@@ -9,6 +9,11 @@ export const LINE_FILE_SOURCES = [
   SOURCE_IDS.totalStartupDieselLitres,
   SOURCE_IDS.totalElectricityKwh,
 ] as const;
+export const LINE_FILE_INPUT_KEYS = {
+  [SOURCE_IDS.totalElectricityKwh]: "electricity_use",
+  [SOURCE_IDS.totalGensetDieselLitres]: "volume_of_fuel",
+  [SOURCE_IDS.totalStartupDieselLitres]: "volume_of_fuel",
+} as const satisfies Record<typeof LINE_FILE_SOURCES[number], string>;
 const GENERATED_FILE_SOURCES = [
   "feedstock-transport", "delivery-transport", "sample-transport", "sequestration",
 ] as const satisfies readonly AutomaticSourceId[];

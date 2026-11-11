@@ -74,10 +74,12 @@ but "no file", and an entry whose amount is 0 needs no file. For paired inputs,
 the amount is the readout difference or the product of the factors. The credit
 batch file covers only the From records amount. An exact From records total of 0
 needs no file. Only the Removal claiming the batch's production emissions sends
-these files. While that Removal is returned, add a corrected file; files already
-sent stay in history. The set belongs to the credit batch and component, not each run.
+these files. While that Removal is returned, replace the files by starting a new set.
+Replaced files stay in history and are no longer sent. The set belongs to the credit batch and component, not each run.
 It is separate from **Proof of delivery** and from a component's **Evidence method**.
 _Avoid_: proof type, file policy (in prose).
+
+**Component file**: A file on the credit batch for a component's From records amount.
 
 **Component comment**:
 One editable comment on a credit batch's Removal-template component, identified by

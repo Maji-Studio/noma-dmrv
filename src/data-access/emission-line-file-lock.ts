@@ -13,10 +13,10 @@ import { nextVersion } from "./row-version";
 import { requireOrgScope } from "./utils";
 
 /** Artifacts, facility, batch, then anchor. Uses the entry correction fence. */
-export async function lockEmissionLineFileBatch(ctx: OrgContext, tx: DbTransaction, creditBatchId: string, componentId: string) {
+export async function lockEmissionLineFileBatch(ctx: OrgContext, tx: DbTransaction, creditBatchId: string, componentId: string, allowArchived = false) {
   requireOrgScope(ctx);
   const { batch, facility } = await lockEmissionEntryBatch(ctx, tx, creditBatchId);
-  if (batch.archivedAt || facility.archivedAt) throw new DomainError("not_found", "Credit batch was not found.");
+  if (!allowArchived && (batch.archivedAt || facility.archivedAt)) throw new DomainError("not_found", "Credit batch was not found.");
   const observation = batch.removalTemplateId
     ? await getLatestTemplateObservation(ctx, "isometric", batch.removalTemplateId, tx) : null;
   const line = observation && entryLine(observation, componentId);
@@ -48,11 +48,12 @@ export async function lockEmissionLineDocumentOwner(ctx: OrgContext, tx: DbTrans
   return { anchor, archived: !!batch.archivedAt || !!facility.archivedAt };
 }
 
-export async function assertEmissionLineDocumentWritable(ctx: OrgContext, id: string, tx?: DbTransaction): Promise<typeof emissionLineFiles.$inferSelect> {
+export async function assertEmissionLineDocumentWritable(ctx: OrgContext, id: string, tx?: DbTransaction, allowArchived = false): Promise<typeof emissionLineFiles.$inferSelect> {
   requireOrgScope(ctx);
-  if (!tx) return db.transaction(transaction => assertEmissionLineDocumentWritable(ctx, id, transaction));
+  if (!tx) return db.transaction(transaction => assertEmissionLineDocumentWritable(ctx, id, transaction, allowArchived));
   const { anchor } = await lockEmissionLineDocumentOwner(ctx, tx, id);
-  await lockEmissionLineFileBatch(ctx, tx, anchor.creditBatchId, anchor.componentId);
+  if (anchor.retiredAt) throw new DomainError("certification_locked", "These files were replaced. Add files to the current set.");
+  await lockEmissionLineFileBatch(ctx, tx, anchor.creditBatchId, anchor.componentId, allowArchived);
   return anchor;
 }
 

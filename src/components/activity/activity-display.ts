@@ -1,3 +1,4 @@
+import { COMPONENT_FILE_LABEL } from "@/lib/certification/emission-entry-messages";
 /**
  * How one activity event reads: record type, kind, who, the record's deep link
  * and the names of the fields it touched. Pure so the copy rules are
@@ -34,7 +35,7 @@ export const ACTIVITY_KIND_LABELS: Record<ActivityAction, string> = {
 /** Glossary names (GLOSSARY.md): Sample, Removal and GHG Statement keep their capitals. */
 export const ACTIVITY_RECORD_TYPE_LABELS: Record<ActivityEntityType, string> = {
   emission_entry: "Emissions entry",
-  emission_line: "Component file",
+  emission_line: COMPONENT_FILE_LABEL,
   removal_template_observation: "Proof setting",
   emission_line_comment: "Component comment",
   credit_batch: "Credit batch",

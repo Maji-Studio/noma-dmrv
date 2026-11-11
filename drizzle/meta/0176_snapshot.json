@@ -1,5 +1,5 @@
 {
-  "id": "f4c45c57-d769-4dd9-838e-cc912969019c",
+  "id": "d39f893d-7ef0-4dda-a886-4f9309f2dec1",
   "prevId": "45927d94-d882-4455-b6f1-c0b9f33e3eff",
   "version": "7",
   "dialect": "postgresql",
@@ -7071,6 +7071,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "retired_at": {
+          "name": "retired_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "retired_by": {
+          "name": "retired_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "version": {
           "name": "version",
           "type": "integer",
@@ -7093,7 +7105,36 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "emission_line_files_component_unique": {
+          "name": "emission_line_files_component_unique",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "credit_batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "component_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"emission_line_files\".\"retired_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "emission_line_files_organization_id_organizations_id_fk": {
           "name": "emission_line_files_organization_id_organizations_id_fk",
@@ -7134,6 +7175,19 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
+        "emission_line_files_retired_by_users_id_fk": {
+          "name": "emission_line_files_retired_by_users_id_fk",
+          "tableFrom": "emission_line_files",
+          "tableTo": "users",
+          "columnsFrom": [
+            "retired_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "emission_line_files_credit_batch_id_organization_id_credit_batches_id_organization_id_fk": {
           "name": "emission_line_files_credit_batch_id_organization_id_credit_batches_id_organization_id_fk",
           "tableFrom": "emission_line_files",
@@ -7158,15 +7212,6 @@
           "columns": [
             "id",
             "organization_id"
-          ]
-        },
-        "emission_line_files_component_unique": {
-          "name": "emission_line_files_component_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "organization_id",
-            "credit_batch_id",
-            "component_id"
           ]
         }
       },

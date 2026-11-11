@@ -1,5 +1,5 @@
 import { listEmissionEntryDraftContenders } from "@/data-access/emission-entry-contenders";
-import { componentFileLocked } from "@/lib/certification/component-file-lock";
+import { batchComponentFileLocked } from "@/lib/certification/component-file-lock";
 import { loadComponentFileReservations } from "@/data-access/component-file-reservations";
 import { groupEmissionLineFiles } from "@/lib/certification/emission-line-file-facts";
 import { listEmissionLineFilesForBatches } from "@/data-access/emission-line-files";
@@ -77,10 +77,7 @@ export async function loadBatchesEmissionLines(
     if (!batch.removalTemplateId) return [batch.id, { status: "blocked", blocker: "unpinnedTemplate", storedEntries: stored }];
     if (!observation) return [batch.id, { status: "blocked", blocker: "templateNotFullyRead", storedEntries: stored }];
     const entries = mergeEntryCarryFacts(deriveEmissionEntryFacts(stored, observation, byId), carryEntries);
-    const lines = buildBatchEmissionLines(observation, entries, byId, { ...automatic[batch.id], recordsFileLocked: componentFileLocked({ claimedByRemovalId: batch.productionEmissionsClaimedByRemovalId,
-        reservation: batch.productionEmissionsClaimReservedBySubmissionId ? fileReservations.find(row => row.id === batch.productionEmissionsClaimReservedBySubmissionId) : null,
-        correctionOpen: contenders.some(contender => contender.contenderKind === "correction" && contender.removalId === batch.productionEmissionsClaimedByRemovalId && contender.creditBatchIds.includes(batch.id)),
-      }, Date.now()) },
+    const lines = buildBatchEmissionLines(observation, entries, byId, { ...automatic[batch.id], recordsFileLocked: batchComponentFileLocked(batch, fileReservations, contenders) },
       commentsByBatch.get(batch.id), groupEmissionLineFiles(lineFiles.filter(row => row.anchor.creditBatchId === batch.id)));
     return [batch.id, { status: "ready", lines, storedEntries: stored }];
   }));

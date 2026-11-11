@@ -15,6 +15,14 @@ import { changedOwner, assertDocumentOwnerWritable, documentNotFound, lockDocume
 import { enqueueDocumentKeys } from "./document-storage-deletions";
 import { assertRowVersion, nextVersion } from "./row-version";
 import { requireOrgScope } from "./utils";
+/** A history refusal is safe to retain when replacing an entire evidence set. */
+export class DocumentHistoryLockedError extends DomainError {
+  constructor(reviewed: boolean) {
+    super("certification_locked", reviewed
+      ? "This document belongs to reviewed certification evidence and cannot be deleted or replaced."
+      : "This document belongs to submitted certification history and cannot be deleted or replaced. The Isometric Source and audit history remain unchanged.");
+  }
+}
 async function lockDocument(ctx: OrgContext, tx: DbTransaction, id: string, deleting = false): Promise<DocumentRow> {
   const initial = await readDocumentForWrite(ctx, tx, id);
   if (!initial) throw documentNotFound();
@@ -32,7 +40,7 @@ export async function deleteDocumentInTransaction(ctx: OrgContext, tx: DbTransac
   assertRowVersion({ entity: "document", id: row.id, expectedVersion: input.expectedVersion, actualVersion: row.version });
   const release = await releaseUnreferencedIsometricMapping(ctx, tx, row.id);
   if (release === "registry-role") throw new DomainError("forbidden", DOCUMENT_REGISTRY_ROLE_ERROR);
-  if (release !== "released") throw new DomainError("certification_locked", release === "reviewed-evidence" ? "This document belongs to reviewed certification evidence and cannot be deleted or replaced." : "This document belongs to submitted certification history and cannot be deleted or replaced. The Isometric Source and audit history remain unchanged.");
+  if (release !== "released") throw new DocumentHistoryLockedError(release === "reviewed-evidence");
   const [mapping] = await tx.select({ id: certifierDocumentUploads.id }).from(certifierDocumentUploads).where(and(eq(certifierDocumentUploads.documentId, row.id), eq(certifierDocumentUploads.organizationId, ctx.organizationId))).limit(1);
   if (mapping) throw new DomainError("conflict", "This document is mirrored to a certification provider and cannot be deleted.");
   await enqueueDocumentKeys(ctx, tx, row);

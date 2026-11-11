@@ -9,6 +9,7 @@ type Coverage = { status: "direct" } | { status: "runner"; operations: string[] 
 const ACTIVITY_COVERAGE = {
   "emission-line-files.ts": {
     getOrCreateEmissionLineFile: { status: "exempt", reason: "The anchor is internal ownership bookkeeping; the document writer records file activity." },
+    replaceEmissionLineFiles: { status: "direct" },
     attachEmissionLineFile: { status: "direct" },
     removeEmissionLineFile: { status: "direct" },
   },

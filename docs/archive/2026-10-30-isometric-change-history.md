@@ -10,10 +10,10 @@ current behavior is indexed in the
 
 An entry needs no file when its own amount is exactly zero: its single value,
 readout difference, or paired product. Unknown input shapes still need proof.
-Run energy proof lives on one `emission_line_files` anchor per credit batch and
+Run energy proof lives on one live `emission_line_files` anchor per credit batch and
 component, with several uploaded `emission_line` documents allowed per anchor.
-During a returned Removal's correction window, add a corrected file; sent files
-stay in history.
+During a returned Removal's correction window, replace the files by starting a
+new set. Replaced files stay in history and are no longer sent.
 
 The claiming Removal sends each uploaded document as a Source of the component's
 `electricity_use` or `volume_of_fuel` input, with role `emission_line_file`.

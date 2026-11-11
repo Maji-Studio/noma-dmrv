@@ -1,4 +1,4 @@
-import { componentFileLocked } from "@/lib/certification/component-file-lock";
+import { batchComponentFileLocked } from "@/lib/certification/component-file-lock";
 import { loadComponentFileReservations } from "@/data-access/component-file-reservations";
 import { groupEmissionLineFiles } from "./emission-line-file-facts";
 import { listEmissionLineFilesForBatches } from "@/data-access/emission-line-files";
@@ -109,10 +109,7 @@ export async function loadBatchEmissionContext(
     ));
     const entries = mergeEntryCarryFacts(deriveEmissionEntryFacts(stored, observation, previousObservations), carryContext.entries);
     result[id] = { lineFiles: groupEmissionLineFiles(lineFiles.filter(row => row.anchor.creditBatchId === id)),
-      recordsFileLocked: componentFileLocked({ claimedByRemovalId: rollups[id].batch.productionEmissionsClaimedByRemovalId,
-        reservation: rollups[id].batch.productionEmissionsClaimReservedBySubmissionId ? fileReservations.find(row => row.id === rollups[id].batch.productionEmissionsClaimReservedBySubmissionId) : null,
-        correctionOpen: contenders.some(contender => contender.contenderKind === "correction" && contender.removalId === rollups[id].batch.productionEmissionsClaimedByRemovalId && contender.creditBatchIds.includes(id)),
-      }, Date.now()), productionReservationSubmissionId: rollups[id].batch.productionEmissionsClaimReservedBySubmissionId, entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
+      recordsFileLocked: batchComponentFileLocked({ ...rollups[id].batch, id }, fileReservations, contenders), productionReservationSubmissionId: rollups[id].batch.productionEmissionsClaimReservedBySubmissionId, entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
       entriesWithoutRemoval: entriesWithoutRemoval(entries, contenders, liveReservationIds, availableApplications) };
   }
   for (const contender of contenders.filter((item) => loadCorrection && item.contenderKind === "correction")) {

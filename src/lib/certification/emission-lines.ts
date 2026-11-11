@@ -62,7 +62,7 @@ export interface BatchEmissionLineFacts {
   enrichmentComplete: boolean;
   entriesCanSubmit?: boolean;
   recordsFileLocked?: boolean;
-  lineFiles?: readonly { anchor: { id: string; componentId: string; version: number }; documents: { id: string; fileName: string; version: number }[] }[];
+  lineFiles?: readonly { anchor: { id: string; componentId: string; version: number; retiredAt?: Date | null }; documents: { id: string; fileName: string; version: number }[] }[];
   automaticFigures: Partial<Record<AutomaticSourceId, EmissionFigure | null>>;
   /** The batches counting this batch's linked feedstock transport, when every leg is owned elsewhere. */
   feedstockTransportCountedOn?: readonly CountedOnBatch[];
@@ -123,7 +123,7 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
       blocker = { code: "entryMissingEvidence", message: MISSING_EVIDENCE_INSTRUCTION, copy: { instruction: MISSING_EVIDENCE_INSTRUCTION }, fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     } else if (recordsNeedFile(filePolicy, automaticFigure?.magnitude ?? "0") &&
       !facts.recordsFileLocked &&
-      !facts.lineFiles?.some(({ anchor, documents }) => anchor.componentId === component.id && documents.length > 0)) {
+      !facts.lineFiles?.some(({ anchor, documents }) => !anchor.retiredAt && anchor.componentId === component.id && documents.length > 0)) {
       state = "missingEvidence";
       const instruction = LINE_FILE_MISSING_INSTRUCTION;
       blocker = { code: "lineMissingEvidence", message: instruction, copy: { instruction }, fixTarget: "emissions",

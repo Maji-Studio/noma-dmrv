@@ -87,8 +87,6 @@ export async function reserveProductionEmissionsClaims(
       );
     }
 
-    await assertComponentFileClaimFresh(ctx, tx, batches.filter(batch => productionIds.includes(batch.id)), args.frozenLineFileSet ?? []);
-
     const members = entryClaim ? await tx.select({ creditBatchId: creditBatchApplications.creditBatchId }).from(creditBatchApplications)
       .where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.removalId, args.removalId))) : [];
     const frozen = entryClaim?.frozenEntrySet ?? [];
@@ -199,6 +197,8 @@ export async function reserveProductionEmissionsClaims(
         "Another Removal is already sending production inputs for this credit batch. Wait for it to finish or reconcile its interrupted submission.",
       );
     }
+
+    await assertComponentFileClaimFresh(ctx, tx, batches.filter(batch => productionIds.includes(batch.id)), args.frozenLineFileSet ?? []);
 
     const reservedEntries = entryIds.length ? await tx.update(emissionEntries).set({
       sendReservedBySubmissionId: args.submissionId, version: nextVersion(emissionEntries.version), updatedAt: sql`now()`,

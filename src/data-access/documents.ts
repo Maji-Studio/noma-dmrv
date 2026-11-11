@@ -1,3 +1,4 @@
+import { COMPONENT_FILE_LABEL } from "@/lib/certification/emission-entry-messages";
 import { bumpDocumentOwnerEvidence, assertDocumentOwnerEvidenceWritable } from "./document-owner-evidence";
 import { emissionLineFiles } from "@/db/schema/emission-line-files";
 import { type ActivityScope, recordDocumentActivity } from "./write-activity";
@@ -70,7 +71,7 @@ export interface DocumentEntityRef {
 
 const DOCUMENT_ENTITY_LABELS: Record<DocumentEntityType, string> = {
   emission_entry: "Emissions entry",
-  emission_line: "Component file",
+  emission_line: COMPONENT_FILE_LABEL,
   sample: "Sample",
   delivery: "Delivery",
   production_run: "Production run",

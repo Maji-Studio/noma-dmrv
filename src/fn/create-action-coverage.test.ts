@@ -69,6 +69,7 @@ const EXCEPTION: Record<string, string> = {
 };
 
 const NOT_CREATE: Record<string, string> = {
+  "emission-line-files#replaceEmissionLineFilesFn": "Retires an existing versioned file set; the next attach creates its successor.",
   "invitation-bootstrap#resendInvitationSetPasswordAction": "Sends a cooldown-limited setup email for an existing pending user.",
   "profile#changeEmailFn": "Requests confirmation to change the caller’s existing account email.",
   "organizations#renameOrganizationAction": "Renames an existing organization.",

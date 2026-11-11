@@ -1,3 +1,4 @@
+import { setComponentFilePolicy } from "@/data-access/component-file-policy";
 import { and } from "drizzle-orm";
 import { productionRuns } from "@/db/schema";
 import { attachEmissionLineFile, listEmissionLineFilesForBatches } from "@/data-access/emission-line-files";
@@ -546,4 +547,30 @@ describe("component-file revision fence", () => {
       await cleanupEmissionLineFileFixture(fixture);
     }
   });
+});
+
+it("refuses required proof introduced after review even with no uploaded files", async () => {
+  const fixture = await createEmissionLineFileFixture();
+  const { ctx, batch, removal, run, observation } = fixture;
+  const electricityKwh = 1;
+  try {
+    await db.update(productionRuns).set({ electricityKwh }).where(and(
+      eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, run.id),
+    ));
+    const none = await setComponentFilePolicy(ctx, { observationId: observation.id, componentId: COMPONENT_ID,
+      filePolicy: "none", expectedVersion: observation.version });
+    const reviewed = await listEmissionLineFilesForBatches(ctx, [batch.id]);
+    expect(reviewed).toEqual([]);
+    await setComponentFilePolicy(ctx, { observationId: observation.id, componentId: COMPONENT_ID,
+      filePolicy: "lineFile", expectedVersion: none.version });
+    const [submission] = await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId,
+      provider: "isometric", submissionType: "removal", localEntityType: "removal", localEntityId: removal.id,
+      version: 1, status: "draft", lockedAt: new Date(), payloadHash: crypto.randomUUID(), payloadSnapshot: {},
+    }).returning();
+    await expect(reserveProductionEmissionsClaims(ctx, { removalId: removal.id, submissionId: submission.id,
+      creditBatchIds: [batch.id], frozenLineFileSet: [],
+    })).rejects.toMatchObject({ code: "conflict", message: EMISSION_ENTRIES_CHANGED, retryable: true });
+  } finally {
+    await cleanupEmissionLineFileFixture(fixture);
+  }
 });

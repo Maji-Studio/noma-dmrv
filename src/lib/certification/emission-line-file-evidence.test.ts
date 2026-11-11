@@ -147,3 +147,11 @@ it("suppresses locked batch proof without hiding the records figure or weakening
     problems: [], enrichmentComplete: true }, "batch");
   expect(claimingLine.blocker?.code).toBe("lineMissingEvidence");
 });
+
+it("ignores retired anchors for evidence and required proof", () => {
+  const { batch, observation } = lineFileEvidenceFacts();
+  batch.lineFiles = batch.lineFiles!.map(file => ({ ...file, anchor: { ...file.anchor, retiredAt: new Date() } }));
+  expect(deriveLineFileEvidence({ batch }, observation)).toEqual([]);
+  expect(buildBatchEmissionLines(observation, [], new Map(), batch, [], batch.lineFiles)[0].blocker?.code)
+    .toBe("lineMissingEvidence");
+});

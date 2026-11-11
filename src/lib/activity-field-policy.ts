@@ -25,7 +25,7 @@ export const activityFieldPolicies: Record<string, ActivityEntityPolicy> = {
   emission_line: { table: emissionLineFiles, fields: {
     id: "ignore", organizationId: "ignore", creditBatchId: { link: "credit_batch" },
     componentId: "value", createdBy: "ignore", updatedBy: "ignore",
-    version: "ignore", createdAt: "ignore", updatedAt: "ignore",
+    version: "ignore", createdAt: "ignore", updatedAt: "ignore", retiredAt: "value", retiredBy: "ignore",
   } },
   // The proof setting writer records its own filePolicy change; the jsonb columns are not diffed.
   removal_template_observation: { table: removalTemplateObservations, fields: {

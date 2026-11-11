@@ -85,8 +85,8 @@ runs. One set of files per credit batch and component, not per run, is stored on
 an `emission_line_files` anchor as uploaded `emission_line` documents. A non-zero
 exact From records total requires at least one uploaded file. Only the Removal
 claiming the batch's production emissions sends these files as Sources of that
-component's energy Datapoint. While that Removal is returned, add a corrected
-file; files already sent stay in history. Missing proof blocks
+component's energy Datapoint. While that Removal is returned, replace the files by starting a new
+set. Replaced files stay in history and are no longer sent. Missing proof blocks
 the claiming Removal's submission with "File missing". Batches whose production
 emissions are claimed or reserved show no missing-file blocker at batch level.
 A non-claiming Removal omits the run amount and files. `entryFiles` requires a

@@ -1,3 +1,4 @@
+export const COMPONENT_FILE_LABEL = "Component file";
 export const EMISSION_LINE_FILE_CHANGED = "The component file changed. Reload and review this Removal again.";
 export const LINE_FILE_MISSING_INSTRUCTION = "Add a file for the From records amount on this credit batch.";
 export const RETURNED_BY_ISOMETRIC_LABEL = "Returned by Isometric";

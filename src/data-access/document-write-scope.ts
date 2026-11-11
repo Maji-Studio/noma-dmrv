@@ -104,7 +104,7 @@ export async function lockDocumentOwner(ctx: OrgContext, tx: DbTransaction, enti
 export async function assertDocumentOwnerWritable(ctx: OrgContext, tx: DbTransaction, scope: DocumentWriteScope, allowArchived = false): Promise<void> {
   requireOrgScope(ctx);
   if (!allowArchived && scope.links.some((row) => row.archived)) throw documentNotFound(scope.field);
-  for (const link of scope.links) await assertDocumentOwnerEvidenceWritable(ctx, link.type, link.id, tx, true);
+  for (const link of scope.links) await assertDocumentOwnerEvidenceWritable(ctx, link.type, link.id, tx, true, allowArchived);
   const currentTargets = targetsFor(scope.links, scope.documentType);
   if (JSON.stringify(currentTargets) !== JSON.stringify(scope.targets)) throw changedOwner();
   try {

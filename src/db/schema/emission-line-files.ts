@@ -1,4 +1,5 @@
-import { foreignKey, integer, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { isNull } from "drizzle-orm";
+import { foreignKey, integer, pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { organizations, users } from "./auth";
 import { creditBatches } from "./credits";
 
@@ -10,12 +11,14 @@ export const emissionLineFiles = pgTable("emission_line_files", {
   componentId: text("component_id").notNull(),
   createdBy: text("created_by").references(() => users.id),
   updatedBy: text("updated_by").references(() => users.id),
+  retiredAt: timestamp("retired_at", { withTimezone: true }),
+  retiredBy: text("retired_by").references(() => users.id),
   version: integer("version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   unique("emission_line_files_id_org_unique").on(t.id, t.organizationId),
-  unique("emission_line_files_component_unique").on(t.organizationId, t.creditBatchId, t.componentId),
+  uniqueIndex("emission_line_files_component_unique").on(t.organizationId, t.creditBatchId, t.componentId).where(isNull(t.retiredAt)),
   foreignKey({ columns: [t.creditBatchId, t.organizationId],
     foreignColumns: [creditBatches.id, creditBatches.organizationId] }).onDelete("cascade"),
 ]);
