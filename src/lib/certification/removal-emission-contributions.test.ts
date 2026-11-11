@@ -233,9 +233,9 @@ describe("sent entries after a Removal window shrinks", () => {
   });
 });
 
-it.each(ENTRY_FILE_CASES)("applies the contribution file requirement to $label", ({ magnitudes, filePolicy, missing }) => {
+it.each(ENTRY_FILE_CASES)("applies the contribution file requirement to $label", ({ magnitudes, keys: inputKeys, filePolicy, missing }) => {
   const paired = magnitudes.length > 1;
-  const keys = paired ? ["initial_readout", "final_readout"] : ["energy"];
+  const keys = inputKeys ?? (paired ? ["initial_readout", "final_readout"] : ["energy"]);
   const values = magnitudes.map((magnitude, index) => ({ inputKey: keys[index], magnitude, unit: "kWh" }));
   const result = derive([entry({ values, evidenceDocumentIds: [], lineRule: paired ? "single" : "additive" })], {
     lineSources: { c1: { scope: "operating", origin: "reviewed", entryPolicy: paired ? "single" : "additive",

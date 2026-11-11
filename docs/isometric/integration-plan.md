@@ -85,9 +85,12 @@ runs, whose From records amount will be covered by one file per credit batch
 (that file is not stored or required yet); `entryFiles` requires a file per
 manual entry; `generated` means noma produces the evidence; `none` requires no
 files. Manual entries still need their own files under `lineFile` and `generated`.
-An amount of zero needs no file: every monitored value must canonicalize to
-exactly zero, including both values of a paired entry. Recorded zero entries
-also need no file.
+An amount of zero needs no file. For a single-input manual entry, this is the
+recorded value (including operating hours for a time-based component). For
+paired meter readouts, it is the final reading minus the initial reading. For
+concentration and mass flow, or mass and distance, it is the product, so either
+factor being zero makes the amount zero. Comparisons use exact decimals. Unknown
+or malformed input shapes still need a file. Recorded zero entries need no file.
 
 Each Removal-lineage Delivery needs uploaded proof before submission, regardless of template
 transport categories. The accepted classifications are owned by

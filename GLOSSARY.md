@@ -70,7 +70,9 @@ What a Removal-template **component** needs as files before a Removal can go out
 (`filePolicy` in code): one file per credit batch for the From records amount
 (production-run diesel and electricity only), a file on each manual entry, evidence
 noma generates, or no file. Manual entries keep their own files under every setting
-but "no file", and an entry whose values are all 0 needs no file.
+but "no file", and an entry whose amount is 0 needs no file. For paired inputs,
+the amount is the readout difference or the product of the factors. The credit
+batch file covers only the From records amount.
 It is separate from **Proof of delivery** and from a component's **Evidence method**.
 _Avoid_: proof type, file policy (in prose).
 
