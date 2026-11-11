@@ -813,15 +813,6 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
     await assertRemovalAllowsCreditBatchMutation(ctx, tx, id, "delete", batch.lockedRemovals);
     await assertNoRemoteRemovalHoldsCreditBatch(ctx, tx, batch);
 
-    const [sample] = await tx.select({ id: samples.id, code: samples.sampleCode }).from(samples)
-      .where(and(eq(samples.creditBatchId, id), eq(samples.organizationId, ctx.organizationId))).limit(1);
-    if (sample) {
-      throw new ActionConflictError(
-        `Credit batch ${batch.code} has Samples. Move them to another credit batch or delete them, then delete the batch.`,
-        { entity: "sample", id: sample.id, code: conflictCode(sample.code) },
-      );
-    }
-
     const [productionRegistration] = await tx
       .select({ externalProductionBatchId: certifierProductionBatches.externalProductionBatchId })
       .from(certifierProductionBatches)
@@ -845,6 +836,15 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
       throw new ActionConflictError(
         `Credit batch ${batch.code} is still registered in Isometric as production batch ${registration.externalProductionBatchId}. Ask support to remove that registration, then delete the batch.`,
         { entity: "credit_batch", id, code: conflictCode(batch.code) },
+      );
+    }
+
+    const [sample] = await tx.select({ id: samples.id, code: samples.sampleCode }).from(samples)
+      .where(and(eq(samples.creditBatchId, id), eq(samples.organizationId, ctx.organizationId))).limit(1);
+    if (sample) {
+      throw new ActionConflictError(
+        `Credit batch ${batch.code} has Samples. Move them to another credit batch or delete them, then delete the batch.`,
+        { entity: "sample", id: sample.id, code: conflictCode(sample.code) },
       );
     }
 

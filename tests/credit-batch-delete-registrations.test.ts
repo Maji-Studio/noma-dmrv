@@ -32,6 +32,7 @@ import { certifierProductionBatches } from "@/db/schema/certifier-production-bat
 import { creditBatchApplications, creditBatches } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
 import { feedstockTypes } from "@/db/schema/feedstock";
+import { samples } from "@/db/schema/production";
 import { productionProcesses } from "@/db/schema/production-processes";
 import { upsertProductionBatchRegistration } from "@/data-access/certifier-production-batches";
 import { deleteCreditBatch } from "@/data-access/credit-batches";
@@ -51,6 +52,8 @@ import { installFakeRegistry, type FakeIsometricRegistry } from "./fixtures/fake
 const TIMEOUT_MS = 60_000;
 const SLICE_WET_MASS_KG = 12_000;
 const SLICE_DRY_MASS_KG = 10_800;
+const SAMPLE_TOTAL_CARBON_PERCENT = 80;
+const SAMPLE_ORGANIC_CARBON_PERCENT = 75;
 const createdFacilityIds: string[] = [];
 const createdRemovalIds: string[] = [];
 const createdBatchIds: string[] = [];
@@ -77,6 +80,7 @@ afterAll(async () => {
   }
   if (createdBatchIds.length) {
     await db.delete(activityEvents).where(inArray(activityEvents.creditBatchId, createdBatchIds));
+    await db.delete(samples).where(inArray(samples.creditBatchId, createdBatchIds));
     await db.delete(creditBatches).where(inArray(creditBatches.id, createdBatchIds));
   }
   if (createdFacilityIds.length) {
@@ -220,6 +224,27 @@ describe("deleteCreditBatch with a retained production batch registration", { ti
     await deleteCreditBatch(ctx, fixture.creditBatchId, released.version);
     expect(await readBatch(fixture.creditBatchId)).toBeUndefined();
     expect(await slicesFor(fixture.creditBatchId)).toEqual([]);
+  });
+
+  it("refuses for the registration before Samples and preserves the Sample", async () => {
+    const { ctx, fixture, otherRemoval } = await sharedBatchAfterRemovalDeletion("draftRemoval");
+    const creditBatchId = fixture.creditBatchId;
+    const batch = await readBatch(creditBatchId);
+    const [sample] = await db.insert(samples).values({
+      organizationId: TEST_ORG_ID,
+      creditBatchId,
+      sampleCode: `LS-CBDEL-${fixture.runId}`,
+      samplingTime: new Date("2026-01-15T12:00:00Z"),
+      totalCarbonPercent: SAMPLE_TOTAL_CARBON_PERCENT,
+      organicCarbonPercent: SAMPLE_ORGANIC_CARBON_PERCENT,
+    }).returning({ id: samples.id });
+
+    await expect(deleteCreditBatch(ctx, creditBatchId, batch.version)).rejects.toMatchObject({
+      name: "ActionConflictError",
+      message: `Credit batch ${batch.code} is registered in Isometric and Removal ${otherRemoval.code} still uses it. Delete Removal ${otherRemoval.code} first, then delete the batch.`,
+      conflict: { entity: "removal", id: otherRemoval.id, code: otherRemoval.code },
+    });
+    expect(await db.select({ id: samples.id }).from(samples).where(eq(samples.id, sample.id))).toEqual([sample]);
   });
 
   it("refuses with a support step when no Removal holds the batch", async () => {
