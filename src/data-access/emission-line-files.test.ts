@@ -97,7 +97,7 @@ it.each(["claimed", "reserved"] as const)("locks all file writers when productio
   const document = await uploaded();
   const [{ anchor }] = await listEmissionLineFiles(fixture.ctx, fixture.batch.id);
   await claimEmissionLineFileFixture(fixture, kind);
-  await expect(replaceEmissionLineFiles(fixture.ctx, { ...anchorInput(), expectedVersion: anchor.version })).rejects.toMatchObject({ code: "certification_locked" });
+  await expect(replaceEmissionLineFiles(fixture.ctx, { ...anchorInput(), anchorId: anchor.id, expectedVersion: anchor.version })).rejects.toMatchObject({ code: "certification_locked" });
   await expect(attach()).rejects.toMatchObject({ code: "certification_locked" });
   await expect(removeEmissionLineFile(fixture.ctx, { documentId: document.id, expectedVersion: document.version })).rejects.toMatchObject({ code: "certification_locked" });
   await expect(db.transaction(tx => deleteDocumentInTransaction(fixture.ctx, tx, { documentId: document.id, expectedVersion: document.version })))
@@ -177,9 +177,9 @@ it("replaces the live set while keeping the sent file and Source history", async
   const unsent = await uploaded();
   const pending = await attach();
   const [{ anchor }] = await listEmissionLineFiles(fixture.ctx, fixture.batch.id);
-  await expect(replaceEmissionLineFiles(fixture.ctx, { ...anchorInput(), expectedVersion: anchor.version + 1 }))
+  await expect(replaceEmissionLineFiles(fixture.ctx, { ...anchorInput(), anchorId: anchor.id, expectedVersion: anchor.version + 1 }))
     .rejects.toMatchObject({ code: "stale_version" });
-  await replaceEmissionLineFiles(fixture.ctx, { ...anchorInput(), expectedVersion: anchor.version });
+  await replaceEmissionLineFiles(fixture.ctx, { ...anchorInput(), anchorId: anchor.id, expectedVersion: anchor.version });
   const [retired] = await db.select().from(emissionLineFiles).where(and(
     eq(emissionLineFiles.organizationId, fixture.ctx.organizationId), eq(emissionLineFiles.id, anchor.id),
   ));
@@ -214,6 +214,13 @@ it("replaces the live set while keeping the sent file and Source history", async
   expect(events).toEqual([expect.objectContaining({ reasonCode: "component-files-replaced" })]);
   const mappings = await db.select().from(certifierDocumentUploads).where(eq(certifierDocumentUploads.organizationId, fixture.ctx.organizationId));
   expect(mappings).toMatchObject([{ documentId: sent.id, externalDocumentId: sourceId }]);
+  // A replayed Replace for the old set must not retire the new one, even at the same version (versions restart per set).
+  const added = [corrected.id];
+  while ((await listEmissionLineFiles(fixture.ctx, fixture.batch.id))[0].anchor.version < anchor.version) added.push((await uploaded()).id);
+  expect((await listEmissionLineFiles(fixture.ctx, fixture.batch.id))[0].anchor.version).toBe(anchor.version);
+  await expect(replaceEmissionLineFiles(fixture.ctx, { ...anchorInput(), anchorId: anchor.id, expectedVersion: anchor.version }))
+    .rejects.toMatchObject({ code: "stale_version" });
+  expect((await listEmissionLineFiles(fixture.ctx, fixture.batch.id)).map(row => row.document?.id).sort()).toEqual(added.sort());
 });
 
 it.each(["resubmitting", "retained"])("locks attach, confirmation and deletion during a returned Removal's active reservation (%s)", async kind => {
@@ -229,7 +236,7 @@ it.each(["resubmitting", "retained"])("locks attach, confirmation and deletion d
     ));
   }
   const [{ anchor }] = await listEmissionLineFiles(fixture.ctx, fixture.batch.id);
-  await expect(replaceEmissionLineFiles(fixture.ctx, { ...anchorInput(), expectedVersion: anchor.version }))
+  await expect(replaceEmissionLineFiles(fixture.ctx, { ...anchorInput(), anchorId: anchor.id, expectedVersion: anchor.version }))
     .rejects.toMatchObject({ code: "certification_locked" });
   await expect(attach()).rejects.toMatchObject({ code: "certification_locked" });
   expect(await confirm(pending)).toMatchObject({ kind: "refused", reason: "certification_locked" });
@@ -256,6 +263,6 @@ it("refuses confirmation on a retired anchor even for a retained pending documen
   await db.insert(certifierDocumentUploads).values({ organizationId: fixture.ctx.organizationId,
     documentId: pending.id, provider: "isometric", externalDocumentId: `source-${pending.id}` });
   const anchor = await getOrCreateEmissionLineFile(fixture.ctx, anchorInput());
-  await replaceEmissionLineFiles(fixture.ctx, { ...anchorInput(), expectedVersion: anchor.version });
+  await replaceEmissionLineFiles(fixture.ctx, { ...anchorInput(), anchorId: anchor.id, expectedVersion: anchor.version });
   expect(await confirm(pending)).toMatchObject({ kind: "refused", reason: "certification_locked" });
 });

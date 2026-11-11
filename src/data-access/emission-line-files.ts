@@ -13,7 +13,7 @@ import { lockEmissionLineFileBatch } from "./emission-line-file-lock";
 import { requestDocumentUploadInTransaction } from "./document-writes";
 import { deleteDocumentInTransaction, DocumentHistoryLockedError } from "./document-mutations";
 import { acquireMirrorLock } from "@/lib/isometric/utils/source-lock";
-import { assertRowVersion, nextVersion } from "./row-version";
+import { assertRowVersion, nextVersion, staleRowVersion } from "./row-version";
 import { recordActivity } from "./activity-events";
 import { recordDocumentActivity } from "./write-activity";
 
@@ -89,7 +89,7 @@ export async function replaceEmissionLineFiles(ctx: OrgContext, input: ReplaceEm
       eq(emissionLineFiles.organizationId, ctx.organizationId), eq(emissionLineFiles.creditBatchId, data.creditBatchId),
       eq(emissionLineFiles.componentId, data.componentId), isNull(emissionLineFiles.retiredAt),
     )).for("update");
-    if (!anchor) throw new DomainError("not_found", "Component file was not found.");
+    if (!anchor || anchor.id !== data.anchorId) throw staleRowVersion("emission_line", data.anchorId);
     assertRowVersion({ entity: "emission_line", id: anchor.id, expectedVersion: data.expectedVersion, actualVersion: anchor.version });
     const files = await tx.select().from(documents).where(and(
       eq(documents.organizationId, ctx.organizationId), eq(documents.entityType, "emission_line"), eq(documents.entityId, anchor.id),

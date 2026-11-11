@@ -15,7 +15,8 @@ export type EmissionLineFileAnchorInput = z.infer<typeof emissionLineFileAnchorS
 export type AttachEmissionLineFileInput = z.infer<typeof attachEmissionLineFileSchema>;
 export type RemoveEmissionLineFileInput = z.infer<typeof removeEmissionLineFileSchema>;
 
+/** Versions restart on every new set, so the anchor id names the reviewed set. */
 export const replaceEmissionLineFilesSchema = emissionLineFileAnchorSchema.extend({
-  expectedVersion: z.number().int().positive(),
+  anchorId: z.uuid(), expectedVersion: z.number().int().positive(),
 });
 export type ReplaceEmissionLineFilesInput = z.infer<typeof replaceEmissionLineFilesSchema>;
