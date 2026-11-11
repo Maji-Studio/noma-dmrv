@@ -1,3 +1,6 @@
+import { loadComponentFileReservations } from "@/data-access/component-file-reservations";
+vi.mock("@/data-access/component-file-reservations", () => ({ loadComponentFileReservations: vi.fn() }));
+import { listEmissionLineFilesForBatches } from "@/data-access/emission-line-files";
 import { removalEntryOwner } from "@/lib/certification/removal-emission-contributions";
 import { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 import { loadRemovalEntryCorrection } from "./removal-correction-core";
@@ -50,6 +53,8 @@ function storedEntry(creditBatchId: string, overrides: Partial<StoredEntry> = {}
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(loadComponentFileReservations).mockResolvedValue([]);
+  vi.mocked(listEmissionLineFilesForBatches).mockResolvedValue([]);
   vi.mocked(loadFacilityEmissionEntryCarry).mockResolvedValue({ entries: [], contenders: [], ownContenders: [], batches: [] });
   vi.mocked(listEmissionEntryAvailableApplications).mockResolvedValue([]);
   vi.mocked(loadEmissionEntryReservations).mockResolvedValue([]);
@@ -192,6 +197,8 @@ it("uses batch-wide automatic figures instead of empty placeholders", async () =
   const facts = structuredClone(facilityFacts);
   facts.templatesById.template!.observation!.lineSources.line.automaticSource = "run-electricity";
   vi.mocked(loadBatchesEmissionAutomaticFacts).mockResolvedValue({ one: { automaticFigures: { "run-electricity": { magnitude: "3", unit: "kWh" } } } });
+  vi.mocked(listEmissionLineFilesForBatches).mockResolvedValue([{ anchor: { id: "anchor", componentId: "line", creditBatchId: "one", version: 2 },
+    document: { id: "proof", fileName: "proof.pdf", version: 1 } }] as never);
   const batches = [{ id: "one", removalTemplateId: "template" }];
   const { batchFacts: loaded } = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facts);
   expect(resolveRemovalTemplate(batches, facts, loaded).emissionLinesByBatchId.one[0]).toMatchObject({ state: "filled", total: { magnitude: "3", unit: "kWh" } });
@@ -380,4 +387,56 @@ it("refreshes an A-only contender set for a Removal covering A+B, retaining B's 
   const entry = { creditBatchId: "two", occurredOn: "2026-01-15", kind: "value" } as never;
   expect(removalEntryOwner(entry, advisory.batchFacts.two.contenders!)).toBe("R2");
   expect(removalEntryOwner(entry, guard.batchFacts.two.contenders!)).toBe("R2");
+});
+
+vi.mock("@/data-access/emission-line-files", () => ({ listEmissionLineFilesForBatches: vi.fn() }));
+
+it.each(["claimed", "reserved", "unclaimed"])("loads the batch proof lock and preserves readiness (%s)", async kind => {
+  const facts = structuredClone(facilityFacts);
+  const contract = facts.templatesById.template!.observation!.lineSources.line;
+  contract.automaticSource = "run-electricity";
+  contract.filePolicy = "lineFile";
+  const batches = [{ id: "one", removalTemplateId: "template" }];
+  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ one: { batch: {
+    facilityId: "facility", productionEmissionsClaimedByRemovalId: kind === "claimed" ? "sent" : null,
+    productionEmissionsClaimReservedBySubmissionId: kind === "reserved" ? "submission" : null,
+  } } } as never);
+  vi.mocked(loadBatchesEmissionAutomaticFacts).mockResolvedValue({ one: { automaticFigures: {
+    "run-electricity": { magnitude: "5", unit: "kWh" },
+  } } });
+  const { batchFacts } = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facts);
+  expect(batchFacts.one.recordsFileLocked).toBe(kind !== "unclaimed");
+  const resolved = resolveRemovalTemplate(batches, facts, batchFacts);
+  expect(resolved.emissionLinesByBatchId.one[0].blocker?.code).toBe(kind === "unclaimed" ? "lineMissingEvidence" : undefined);
+  const context = { ...resolved, memberBatches: batches, requiredTransportCategories: [], mapping: {},
+    hasSubmittableRuns: true, entityReadinessGaps: [], submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
+  } as unknown as RemovalCertifyContext;
+  const health = deriveBatchHealth(toBatchHealthFacts(context, "one"));
+  expect(health.checks.find(check => check.key === "emissions")?.status).toBe(kind === "unclaimed" ? "unmet" : "met");
+});
+
+it.each(["stale", "rejected", "correction", "closed", "other-removal", "other-batch", "reserved-correction"])("uses the component-file lock rule for %s", async state => {
+  const reserved = ["stale", "rejected", "reserved-correction"].includes(state);
+  const claimed = !["stale", "rejected"].includes(state);
+  const locked = ["closed", "other-removal", "other-batch", "reserved-correction"].includes(state);
+  vi.mocked(loadComponentFileReservations).mockResolvedValue(reserved ? [{
+    id: "submission", provider: "isometric", submissionType: "removal", localEntityType: "removal", localEntityId: "sent",
+    status: state === "rejected" ? "rejected" : "draft", lockedAt: state === "reserved-correction" ? new Date() : new Date(0), metadata: {},
+  }] as never : []);
+  vi.mocked(listEmissionEntryDraftContenders).mockResolvedValue(state === "closed" ? [] : [{
+    contenderKind: "correction", removalId: state === "other-removal" ? "another" : "sent", createdAt: "2026-01-01",
+    creditBatchIds: [state === "other-batch" ? "another-batch" : "one"], window: { start: "2026-01-01", end: "2026-02-01" },
+  }]);
+  const facts = structuredClone(facilityFacts);
+  Object.assign(facts.templatesById.template!.observation!.lineSources.line, { automaticSource: "run-electricity", filePolicy: "lineFile" });
+  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ one: { batch: { facilityId: "facility",
+    productionEmissionsClaimedByRemovalId: claimed ? "sent" : null,
+    productionEmissionsClaimReservedBySubmissionId: reserved ? "submission" : null,
+  } } } as never);
+  vi.mocked(loadBatchesEmissionAutomaticFacts).mockResolvedValue({ one: { automaticFigures: { "run-electricity": { magnitude: "5", unit: "kWh" } } } });
+  const batches = [{ id: "one", removalTemplateId: "template" }];
+  const { batchFacts } = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facts);
+  expect(batchFacts.one.recordsFileLocked).toBe(locked);
+  expect(resolveRemovalTemplate(batches, facts, batchFacts).emissionLinesByBatchId.one[0].blocker?.code)
+    .toBe(locked ? undefined : "lineMissingEvidence");
 });

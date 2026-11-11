@@ -22,6 +22,7 @@ export function normalizeEntrySourceBindingForHash<T extends {
   nomaRole: string; lineage: RemovalSourceLineage;
   carriedEntry?: { creditBatchCode: string; occurredOn: string };
 }>(binding: T) {
+  if (binding.nomaRole === "emission_line_file") return { ...binding, lineage: { ...binding.lineage, entityLabel: "Component file" } };
   if (binding.nomaRole !== "emission_entry") return binding;
   return { ...binding, lineage: { ...binding.lineage, entityLabel: "Emissions entry" },
     ...(binding.carriedEntry ? { carriedEntry: { occurredOn: binding.carriedEntry.occurredOn } } : {}),

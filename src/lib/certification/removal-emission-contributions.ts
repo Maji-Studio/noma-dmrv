@@ -1,5 +1,5 @@
 import { effectiveFilePolicy } from "@/lib/isometric/template-observations/file-policies";
-import { entryFileMissing, entryValuesAreZero } from "./emission-entry-evidence";
+import { entryFileMissing, entryAmountIsZero } from "./emission-entry-evidence";
 import {
   isCarriedToRemoval,
   type EntryCarryDisposition,
@@ -167,7 +167,7 @@ export function deriveRemovalEntryContributions(args: {
       continue;
     }
     if (entryFileMissing(effectiveFilePolicy(contract), {
-      kind: entry.kind, isZero: entryValuesAreZero(entry.values), hasEvidence: entry.evidenceDocumentIds.length > 0,
+      kind: entry.kind, isZero: entryAmountIsZero(entry.values), hasEvidence: entry.evidenceDocumentIds.length > 0,
     })) result.blockers.push({ code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", fixTarget: "emissions", creditBatchId: entry.creditBatchId, lineRef: { componentId: entry.componentId, displayName: entry.componentId } });
     selected.push(entry);
   }

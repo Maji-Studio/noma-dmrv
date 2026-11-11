@@ -127,6 +127,8 @@ it.each(["0", "1"])("uses an automatic figure of %s instead of a Removal-owned z
   const f = facts();
   f.entries = [entry(f, { kind: "zero", confirmedForRemovalId: "removal", total: null, hasEvidence: false })];
   f.automaticFigures = { "run-electricity": { magnitude, unit: "kWh" } };
+  f.lineFiles = [{ anchor: { id: "anchor", componentId: f.entries[0].componentId, version: 2 },
+    documents: [{ id: "proof", fileName: "proof.pdf", version: 1 }] }];
   expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state: "filled", total: { magnitude, unit: "kWh" } });
 });
 
@@ -288,14 +290,14 @@ it("splits the stale-entry fallback instruction when no reason is supplied", () 
   expect(line.blocker?.copy).toEqual({ instruction: line.blocker?.message });
 });
 
-it.each(ENTRY_FILE_CASES)("applies the entry file requirement to $label", ({ magnitudes, filePolicy, missing }) => {
+it.each(ENTRY_FILE_CASES)("applies the entry file requirement to $label", ({ magnitudes, keys: inputKeys, filePolicy, missing }) => {
   const f = facts();
   const component = f.definition.groups[0].components[0];
   component.inputs = component.inputs.filter((input) => input.type === "monitored");
   const paired = magnitudes.length > 1;
   if (paired) {
     component.blueprintKey = "metered_energy_based_ci_emissions";
-    component.inputs = ["initial_readout", "final_readout"].map((key) => ({ key, type: "monitored", quantityKind: "energy" }));
+    component.inputs = (inputKeys ?? ["initial_readout", "final_readout"]).map((key) => ({ key, type: "monitored", quantityKind: key === "concentration" ? "mass_fraction" : key === "mass_flow" ? "mass_flow_rate" : "energy" }));
     f.lineSources[component.id] = { scope: "operating", entryPolicy: "single", origin: "reviewed" };
   }
   if (filePolicy) f.lineSources[component.id].filePolicy = filePolicy;

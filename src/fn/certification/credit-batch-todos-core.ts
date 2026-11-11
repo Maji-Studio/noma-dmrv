@@ -31,7 +31,7 @@ export interface CreditBatchTodos {
 export async function loadCreditBatchTodos(
   ctx: OrgContext,
   facilityId: string,
-  batches: readonly { id: string; removalTemplateId: string | null }[],
+  batches: readonly { id: string; removalTemplateId: string | null; productionEmissionsClaimedByRemovalId?: string | null; productionEmissionsClaimReservedBySubmissionId?: string | null }[],
 ): Promise<Map<string, CreditBatchTodos>> {
   if (!batches.length) return new Map();
   const ids = batches.map((batch) => batch.id);

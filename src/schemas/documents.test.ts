@@ -61,6 +61,6 @@ it.each(DOCUMENT_ENTITY_TYPES.filter((owner) => owner !== "sample"))("refuses hi
   expect(requestUploadSchema.safeParse({ ...histogramUpload, entityType }).success).toBe(false);
 });
 
-it("supports the fourteen current document owners", () => {
-  expect(DOCUMENT_ENTITY_TYPES).toEqual(["emission_entry", "sample", "delivery", "production_run", "production_incident", "production_sample", "biochar_product", "feedstock", "application", "credit_batch", "facility", "reactor", "order", "transport_leg"]);
+it("supports the fifteen current document owners", () => {
+  expect(DOCUMENT_ENTITY_TYPES).toEqual(["emission_entry", "emission_line", "sample", "delivery", "production_run", "production_incident", "production_sample", "biochar_product", "feedstock", "application", "credit_batch", "facility", "reactor", "order", "transport_leg"]);
 });

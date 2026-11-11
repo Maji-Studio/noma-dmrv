@@ -18,7 +18,7 @@
 import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-messages";
 import type { RemovalCorrection } from "./removal-entry-correction";
 import { templateLineFixTarget } from "./template-fix-targets";
-import type { BatchEmissionLine } from "./emission-lines";
+import { EMISSION_LINE_STATE_LABELS, type BatchEmissionLine } from "./emission-lines";
 import type { SampleDocumentWarningKey } from "./sample-document-warnings";
 import {
   isCountedSubmissionBlocker,
@@ -240,6 +240,7 @@ function batchHealthReadOnlyFact(check: Pick<BatchHealthCheck, "readOnlyDetail" 
 }
 
 function emissionCheckDetail(line: BatchEmissionLine): { message: string; copy?: BlockerCopy } {
+  if (line.blocker?.code === "lineMissingEvidence") return { message: line.blocker.message, copy: line.blocker.copy };
   if (line.blocker?.code === "entryHasNoRemoval") return line.blocker;
   const instruction = line.blocker?.code === "entryMissingEvidence"
     ? `Add a file for ${line.displayName}.`
@@ -628,6 +629,9 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
       ...(facts.emissionLines != null ? [{
         key: "emissions" as const, label: "Emissions", fixTarget: "emissions" as const,
         status: emissionIssues.size ? "unmet" as const : "met" as const,
+        ...([...emissionIssues.values()].some(line => line.blocker?.code === "lineMissingEvidence") &&
+          [...emissionIssues.values()].every(line => line.state === "missingEvidence")
+          ? { unmetLabel: EMISSION_LINE_STATE_LABELS.missingEvidence } : {}),
         detail: emissionDetails.map((detail) => detail.message).join(" ") || undefined,
         ...(emissionIssues.size && emissionCopy ? { copy: emissionCopy } : {}),
       }] : []),

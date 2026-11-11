@@ -1,6 +1,10 @@
 import { SEMANTIC_BINDING_CATALOG } from "../semantic-binding-catalog";
 import type { EntryPolicy, QuantityKind, TemplateComponent } from "./types";
 
+export const READOUT_INPUT_KEYS = ["initial_readout", "final_readout"] as const;
+export const CONCENTRATION_MASS_FLOW_INPUT_KEYS = ["concentration", "mass_flow"] as const;
+export const MASS_DISTANCE_INPUT_KEYS = ["mass", "distance"] as const;
+
 const ADDITIVE_QUANTITY_KINDS = new Set(["volume", "energy", "mass", "distance", "mass_distance"]);
 const GAS_CONCENTRATION_KINDS = new Set(["mass_fraction", "mass_concentration"]);
 const GAS_MASS_KINDS = new Set(["mass", "mass_flow_rate"]);
@@ -35,15 +39,15 @@ export function allowedEntryPolicies(component: TemplateComponent): EntryPolicy[
   if (inputs.length !== 2) return ["none"];
   const has = (key: string, kinds: ReadonlySet<string>) =>
     inputs.some((input) => input.key === key && kinds.has(input.quantityKind));
-  if (has("initial_readout", ENERGY_KINDS) && has("final_readout", ENERGY_KINDS)) return ["none", "single"];
-  if (has("concentration", GAS_CONCENTRATION_KINDS) && has("mass_flow", GAS_MASS_KINDS)) return ["none", "single"];
+  if (has(READOUT_INPUT_KEYS[0], ENERGY_KINDS) && has(READOUT_INPUT_KEYS[1], ENERGY_KINDS)) return ["none", "single"];
+  if (has(CONCENTRATION_MASS_FLOW_INPUT_KEYS[0], GAS_CONCENTRATION_KINDS) && has(CONCENTRATION_MASS_FLOW_INPUT_KEYS[1], GAS_MASS_KINDS)) return ["none", "single"];
   if (isMassDistancePair(inputs)) return ["none", "single"];
   return ["none"];
 }
 
 function isMassDistancePair(inputs: TemplateComponent["inputs"]): boolean {
-  return inputs.length === 2 && inputs.some((input) => input.key === "mass" && MASS_KINDS.has(input.quantityKind)) &&
-    inputs.some((input) => input.key === "distance" && DISTANCE_KINDS.has(input.quantityKind));
+  return inputs.length === 2 && inputs.some((input) => input.key === MASS_DISTANCE_INPUT_KEYS[0] && MASS_KINDS.has(input.quantityKind)) &&
+    inputs.some((input) => input.key === MASS_DISTANCE_INPUT_KEYS[1] && DISTANCE_KINDS.has(input.quantityKind));
 }
 
 /** Stored automatic pairs used additive before whole-entry pairing was enforced. */

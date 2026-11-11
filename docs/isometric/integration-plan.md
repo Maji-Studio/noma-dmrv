@@ -81,13 +81,23 @@ Datapoints; propagation delay and a true mismatch are different outcomes.
 
 Each component has a proof setting (`src/lib/isometric/template-observations/file-policies.ts`):
 `lineFile` is for genset diesel, startup diesel and electricity from production
-runs, whose From records amount will be covered by one file per credit batch
-(that file is not stored or required yet); `entryFiles` requires a file per
-manual entry; `generated` means noma produces the evidence; `none` requires no
-files. Manual entries still need their own files under `lineFile` and `generated`.
-An amount of zero needs no file: every monitored value must canonicalize to
-exactly zero, including both values of a paired entry. Recorded zero entries
-also need no file.
+runs. One set of files per credit batch and component, not per run, is stored on
+an `emission_line_files` anchor as uploaded `emission_line` documents. A non-zero
+exact From records total requires at least one uploaded file. Only the Removal
+claiming the batch's production emissions sends these files as Sources of that
+component's energy Datapoint. While that Removal is returned, replace the files by starting a new
+set. Replaced files stay in history and are no longer sent. Missing proof blocks
+the claiming Removal's submission with "File missing". Batches whose production
+emissions are claimed or reserved show no missing-file blocker at batch level.
+A non-claiming Removal omits the run amount and files. `entryFiles` requires a
+file per manual entry; `generated` means noma produces the evidence; `none` requires no files. Manual entries still need their
+own files under `lineFile` and `generated`.
+An amount of zero needs no file. For a single-input manual entry, this is the
+recorded value (including operating hours for a time-based component). For
+paired meter readouts, it is the final reading minus the initial reading. For
+concentration and mass flow, or mass and distance, it is the product, so either
+factor being zero makes the amount zero. Comparisons use exact decimals. Unknown
+or malformed input shapes still need a file. Recorded zero entries need no file.
 
 Each Removal-lineage Delivery needs uploaded proof before submission, regardless of template
 transport categories. The accepted classifications are owned by

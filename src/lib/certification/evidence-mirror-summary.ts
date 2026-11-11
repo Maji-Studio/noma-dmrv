@@ -1,3 +1,4 @@
+import type { LineFileEvidence } from "./emission-line-file-evidence";
 import type { OrgContext } from "@/lib/auth/server";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
@@ -12,6 +13,7 @@ import type { DocumentEntityType } from "@/schemas/documents";
 import { ISOMETRIC_PROVIDER } from "./shared";
 import {
   sourceCandidateEligibility,
+  collectLineFileSourceDocuments,
   type CandidateLineageEntityType,
   type CandidateSourceDocument,
 } from "@/lib/certification/source-candidates";
@@ -54,7 +56,7 @@ function isSummaryCandidate(candidate: CandidateSourceDocument): boolean {
     entityType === "application" ||
     entityType === "delivery" ||
     entityType === "feedstock" ||
-    entityType === "credit_batch"
+    entityType === "credit_batch" || entityType === "emission_line"
   );
 }
 
@@ -64,6 +66,7 @@ export async function loadEvidenceMirrorSummaryForScope(
   scope: EvidenceRemovalScope,
   latestSubmission: CertificationSubmissionRow | null = null,
   correctionWindowOpen = false,
+  lineFileEvidence: readonly LineFileEvidence[] = [],
 ): Promise<EvidenceMirrorSummary> {
   if (!scope.removalId) return { total: 0, mirrored: 0 };
 
@@ -129,6 +132,11 @@ export async function loadEvidenceMirrorSummaryForScope(
       binding: eligibility.binding,
       biocharApplicationId: eligibility.biocharApplicationId,
     });
+  }
+  for (const { document, binding } of lineFileEvidence.length ? await collectLineFileSourceDocuments(orgCtx, lineFileEvidence) : []) {
+    if (!isMirrorCandidateDocument(document)) continue;
+    documentsById.set(document.id, document);
+    liveCandidates.push({ documentId: document.id, binding });
   }
   const documentIds = Array.from(
     new Set(

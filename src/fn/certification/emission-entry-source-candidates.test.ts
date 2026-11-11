@@ -10,7 +10,7 @@ vi.mock("@/lib/log", async (importOriginal) => {
   return { ...actual, logger: { ...actual.logger, warn: mocks.warn } };
 });
 vi.mock("@/data-access/documents", () => ({ listEmissionEntryDocumentsByIds: mocks.documents, listDocumentsForEntity: vi.fn() }));
-vi.mock("@/lib/certification/emission-entry-source-context", () => ({ loadEntrySourceContributions: mocks.contributions }));
+vi.mock("@/lib/certification/emission-entry-source-context", () => ({ loadRemovalSourceContext: async () => ({ contributions: await mocks.contributions(), lineFileEvidence: [] }) }));
 vi.mock("@/data-access/certifier-removals", () => ({
   getCertifierRemovalById: vi.fn(async () => ({ facilityId: "facility" })),
   getCreditBatchesByRemovalId: vi.fn(async () => []),

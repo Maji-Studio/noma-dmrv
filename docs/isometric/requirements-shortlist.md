@@ -79,6 +79,13 @@ distinguish that gate from optional parsed readings and registry submission.
 | Meter electricity at the required interval and accuracy, with calibration/uncertainty support | Ongoing | At least hourly readings, meter accuracy and calibration metadata, any required discount | [Energy v1.2](https://registry.isometric.com/module/energy-use-accounting/1.2) |
 | Support fuel quantities with meter/container/bill and calibration records | Each fuel reporting period | Litres or mass, time of use, evidence, and lifecycle factor source | [Energy v1.2](https://registry.isometric.com/module/energy-use-accounting/1.2) |
 
+Run energy Sources come from the uploaded credit batch component file. For a
+non-zero exact From records total, the Removal claiming production emissions
+requires that file and sends it on the component's electricity or fuel Datapoint.
+A zero total or a non-claiming Removal sends no component file. Manual entries
+keep their own proof requirements. This file binding does not establish meter
+accuracy, calibration or reading frequency.
+
 ## Transportation
 
 | Requirement | When | Minimum records or computation | Source |

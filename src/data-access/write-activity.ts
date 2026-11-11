@@ -1,3 +1,4 @@
+import { emissionLineFiles } from "@/db/schema/emission-line-files";
 import { emissionEntries } from "@/db/schema/emission-entries";
 import type { ActivitySnapshot } from "@/lib/activity-changes";
 import { and, eq, gt, inArray, or } from "drizzle-orm";
@@ -20,6 +21,12 @@ export async function resolveWriteActivityScopes(
   if (entityType === "emission_entry") {
     const [entry] = await tx.select({ creditBatchId: emissionEntries.creditBatchId }).from(emissionEntries).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entityId)));
     return entry ? [entry] : [];
+  }
+  if (entityType === "emission_line") {
+    const [anchor] = await tx.select({ creditBatchId: emissionLineFiles.creditBatchId }).from(emissionLineFiles).where(and(
+      eq(emissionLineFiles.organizationId, ctx.organizationId), eq(emissionLineFiles.id, entityId),
+    ));
+    return anchor ? [anchor] : [];
   }
   if (entityType === "credit_batch") return [{ creditBatchId: entityId }];
   if (entityType === "sample") {

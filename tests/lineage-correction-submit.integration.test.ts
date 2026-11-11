@@ -136,7 +136,7 @@ it.each(["run", "distance"] as const)("detects a %s-only correction, fences the 
     inputs: [{ type: "monitored", input_key: "electricity_use", datapoint_id: null, display_name: "Electricity", quantity_kind: "energy" }],
   })) } as unknown as typeof template.groups[number]);
   const lineSources = reviewedTemplateSources(template);
-  lineSources.line = { scope: "operating", entryPolicy: "none", automaticSource: "run-electricity", origin: "reviewed" };
+  lineSources.line = { scope: "operating", entryPolicy: "none", automaticSource: "run-electricity", origin: "reviewed", filePolicy: "none" };
   const [observation] = await db.insert(removalTemplateObservations).values({ organizationId: org.organizationId, provider: "isometric",
     externalProjectId: "prj_test_1", externalTemplateId: template.id, definition: normalizeTemplateDefinition(template),
     semanticFingerprint: "correction-submit", fullFingerprint: "correction-submit", lineSources,

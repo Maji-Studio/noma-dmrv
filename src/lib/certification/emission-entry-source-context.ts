@@ -10,6 +10,10 @@ import { frozenEntriesForAttempt, loadRemovalEntryContext } from "./removal-entr
  * Compilation still loads fresh registry facts and fails closed independently.
  */
 export async function loadEntrySourceContributions(ctx: OrgContext, removalId: string) {
+  return (await loadRemovalSourceContext(ctx, removalId))?.contributions;
+}
+
+export async function loadRemovalSourceContext(ctx: OrgContext, removalId: string) {
   const scope = await resolveScopeForRemoval(ctx, removalId);
   const observations = await getLatestTemplateObservations(ctx, ISOMETRIC_PROVIDER,
     [...new Set(scope.memberBatches.flatMap((batch) => batch.removalTemplateId ? [batch.removalTemplateId] : []))]);
@@ -19,5 +23,5 @@ export async function loadEntrySourceContributions(ctx: OrgContext, removalId: s
   const facts = await loadBatchEmissionContext(ctx, scope.facilityId, scope.memberBatches, facility, { ownedRemovalId: scope.removalId ?? undefined });
   const latest = await getLatestSubmission(ctx, { provider: ISOMETRIC_PROVIDER,
     submissionType: REMOVAL_SUBMISSION_TYPE, localEntityType: REMOVAL_ENTITY_TYPE, localEntityId: removalId });
-  return (await loadRemovalEntryContext(ctx, scope, facts, facility, frozenEntriesForAttempt(latest, facts)))?.contributions;
+  return loadRemovalEntryContext(ctx, scope, facts, facility, frozenEntriesForAttempt(latest, facts));
 }

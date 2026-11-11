@@ -245,7 +245,7 @@ describe("Removal preflight", () => {
 
 it("retains typed empty-line and contribution blockers with entry compilation enabled", () => {
   const ctx = makeContext();
-  ctx.removalEntryContext = { observationId: "observation", semanticFingerprint: "fingerprint", contributions: {
+  ctx.removalEntryContext = { lineFileEvidence: [], observationId: "observation", semanticFingerprint: "fingerprint", contributions: {
     manifest: [], inputs: [], entrySet: [], selectedEntryIds: [], sentSingleComponentIds: [],
     blockers: [{ code: "singleLineMultipleEntries", message: "Create separate Removals for these batches.", creditBatchId: "batch", fixTarget: "emissions" }],
   } };
@@ -256,7 +256,7 @@ it("deduplicates the same contribution and line blocker but keeps distinct batch
   const ctx = makeContext();
   const blocker = { code: "entryMissingEvidence" as const, message: "Add a file.", fixTarget: "emissions" as const,
     lineRef: { componentId: "line", displayName: "Electricity" } };
-  ctx.removalEntryContext = { observationId: "observation", semanticFingerprint: "fingerprint", contributions: {
+  ctx.removalEntryContext = { lineFileEvidence: [], observationId: "observation", semanticFingerprint: "fingerprint", contributions: {
     manifest: [], inputs: [], entrySet: [], selectedEntryIds: [], sentSingleComponentIds: [], blockers: [{ ...blocker, creditBatchId: "batch" }],
   } };
   ctx.emissionLinesByBatchId = { batch: [{ componentId: "line", blocker }, { componentId: "other", blocker: { ...blocker, lineRef: { componentId: "other", displayName: "Other" } } }],

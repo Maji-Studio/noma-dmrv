@@ -1,3 +1,4 @@
+import { assertComponentFileClaimFresh } from "./component-file-claim";
 import { isCarriedToRemoval } from "@/lib/certification/emission-entry-carry";
 import { loadFacilityEmissionEntryCarry } from "./emission-entry-carry";
 import { loadEmissionEntryHolds } from "./emission-entry-holds";
@@ -54,6 +55,7 @@ export async function reserveProductionEmissionsClaims(
     submissionId: string;
     creditBatchIds: string[];
     now?: Date;
+    frozenLineFileSet?: { anchorId: string; version: number }[];
     entryClaim?: { memberBatchIds: string[]; frozenEntrySet: { entryId: string; contentRevision: number }[] };
   },
 ): Promise<void> {
@@ -195,6 +197,8 @@ export async function reserveProductionEmissionsClaims(
         "Another Removal is already sending production inputs for this credit batch. Wait for it to finish or reconcile its interrupted submission.",
       );
     }
+
+    await assertComponentFileClaimFresh(ctx, tx, batches.filter(batch => productionIds.includes(batch.id)), args.frozenLineFileSet ?? []);
 
     const reservedEntries = entryIds.length ? await tx.update(emissionEntries).set({
       sendReservedBySubmissionId: args.submissionId, version: nextVersion(emissionEntries.version), updatedAt: sql`now()`,

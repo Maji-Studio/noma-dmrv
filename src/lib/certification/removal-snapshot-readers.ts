@@ -98,6 +98,7 @@ const removalSourceBindingPlanSchema = z.array(
   z.object({
     documentId: z.string().min(1),
     sourceId: z.string().min(1),
+    lineFile: z.object({ creditBatchId: z.string().min(1), anchorVersion: z.number().int().positive() }).optional(),
     nomaRole: z.enum([
       "inventory",
       "feedstock_bill_of_lading",
@@ -106,6 +107,7 @@ const removalSourceBindingPlanSchema = z.array(
       "durability_evidence_ledger",
       "lab_report",
       "emission_entry",
+      "emission_line_file",
     ]),
     lineage: z.object({
       entityType: z.string().min(1),
@@ -132,6 +134,7 @@ const nomaEvidenceRoleSchema = z.enum([
   "durability_evidence_ledger",
   "lab_report",
   "emission_entry",
+  "emission_line_file",
 ] satisfies [NomaEvidenceRole, ...NomaEvidenceRole[]]);
 const removalSourceLineageSchema = z.object({
   entityType: z.string().min(1),
@@ -162,6 +165,7 @@ const explicitSourceTargetSchema = z.object({
 const classifiedRemovalSourceSchema: z.ZodType<ClassifiedRemovalSource> =
   z.object({
     nomaRole: nomaEvidenceRoleSchema,
+    lineFile: z.object({ creditBatchId: z.string().min(1), anchorVersion: z.number().int().positive() }).optional(),
     nomaRoleLabel: z.string().min(1),
     lineage: removalSourceLineageSchema,
     intendedTarget: z.discriminatedUnion("kind", [

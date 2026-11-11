@@ -37,7 +37,7 @@ vi.mock("@/lib/auth/server", () => ({
     isPlatformAdmin: false,
   })),
 }));
-vi.mock("@/lib/certification/emission-entry-source-context", () => ({ loadEntrySourceContributions: vi.fn(async () => undefined) }));
+vi.mock("@/lib/certification/emission-entry-source-context", () => ({ loadRemovalSourceContext: vi.fn(async () => undefined) }));
 vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-removals");

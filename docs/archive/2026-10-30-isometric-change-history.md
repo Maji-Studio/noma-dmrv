@@ -6,6 +6,25 @@ current behavior is indexed in the
 
 # Isometric Docs Change Log
 
+## 2026-11-11: Credit batch component file for run energy (#1519)
+
+An entry needs no file when its own amount is exactly zero: its single value,
+readout difference, or paired product. Unknown input shapes still need proof.
+Run energy proof lives on one live `emission_line_files` anchor per credit batch and
+component, with several uploaded `emission_line` documents allowed per anchor.
+During a returned Removal's correction window, replace the files by starting a
+new set. Replaced files stay in history and are no longer sent.
+
+The claiming Removal sends each uploaded document as a Source of the component's
+`electricity_use` or `volume_of_fuel` input, with role `emission_line_file`.
+When the exact From records total is not 0, `lineMissingEvidence` blocks the
+claiming Removal unless at least one uploaded file exists. Batches whose
+production emissions are already claimed or reserved show no such blocker at
+batch level. Non-claiming Removals omit production amounts and their Sources.
+
+Source binding mapping revision advances from 5 to 6. Removals in an open
+correction window see their candidate Sources as changed.
+
 ## 2026-11-05: Enter again for carried emissions entries (#1580)
 
 A carried entry that stopped counting can be entered again while its receiving

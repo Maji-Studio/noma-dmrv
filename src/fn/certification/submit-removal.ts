@@ -538,6 +538,11 @@ async function submitRemovalCore(
           removalId,
           submissionId: claimed.row.id,
           creditBatchIds: productionClaimBatchIds,
+          // The saved plan contains exactly the lineFileEvidence used by this payload,
+          // including on resume. Several documents can share the same anchor revision.
+          frozenLineFileSet: [...new Map(readRemovalSourceBindingPlan(claimed.row)
+            .filter(file => file.nomaRole === "emission_line_file" && file.lineFile && productionClaimBatchIds.includes(file.lineFile.creditBatchId))
+            .map(file => [file.lineage.entityId, { anchorId: file.lineage.entityId, version: file.lineFile!.anchorVersion }])).values()],
           entryClaim: { memberBatchIds: ctx.memberBatches.map((batch) => batch.id), frozenEntrySet: readRemovalEntrySnapshot(claimed.row).frozenEntrySet },
         });
         if (claimed.reason === "rejected-hash-changed") {

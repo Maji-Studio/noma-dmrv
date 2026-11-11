@@ -98,6 +98,7 @@ export async function planRemovalEvidence(args: {
           await collectCandidateSourceDocumentsForRemoval(orgCtx, {
             removalId,
             entryContributions: ctx.removalEntryContext?.contributions,
+            lineFileEvidence: ctx.removalEntryContext?.lineFileEvidence,
             lineages: ctx.lineages,
             feedstockCodes: ctx.feedstockCodes,
             transportFeedstockIds: ctx.transportCoverage.feedstock.entityIds,
@@ -156,6 +157,7 @@ export async function planRemovalEvidence(args: {
       lineSources: ctx.lineSources,
       ...membership,
       entryContributions: ctx.removalEntryContext?.contributions,
+      lineFileEvidence: ctx.removalEntryContext?.lineFileEvidence,
     })),
     // The semantic plan includes pending files with placeholder Source IDs. The
     // operational plan above remains strict, so placeholders never reach the API.
@@ -171,6 +173,7 @@ export async function planRemovalEvidence(args: {
       lineSources: ctx.lineSources,
       ...membership,
       entryContributions: ctx.removalEntryContext?.contributions,
+      lineFileEvidence: ctx.removalEntryContext?.lineFileEvidence,
     })),
   };
 }
