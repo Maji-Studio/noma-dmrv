@@ -58,6 +58,7 @@ const EXCEPTION: Record<string, string> = {
   "organizations#inviteMemberAction": "Owner-approved retry replaces the pending invitation through Better Auth.",
   "organizations#resendInvitationAction": "Replaces one pending invitation in a transaction; a retry replaces it again and the newest link wins.",
   "documents#requestUpload": "Duplicates leave pending uploads reclaimed by the upload sweep; evidence create is single-flight.",
+  "emission-line-files#attachEmissionLineFileFn": "One active file per component anchor; a retry is refused as a conflict and the pending upload is reclaimed by the upload sweep.",
   "production-run-reading-imports#importProductionRunReadingsFromDocumentFn": "Seed-only unmounted importer deduplicates timestamps.",
   "bin-movements#recordStockTakeFn": "Legacy unmounted action; useRecordStockTake has no caller.",
   "certification/ghg-statement-reports#prepareGhgStatementReport": "Reuses preparationKey under certification artifact and facility locks.",

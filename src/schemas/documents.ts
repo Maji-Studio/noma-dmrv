@@ -47,6 +47,7 @@ export type DocumentVisibility = (typeof DOCUMENT_VISIBILITIES)[number];
 
 export const DOCUMENT_ENTITY_TYPES = [
   "emission_entry",
+  "emission_line",
   "sample",
   "delivery",
   "production_run",

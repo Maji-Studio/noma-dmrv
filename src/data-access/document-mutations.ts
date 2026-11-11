@@ -1,3 +1,4 @@
+import { bumpEmissionLineFileEvidence } from "./emission-line-file-lock";
 import { bumpEmissionEntryEvidence } from "./emission-entry-lock";
 import type { CaptureActivity } from "@/lib/activity-changes";
 import { and, eq } from "drizzle-orm";
@@ -37,6 +38,7 @@ export async function deleteDocumentInTransaction(ctx: OrgContext, tx: DbTransac
   if (mapping) throw new DomainError("conflict", "This document is mirrored to a certification provider and cannot be deleted.");
   await enqueueDocumentKeys(ctx, tx, row);
   if (row.uploadStatus === "uploaded") await bumpEmissionEntryEvidence(ctx, tx, row.entityType, row.entityId);
+  if (row.uploadStatus === "uploaded") await bumpEmissionLineFileEvidence(ctx, tx, row.entityType, row.entityId);
   await tx.delete(documents).where(and(eq(documents.id, row.id), eq(documents.organizationId, ctx.organizationId)));
   return row;
 }

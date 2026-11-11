@@ -99,6 +99,7 @@ const ACTIVITY_COVERAGE = {
     deleteDocumentRow: { status: "direct" },
     retireDocumentsForEntities: { status: "direct" },
     retireTombstonedEmissionEntryDocuments: { status: "direct" },
+    retireCreditBatchEmissionLineFiles: { status: "direct" },
   },
   "document-writes.ts": {
     requestDocumentUploadInTransaction: { status: "runner", operations: ["request_document_upload", "request_document_upload_app"] },

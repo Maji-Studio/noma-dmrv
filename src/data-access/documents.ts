@@ -1,3 +1,5 @@
+import { emissionLineFiles } from "@/db/schema/emission-line-files";
+import { bumpEmissionLineFileEvidence, assertEmissionLineDocumentWritable, assertEmissionLineFileSlotEmpty } from "./emission-line-file-lock";
 import { assertEmissionEntryDocumentWritable, bumpEmissionEntryEvidence } from "./emission-entry-lock";
 import { type ActivityScope, recordDocumentActivity } from "./write-activity";
 import type { ActivityEventInput } from "./activity-events";
@@ -69,6 +71,7 @@ export interface DocumentEntityRef {
 
 const DOCUMENT_ENTITY_LABELS: Record<DocumentEntityType, string> = {
   emission_entry: "Emissions entry",
+  emission_line: "Component file",
   sample: "Sample",
   delivery: "Delivery",
   production_run: "Production run",
@@ -107,6 +110,13 @@ export async function assertCanManageDocumentEntity(
   }
 
   switch (entityType) {
+    case "emission_line": {
+      const [row] = await (tx ?? db).select({ id: emissionLineFiles.id }).from(emissionLineFiles).where(and(
+        eq(emissionLineFiles.organizationId, ctx.organizationId), eq(emissionLineFiles.id, entityId),
+      ));
+      if (!row) throw entityMissingError(entityType);
+      return;
+    }
     case "emission_entry": {
       const [row] = await (tx ?? db)
         .select({ id: emissionEntries.id })
@@ -419,8 +429,13 @@ export async function insertDocument(
   requireOrgScope(ctx);
   return db.transaction(async (tx) => {
     if (input.entityType === "emission_entry") await assertEmissionEntryDocumentWritable(ctx, input.entityId, tx);
+    if (input.entityType === "emission_line") {
+      await assertEmissionLineDocumentWritable(ctx, input.entityId, tx);
+      await assertEmissionLineFileSlotEmpty(ctx, tx, input.entityType, input.entityId);
+    }
     const [row] = await tx.insert(documents).values({ ...input, organizationId: ctx.organizationId }).returning();
     await bumpEmissionEntryEvidence(ctx, tx, row.entityType, row.entityId);
+    await bumpEmissionLineFileEvidence(ctx, tx, row.entityType, row.entityId);
     await recordDocumentActivity(ctx, tx, row, "created", { source: "form" });
     return row;
   });
@@ -436,10 +451,12 @@ export async function deleteDocumentRow(
   if (!tx) return db.transaction(writerTx => deleteDocumentRow(ctx, id, source, writerTx));
   const [initial] = await tx.select().from(documents).where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId)));
   if (initial?.entityType === "emission_entry" && !(source === "system" && initial.uploadStatus === "failed")) await assertEmissionEntryDocumentWritable(ctx, initial.entityId, tx);
+  if (initial?.entityType === "emission_line" && !(source === "system" && initial.uploadStatus === "failed")) await assertEmissionLineDocumentWritable(ctx, initial.entityId, tx);
   const [row] = await tx.select().from(documents)
     .where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId))).for("update");
   if (!row) return null;
   if (row.uploadStatus === "uploaded") await bumpEmissionEntryEvidence(ctx, tx, row.entityType, row.entityId);
+  if (row.uploadStatus === "uploaded") await bumpEmissionLineFileEvidence(ctx, tx, row.entityType, row.entityId);
   await recordDocumentActivity(ctx, tx, row, "deleted", { source });
   await tx.delete(documents).where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId)));
   return row;
@@ -537,6 +554,19 @@ export async function retireTombstonedEmissionEntryDocuments(
   })), "form", undefined, true);
 }
 
+/** Batch deletion holds the batch lock; its component file anchors cascade with the batch. */
+export async function retireCreditBatchEmissionLineFiles(
+  ctx: OrgContext, tx: DbTransaction, creditBatchId: string,
+): Promise<void> {
+  requireOrgScope(ctx);
+  const anchors = await tx.select({ id: emissionLineFiles.id }).from(emissionLineFiles).where(and(
+    eq(emissionLineFiles.organizationId, ctx.organizationId), eq(emissionLineFiles.creditBatchId, creditBatchId),
+  )).for("update");
+  await retireOwnedDocuments(ctx, tx, anchors.map(anchor => ({
+    entityType: "emission_line" as const, entityId: anchor.id,
+  })), "form", undefined, true);
+}
+
 /**
  * Retire documents owned by entities that are about to be hard-deleted.
  *
@@ -563,6 +593,7 @@ export async function retireDocumentsForEntities(
 async function retireOwnedDocuments(
   ctx: OrgContext, tx: DbTransaction, entities: readonly DocumentEntityRef[],
   source: ActivityEventInput["source"], actorUserId?: ActivityEventInput["actorUserId"],
+  // The parent delete already holds its locks and checks; owner-level guards would refuse it.
   tombstonedEntries = false,
 ): Promise<void> {
   requireOrgScope(ctx);
@@ -578,6 +609,9 @@ async function retireOwnedDocuments(
   ];
   for (const entity of uniqueEntities.filter(entity => entity.entityType === "emission_entry").sort((a, b) => a.entityId.localeCompare(b.entityId))) {
     if (!tombstonedEntries) await assertEmissionEntryDocumentWritable(ctx, entity.entityId, tx);
+  }
+  for (const entity of uniqueEntities.filter(entity => entity.entityType === "emission_line").sort((a, b) => a.entityId.localeCompare(b.entityId))) {
+    if (!tombstonedEntries) await assertEmissionLineDocumentWritable(ctx, entity.entityId, tx);
   }
   const ownershipConditions = uniqueEntities.map((entity) =>
     and(
@@ -656,6 +690,7 @@ async function retireOwnedDocuments(
 
   for (const document of ownedDocuments) {
     if (!tombstonedEntries) await bumpEmissionEntryEvidence(ctx, tx, document.entityType, document.entityId);
+    if (!tombstonedEntries) await bumpEmissionLineFileEvidence(ctx, tx, document.entityType, document.entityId);
     const owner = uniqueEntities.find(entity => entity.entityType === document.entityType && entity.entityId === document.entityId);
     await recordDocumentActivity(ctx, tx, document, "deleted", { scopes: owner?.activityScopes, source, actorUserId });
     await enqueueDocumentKeys(ctx, tx, document);

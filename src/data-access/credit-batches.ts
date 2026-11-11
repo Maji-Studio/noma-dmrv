@@ -69,7 +69,7 @@ import { formatUtcDate } from "@/lib/date-utils";
 import { ActionConflictError, SafeError } from "@/lib/errors";
 import { conflictCode } from "@/lib/conflict-ref";
 import { isBatchEligible } from "@/lib/certifier-policy";
-import { retireDocumentsForEntities, retireTombstonedEmissionEntryDocuments } from "./documents";
+import { retireCreditBatchEmissionLineFiles, retireDocumentsForEntities, retireTombstonedEmissionEntryDocuments } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import {
   assertCreditBatchSlicesAreUnassigned,
@@ -861,6 +861,7 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
         .delete(creditBatchProductionRuns)
         .where(and(eq(creditBatchProductionRuns.creditBatchId, id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)));
       await deleteCreditBatchApplicationSlices(ctx, tx, id);
+      await retireCreditBatchEmissionLineFiles(ctx, tx, id);
       await tx.delete(creditBatches).where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)));
 
       await retireDocumentsForEntities(ctx, tx, [
