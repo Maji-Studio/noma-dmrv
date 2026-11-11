@@ -141,7 +141,7 @@ function EntryRow({ line, entry, scope, groupLabel, readOnly, onEdit, onDelete }
       <EntrySource groupLabel={groupLabel} dateText={dateText} />
       <span role="cell" className={DATE_CELL}>{dateText}</span>
       <span role="cell" className={DETAIL_CELL}>
-        <EntryEvidence entry={entry} scope={scope} actions={actions} readOnly={readOnly} />
+        <EntryEvidence entry={entry} filePolicy={line.filePolicy} scope={scope} actions={actions} readOnly={readOnly} />
         <LateEntryStatus entry={entry} facilityId={scope.facilityId} className="pt-4" readOnly={readOnly} />
       </span>
       <span role="cell" className={AMOUNT_CELL}>

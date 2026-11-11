@@ -79,9 +79,10 @@ memory. See `src/fn/certification/sources-transfer.ts`.
 Post-submit verification follows component attributions and
 Datapoints; propagation delay and a true mismatch are different outcomes.
 
-Each component has a proof setting: `lineFile` covers the From records amount
-with one file per credit batch and is allowed only for genset diesel, startup
-diesel and electricity from production runs; `entryFiles` requires a file per
+Each component has a proof setting (`src/lib/isometric/template-observations/file-policies.ts`):
+`lineFile` is for genset diesel, startup diesel and electricity from production
+runs, whose From records amount will be covered by one file per credit batch
+(that file is not stored or required yet); `entryFiles` requires a file per
 manual entry; `generated` means noma produces the evidence; `none` requires no
 files. Manual entries still need their own files under `lineFile` and `generated`.
 An amount of zero needs no file: every monitored value must canonicalize to

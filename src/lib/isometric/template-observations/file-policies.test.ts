@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { SOURCE_IDS, type AutomaticSourceId } from "./catalog-sources";
 import type { LineContract } from "./line-sources";
-import { allowedFilePolicies, defaultFilePolicy, effectiveFilePolicy, entriesNeedFiles, FILE_POLICIES, LINE_FILE_SOURCES, recordsNeedFile } from "./file-policies";
+import { allowedFilePolicies, defaultFilePolicy, effectiveFilePolicy, entriesNeedFiles, FILE_POLICIES, LINE_FILE_SOURCES } from "./file-policies";
 
 const entryPolicies = ["none", "single", "additive"] as const;
 const sources: (AutomaticSourceId | undefined)[] = [...Object.values(SOURCE_IDS), "safety-margin", undefined];
@@ -29,7 +29,6 @@ it("falls back for an unknown stored setting without throwing", () => {
   expect(effectiveFilePolicy(stale)).toBe("entryFiles");
 });
 
-it.each(FILE_POLICIES)("defines manual and From records requirements for %s", (policy) => {
+it.each(FILE_POLICIES)("defines the manual entry requirement for %s", (policy) => {
   expect(entriesNeedFiles(policy)).toBe(policy !== "none");
-  expect(recordsNeedFile(policy)).toBe(policy === "lineFile");
 });

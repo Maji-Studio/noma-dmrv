@@ -1,4 +1,4 @@
-import { SOURCE_IDS } from "./catalog-sources";
+import { SOURCE_IDS, type AutomaticSourceId } from "./catalog-sources";
 import type { LineContract } from "./line-sources";
 
 export type FilePolicy = "lineFile" | "entryFiles" | "generated" | "none";
@@ -8,7 +8,9 @@ export const LINE_FILE_SOURCES = [
   SOURCE_IDS.totalStartupDieselLitres,
   SOURCE_IDS.totalElectricityKwh,
 ] as const;
-const GENERATED_FILE_SOURCES = ["feedstock-transport", "delivery-transport", "sample-transport", "sequestration"] as const;
+const GENERATED_FILE_SOURCES = [
+  "feedstock-transport", "delivery-transport", "sample-transport", "sequestration",
+] as const satisfies readonly AutomaticSourceId[];
 type FileContract = Pick<LineContract, "automaticSource" | "entryPolicy" | "filePolicy">;
 
 function supportsComponentFile(contract: FileContract): boolean {
@@ -34,8 +36,4 @@ export function effectiveFilePolicy(contract: FileContract): FilePolicy {
 /** A component file covers From records; manual entries still need their own files. */
 export function entriesNeedFiles(policy: FilePolicy): boolean {
   return policy !== "none";
-}
-
-export function recordsNeedFile(policy: FilePolicy): boolean {
-  return policy === "lineFile";
 }

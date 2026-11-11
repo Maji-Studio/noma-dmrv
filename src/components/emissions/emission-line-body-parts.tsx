@@ -13,7 +13,9 @@ import { ServerError } from "@/components/forms/server-error";
 import { Button, Notice } from "@/components/ui";
 import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
 import { removalTemplateSetupHref, removalTemplatesSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
+import { entryFileMissing } from "@/lib/certification/emission-entry-evidence";
 import { entryFigures } from "@/lib/certification/late-entry-figures";
+import type { FilePolicy } from "@/lib/isometric/template-observations/file-policies";
 import { cn } from "@/lib/utils";
 import { EntryFileUpload, useEntryFiles } from "./emission-entry-files";
 import {
@@ -195,15 +197,18 @@ function AddFilePanel({ entry, scope, actions }: { entry: EmissionEntry; scope: 
  * caption line that wraps, then the upload panel. Until the file names load
  * the entry's own count stands in, so the slot never shows an empty bar.
  */
-export function EntryEvidence({ entry, scope, actions, className, readOnly = false }: {
+export function EntryEvidence({ entry, filePolicy, scope, actions, className, readOnly = false }: {
   entry: EmissionEntry;
+  /** The component's proof setting: an entry of 0, or a component that needs no files, shows no warning. */
+  filePolicy: FilePolicy;
   scope: EmissionBatchScope;
   actions: ReturnType<typeof useEntryActions>;
   className?: string;
   readOnly?: boolean;
 }) {
   const { files, countText } = useEntryFiles(entry);
-  const missing = entry.documentCount === 0;
+  const missing = entryFileMissing(filePolicy, entry);
+  const noFiles = entry.documentCount === 0;
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <div className="flex flex-wrap items-center gap-x-16 gap-y-2 body-caption text-[var(--color-text-secondary)]">
@@ -218,7 +223,7 @@ export function EntryEvidence({ entry, scope, actions, className, readOnly = fal
             <WarningIcon size={ICON} weight="bold" aria-hidden="true" />
             File missing
           </span>
-        ) : files ? (
+        ) : noFiles ? null : files ? (
           files.map((file) => (
             <a
               key={file.id}
@@ -237,7 +242,7 @@ export function EntryEvidence({ entry, scope, actions, className, readOnly = fal
             {countText}
           </span>
         )}
-        {missing && !readOnly && !actions.addingFile && (
+        {noFiles && !readOnly && !actions.addingFile && (
           <QuietAction onClick={actions.startAddFile} className="min-h-24 body-caption">Add file</QuietAction>
         )}
         {entry.note && <span className="min-w-0">{entry.note}</span>}
