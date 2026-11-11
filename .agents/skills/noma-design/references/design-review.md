@@ -15,13 +15,27 @@ For every item, check the changed code and the 1440 and 390 screenshots.
 - `Button`, not a raw `<button>`: `docs/design-system.md` § Button.
 - Dialog actions sit bottom left, primary first: `docs/design-system.md` § Modal (also `.greptile/config.json` rule `ui-action-order`).
 - A surface with nothing in it uses `EmptyState`, not bare text: `docs/design-system.md` § Other primitives (and § Missing values for what `EmptyState` is not for); copy in `docs/ux-writing.md` § Empty states.
+- A text action is `TextAction`, and a button stays busy until its result shows: `docs/design-system.md` § Button.
+- A list cell holds one value on one line, a name before a code: `docs/design-system.md` § List-page idiom.
+- A sheet's view footer has its actions first and Close last: `docs/design-system.md` § Canonical Page Shell. A form's actions stay pinned to the bottom of the sheet: `docs/forms.md` § FormActions.
 - Wet mass comes first, with moisture and dry mass derived after it: `docs/design-system.md` § Wet mass, moisture, dry mass; `docs/forms.md` § Stock blocks lead with wet mass.
 
 ## Formatting and copy
 
 - Dates and times go through the shared formatters in `src/lib/format-utils.ts` (`formatDate`, `formatDateTime`, `formatDateRange`, `formatFacilityDateTime`, `formatFacilityDay`, `formatDayString`), never `toLocaleDateString` or `Intl.DateTimeFormat` in a component: `docs/design-system.md` § Date and time display. `src/lib/date-utils.ts` holds the facility clock and input-side helpers.
 - Copy follows the terms, structure and review checklist, with no en or em dashes: `docs/ux-writing.md` § Review checklist (and § Core rules, § Message structure for wording).
+- A missing value uses the shared token and says what unblocks it where the code knows: `docs/design-system.md` § Missing values; `docs/ux-writing.md` § Missing values.
+- A value change is two blocks and an arrow, with unchanged readings left out: `docs/design-system.md` § Before and after.
 - A list-page `PageHeader` subtitle stays only when it adds information: `docs/design-system.md` § PageHeader.
+
+## Recurring corrections
+
+The four rules live in `SKILL.md` § The corrections that recur. Judge them on the screenshots and the diff.
+
+- Reuse first: a new component or style has no existing sibling that would have done the job.
+- Rest state: the screen at rest shows what the next step needs, and the rest opens on interaction.
+- One place: no fact, setting or page appears twice, and a replaced route is deleted.
+- Operator decides: no new blocked save, prefilled flow or automatic fix without a named data-integrity risk.
 
 ## Phone (390)
 
@@ -36,4 +50,5 @@ Judge these on the 390 screenshot. This list is their only home; the related sec
 ## Consistency and history
 
 - A style change reaches every sibling surface in the same PR: `docs/design-system.md` § Consistency across sibling surfaces.
-- Nothing returns that `docs/design-decisions.md` lists as tried and replaced or rejected. Read the entries for the touched surface (§ Cross-cutting, § Pickers and forms, § Onboarding, § Stock, bins and transport, § Credit batches and locks, § OAuth consent).
+- Nothing returns that `docs/design-decisions.md` lists as tried and replaced or rejected. Read § Cross-cutting and the section for the touched surface.
+- A PR that lands a pick or a reversal adds its entry to `docs/design-decisions.md` and says who decided: `SKILL.md` § Log the pick.
