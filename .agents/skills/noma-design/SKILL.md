@@ -21,9 +21,9 @@ Load `maji-design-app` first and follow its steps. This skill adds what noma dec
 - Explanations: `docs/forms.md` § Explanations behind an (i) (one view, `ExplanationInfo`, two inline lines).
 - CERT chip: `docs/forms.md` § CERT chip status.
 - Dialogs: `docs/design-system.md` § Modal (action order, width, linked records).
-- Locks: `docs/design-system.md` § Notice (informative box, no unavailable action).
+- Locks: `docs/design-system.md` § Notice (the lock box); `docs/design-decisions.md` § Credit batches and locks (no action the record cannot take).
 - Consistency: `docs/design-system.md` § Consistency across sibling surfaces.
-- List cells: `docs/design-system.md` § List-page idiom (one line, names before codes).
+- List cells: `docs/design-system.md` § List-page idiom (quiet cells, names before codes).
 - Sheet footers: `docs/design-system.md` § Canonical Page Shell (view mode: actions, then Close); `docs/forms.md` § FormActions (pinned to the bottom).
 - Text actions and busy buttons: `docs/design-system.md` § Button (`TextAction`; busy until the result shows).
 - Missing values: `docs/design-system.md` § Missing values; `docs/ux-writing.md` § Missing values.
@@ -35,8 +35,8 @@ These four come back in the decision log and in review more than any others. App
 
 - **Reuse first.** Build from the component a sibling surface already uses (`DataTable`, `FormActions`, `TextAction`, `RemovalRecords`, the list pages' filter select). A new style is the option the log rejects most. When nothing existing fits, say so on the answer page and show the nearest existing one beside the new one.
 - **Rest state.** At rest a screen shows what the operator needs for the next step. Everything else opens on interaction: groups closed, the first three rows then "Show all N", a details view one click away, the reason behind an (i).
-- **One place.** One page per thing, one setting per choice, one line per fact. When two surfaces hold the same thing, merge them and delete the other route with no redirect.
-- **Operator decides.** Lead the options with the simplest one: the save goes through, a to-do or a note shows what is open, and a sent record stays locked. Offer a blocked save, a prefilled flow or an automatic fix only against a real data-integrity risk, and name that risk in the option.
+- **One place.** One working page per thing, one setting per choice, one line per fact. When two surfaces do the same job, merge them and delete the other. A repeat on purpose (a sheet that previews a routed page, a form footer that repeats the credit batch) is a pick the log records.
+- **Operator decides.** Lead the options with the simplest one: the save goes through, a to-do or a note shows what is open, and a sent record stays locked. Offer a blocked save, a helper flow that enters a record for the operator, or an automatic fix only against a real data-integrity risk, and name that risk in the option.
 
 Done when the work passes all four, or the answer page names the one it breaks and why.
 
