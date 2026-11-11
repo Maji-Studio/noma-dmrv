@@ -1,9 +1,9 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { getRemovalCarriedEntriesFn } from "./removal-carried-entries";
-import { loadRemovalCarriedEntries } from "@/data-access/removal-carried-entries";
+import { loadRemovalCarriedEntries } from "@/lib/certification/removal-carried-entries";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import type { OrgContext } from "@/lib/auth/server";
-vi.mock("@/data-access/removal-carried-entries", () => ({ loadRemovalCarriedEntries: vi.fn() }));
+vi.mock("@/lib/certification/removal-carried-entries", () => ({ loadRemovalCarriedEntries: vi.fn() }));
 vi.mock("../with-action", () => ({ withAction: async (fn: (ctx: OrgContext) => Promise<unknown>) => {
   try { return { success: true, data: await fn(makeTestOrgContext()) }; }
   catch { return { success: false }; }

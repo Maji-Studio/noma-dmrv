@@ -1,31 +1,29 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { loadRemovalCarriedEntries } from "./removal-carried-entries";
-import { getCreditBatchesByRemovalId, getCertifierRemovalById } from "./certifier-removals";
-import { getSentRemovalForComparison } from "./removal-entry-correction";
+import { getCreditBatchesByRemovalId, getCertifierRemovalById } from "@/data-access/certifier-removals";
+import { getSentRemovalForComparison } from "@/data-access/removal-entry-correction";
 import { loadDraftRemovalCarriedEntries } from "./removal-draft-carried-entries";
-import { loadFacilityEmissionEntryCarry } from "./emission-entry-carry";
-import { readRecordLockLineage } from "./record-lock-lineage";
-import { makeTestOrgContext } from "../../tests/helpers/test-org";
-const mocks = vi.hoisted(() => ({ select: vi.fn(), members: vi.fn() }));
-vi.mock("@/db", () => ({ db: { select: mocks.select, selectDistinct: mocks.members } }));
-vi.mock("./certifier-removals", () => ({ getCertifierRemovalById: vi.fn(), getCreditBatchesByRemovalId: vi.fn() }));
-vi.mock("./emission-entry-carry", () => ({ loadFacilityEmissionEntryCarry: vi.fn() }));
-vi.mock("./record-lock-lineage", () => ({ readRecordLockLineage: vi.fn() }));
-vi.mock("./removal-entry-correction", () => ({ getSentRemovalForComparison: vi.fn() }));
+import { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
+import { loadRecordLockLineage } from "@/data-access/record-lock-lineage";
+import { makeTestOrgContext } from "../../../tests/helpers/test-org";
+import { getCreditBatchCodes } from "@/data-access/credit-batch-codes";
+vi.mock("@/data-access/credit-batch-codes", () => ({ getCreditBatchCodes: vi.fn() }));
+vi.mock("@/data-access/certifier-removals", () => ({ getCertifierRemovalById: vi.fn(), getCreditBatchesByRemovalId: vi.fn() }));
+vi.mock("@/data-access/emission-entry-carry", () => ({ loadFacilityEmissionEntryCarry: vi.fn() }));
+vi.mock("@/data-access/record-lock-lineage", () => ({ loadRecordLockLineage: vi.fn() }));
+vi.mock("@/data-access/removal-entry-correction", () => ({ getSentRemovalForComparison: vi.fn() }));
 vi.mock("./removal-draft-carried-entries", () => ({ loadDraftRemovalCarriedEntries: vi.fn() }));
-vi.mock("./removal-template-observations", () => ({ getTemplateObservationById: vi.fn() }));
-vi.mock("./removal-codes", () => ({ getRemovalCodes: vi.fn(async () => new Map()) }));
+vi.mock("@/data-access/removal-template-observations", () => ({ getTemplateObservationById: vi.fn() }));
+vi.mock("@/data-access/removal-codes", () => ({ getRemovalCodes: vi.fn(async () => new Map()) }));
 const ctx = makeTestOrgContext();
-const query = (rows: object[]) => ({ from: () => ({ where: async () => rows }) });
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(getCreditBatchesByRemovalId).mockResolvedValue([]);
   vi.mocked(loadFacilityEmissionEntryCarry).mockResolvedValue({ entries: [], contenders: [], ownContenders: [], batches: [] });
-  mocks.members.mockReturnValue(query([{ id: "member" }]));
-  mocks.select.mockReturnValue(query([{ id: "origin", code: "CB-origin" }]));
+  vi.mocked(getCreditBatchCodes).mockResolvedValue([{ id: "origin", code: "CB-origin" }]);
   vi.mocked(getCertifierRemovalById).mockResolvedValue({ id: "removal", facilityId: "facility" } as never);
   vi.mocked(getSentRemovalForComparison).mockResolvedValue(null);
-  vi.mocked(readRecordLockLineage).mockResolvedValue([returnedLineage("FAILED_VERIFICATION")]);
+  vi.mocked(loadRecordLockLineage).mockResolvedValue([returnedLineage("FAILED_VERIFICATION")]);
 });
 function returnedLineage(status: string | null, submittedToVerifier = status === "FAILED_VERIFICATION") {
   return { id: "removal", submissions: [{ id: "sent", externalId: "ext", status: "submitted", submittedAt: "2026-10-01T00:00:00.000Z", inFlight: false }],
@@ -35,7 +33,7 @@ it("refuses a Removal outside the authenticated organization's visible records",
   vi.mocked(getCertifierRemovalById).mockResolvedValue(null);
   await expect(loadRemovalCarriedEntries(ctx, "foreign")).rejects.toThrow("Removal was not found.");
   expect(getCertifierRemovalById).toHaveBeenCalledExactlyOnceWith(ctx, "foreign");
-  expect(mocks.members).not.toHaveBeenCalled();
+  expect(getCreditBatchesByRemovalId).not.toHaveBeenCalled();
   expect(loadDraftRemovalCarriedEntries).not.toHaveBeenCalled();
 });
 it("uses the entry-only draft selector", async () => {
@@ -56,6 +54,7 @@ it("reads exactly the frozen carried list independently of present membership", 
   expect(await loadRemovalCarriedEntries(ctx, "removal")).toEqual({ facilityId: "facility", lateEntries: [], carriedEntries: [expect.objectContaining({ entryId: "carried",
     creditBatchId: "origin", creditBatchCode: "CB-origin", occurredOn: "2026-10-01", value: entry.value, evidenceDocumentIds: ["file"] })] });
   expect(loadDraftRemovalCarriedEntries).not.toHaveBeenCalled();
+  expect(getCreditBatchCodes).toHaveBeenCalledExactlyOnceWith(ctx, "facility", ["origin"]);
 });
 it("does not silently substitute live entries for a corrupt sent snapshot", async () => {
   vi.mocked(getSentRemovalForComparison).mockResolvedValue({ payloadSnapshot: { semantic: { carriedEntries: "bad" } } } as never);
@@ -68,7 +67,7 @@ it("returns empty for older snapshots without the optional carried list", async 
   expect(await loadRemovalCarriedEntries(ctx, "removal")).toEqual({ facilityId: "facility", carriedEntries: [], lateEntries: [] });
 });
 it("keeps frozen values when display records or optional labels are missing", async () => {
-  mocks.select.mockReturnValue(query([]));
+  vi.mocked(getCreditBatchCodes).mockResolvedValue([]);
   vi.mocked(getSentRemovalForComparison).mockResolvedValue({ payloadSnapshot: { semantic: { carriedEntries: [{
     entryId: "entry", creditBatchId: "gone", componentId: "line", occurredOn: "2026-10-01",
     value: { magnitude: "12", unit: "kWh" }, evidenceDocumentIds: ["frozen-file"],
@@ -117,7 +116,7 @@ it("lists a paired-input late entry with every value (#1417)", async () => {
 it("skips facility discovery for a sent Removal whose statement is not returned", async () => {
   vi.mocked(getSentRemovalForComparison).mockResolvedValue({ payloadSnapshot: { semantic: {} } } as never);
   for (const lineage of [[], [returnedLineage("SUBMITTED")], [returnedLineage("DRAFT")], [returnedLineage(null)]]) {
-    vi.mocked(readRecordLockLineage).mockResolvedValueOnce(lineage as never);
+    vi.mocked(loadRecordLockLineage).mockResolvedValueOnce(lineage as never);
     expect(await loadRemovalCarriedEntries(ctx, "removal")).toEqual({ facilityId: "facility", carriedEntries: [], lateEntries: [] });
   }
   expect(loadFacilityEmissionEntryCarry).not.toHaveBeenCalled();

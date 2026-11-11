@@ -20,6 +20,12 @@ const transactionStatementReads = new WeakMap<object, StatementReads>();
 type Removal = { removalId: string; ghgStatementId: string | null };
 type Submission = typeof certificationSubmissions.$inferSelect;
 
+/** Read persisted lineage through the shared org-scoped database reader. */
+export async function loadRecordLockLineage(ctx: OrgContext, removals: readonly Removal[]): Promise<RecordLockRemoval[]> {
+  requireOrgScope(ctx);
+  return readRecordLockLineage(ctx, db, removals);
+}
+
 /** Include historical statement membership, not just the Removal's current FK. */
 export async function readRecordLockLineage(ctx: OrgContext, tx: Pick<DbTransaction, "select">, removals: readonly Removal[], fresh = false, options: { statementReads?: StatementReads; excludeSubmissionId?: string } = {}): Promise<RecordLockRemoval[]> {
   requireOrgScope(ctx);

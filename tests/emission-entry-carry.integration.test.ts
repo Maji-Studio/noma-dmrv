@@ -1,4 +1,4 @@
-import { loadRemovalCarriedEntries } from "@/data-access/removal-carried-entries";
+import { loadRemovalCarriedEntries } from "@/lib/certification/removal-carried-entries";
 import { normalizeCarriedEntriesForHash } from "@/lib/certification/removal-entry-hash";
 import { MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "@/lib/credit-batches/application-mass";
 /** Real database contracts. Run only in the configured throwaway test database. */

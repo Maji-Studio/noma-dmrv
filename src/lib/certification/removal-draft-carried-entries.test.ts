@@ -1,18 +1,18 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import { makeTestOrgContext } from "../../tests/helpers/test-org";
+import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import { loadDraftRemovalCarriedEntries } from "./removal-draft-carried-entries";
 import { loadRemovalEntryContext } from "@/lib/certification/removal-entry-context";
-import { loadFacilityEmissionEntryCarry } from "./emission-entry-carry";
+import { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 import type { RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
 
 const mocks = vi.hoisted(() => ({ batches: vi.fn(), observations: vi.fn(), carry: vi.fn(), rollups: vi.fn(), facts: vi.fn(), contenders: vi.fn(), latest: vi.fn() }));
-vi.mock("./certifier-removals", () => ({ getCreditBatchesByRemovalId: mocks.batches }));
-vi.mock("./removal-template-observations", () => ({ getLatestTemplateObservations: mocks.observations }));
-vi.mock("./emission-entry-carry", () => ({ loadFacilityEmissionEntryCarry: mocks.carry }));
-vi.mock("./credit-batch-accounting", () => ({ loadCreditBatchRollups: mocks.rollups }));
-vi.mock("./emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: mocks.facts }));
-vi.mock("./emission-entry-contenders", () => ({ listEmissionEntryAvailableApplications: vi.fn(async () => []), listEmissionEntryDraftContenders: mocks.contenders, loadEmissionEntryReservations: vi.fn(async () => []) }));
-vi.mock("./certification-submissions", () => ({ getLatestSubmission: mocks.latest }));
+vi.mock("@/data-access/certifier-removals", () => ({ getCreditBatchesByRemovalId: mocks.batches }));
+vi.mock("@/data-access/removal-template-observations", () => ({ getLatestTemplateObservations: mocks.observations }));
+vi.mock("@/data-access/emission-entry-carry", () => ({ loadFacilityEmissionEntryCarry: mocks.carry }));
+vi.mock("@/data-access/credit-batch-accounting", () => ({ loadCreditBatchRollups: mocks.rollups }));
+vi.mock("@/data-access/emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: mocks.facts }));
+vi.mock("@/data-access/emission-entry-contenders", () => ({ listEmissionEntryAvailableApplications: vi.fn(async () => []), listEmissionEntryDraftContenders: mocks.contenders, loadEmissionEntryReservations: vi.fn(async () => []) }));
+vi.mock("@/data-access/certification-submissions", () => ({ getLatestSubmission: mocks.latest }));
 const ctx = makeTestOrgContext();
 const observation = {
   id: "observation", externalTemplateId: "template", semanticFingerprint: "facts",
