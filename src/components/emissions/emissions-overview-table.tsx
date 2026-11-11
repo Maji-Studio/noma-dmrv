@@ -8,11 +8,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CaretDownIcon, CaretUpIcon } from "@phosphor-icons/react/dist/ssr";
-import { StatusBadge } from "@/components/ui";
 import type { EmissionLineCounts, FacilityEmissionsOverviewBatch } from "@/hooks/use-emissions-overview";
 import { EMISSION_LINE_STATE_LABELS, type EmissionLineState } from "@/lib/certification/emission-lines";
 import { formatDateRange } from "@/lib/format-utils";
-import { creditBatchStatuses, type CreditBatchStatus } from "@/schemas/credit-batches";
 import { cn } from "@/lib/utils";
 import {
   BATCH_SORT_LABELS,
@@ -34,10 +32,6 @@ const TH =
   "px-16 py-10 font-medium text-left whitespace-nowrap bg-[var(--sea)] lg:sticky lg:top-0 lg:z-[1] lg:[box-shadow:inset_0_-1px_0_var(--color-border-tertiary)]";
 const TD = "px-16 py-12";
 
-function isCreditBatchStatus(status: string): status is CreditBatchStatus {
-  return (creditBatchStatuses as readonly string[]).includes(status);
-}
-
 export function batchPeriodText(batch: Pick<FacilityEmissionsOverviewBatch, "startDate" | "endDate">): string {
   return formatDateRange(batch.startDate, batch.endDate);
 }
@@ -58,7 +52,6 @@ export function EmissionsOverviewTable({ rows, query, facilityId, onSort }: Emis
           <tr>
             <SortHeader sort="code" query={query} onSort={onSort} />
             <SortHeader sort="period" query={query} onSort={onSort} className="hidden xl:table-cell" />
-            <th scope="col" className={cn(TH, "hidden sm:table-cell")}>Status</th>
             {COUNT_COLUMNS.map(({ state }) => (
               <th key={state} scope="col" className={cn(TH, "hidden text-right lg:table-cell")}>
                 {EMISSION_LINE_STATE_LABELS[state]}
@@ -138,9 +131,6 @@ function BatchRow({ batch, href, onOpen }: { batch: FacilityEmissionsOverviewBat
         )}
       </td>
       <td className={cn(TD, "hidden whitespace-nowrap xl:table-cell")}>{period}</td>
-      <td className={cn(TD, "hidden sm:table-cell")}>
-        {isCreditBatchStatus(batch.status) ? <StatusBadge status={batch.status} size="small" /> : batch.status}
-      </td>
       {COUNT_COLUMNS.map(({ state, count }) => (
         <td
           key={state}
