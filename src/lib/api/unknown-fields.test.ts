@@ -22,3 +22,14 @@ it("visits nullable nested objects and array elements", () => {
   expect(unknownFieldIssues({ nested: { items: [{ name: "ok", "a/b~": true }] } }, schema)[0].path).toEqual(["nested", "items", 0, "a/b~"]);
   expect(unknownFieldIssues({ nested: null }, schema)).toEqual([]);
 });
+
+it("visits array branches whose nullable type is an array", () => {
+  const schema = { anyOf: [
+    { type: ["array", "null"], items: { type: "object", properties: { name: { type: "string" } } } },
+    { type: "string" },
+  ] };
+  expect(unknownFieldIssues([{ name: "ok", extra: true }], schema)).toEqual([
+    { path: [0, "extra"], code: "unknown_field", message: "This property is not accepted." },
+  ]);
+  expect(unknownFieldIssues(null, schema)).toEqual([]);
+});
