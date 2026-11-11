@@ -1,3 +1,6 @@
+import { lineFileEvidenceFacts } from "../../../tests/helpers/line-file-evidence-facts";
+import { deriveBatchEmissionLines } from "./emission-lines";
+import { buildCreditBatchOpenItems } from "@/lib/credit-batches/open-items";
 import { describe, expect, it } from "vitest";
 import {
   buildRemovalRequirementsChecklist,
@@ -275,4 +278,18 @@ it.each(["project-scope", "unrecognized-component", "ambiguous"] as const)("rout
     templateBlockerCodes: reason === "ambiguous" ? ["templateLinesNeedReview"] : [],
     templateFixTargets: reason === "ambiguous" ? ["templateLineReview"] : ["templateLines"],
   });
+});
+
+it("uses File missing for component proof in readiness, batch health and open items", () => {
+  const { batch, observation } = lineFileEvidenceFacts();
+  batch.lineFiles = [];
+  const emissionLines = deriveBatchEmissionLines({ ...batch, ...observation, problems: [], enrichmentComplete: true });
+  const blocker = emissionLines[0].blocker!;
+  const check = buildRemovalRequirementsChecklist(facts({ emissionLineBlockers: [blocker] })).find(check => check.key === "emissions")!;
+  expect(certCheckLabel(check)).toBe("File missing");
+  const health = deriveBatchHealth(batchFacts({ emissionLines }));
+  expect(health.state).toBe("incomplete");
+  const items = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true, health, emissionLines });
+  expect(items.blocking).toContainEqual(expect.objectContaining({ title: "File missing",
+    instruction: "Add a file for the From records amount on this credit batch.", target: { tab: "emissions" } }));
 });

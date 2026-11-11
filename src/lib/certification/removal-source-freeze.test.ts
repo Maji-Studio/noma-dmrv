@@ -168,3 +168,15 @@ it("keeps a sent document on correction resubmit while it is still attached", ()
   const attached = [frozenOperatorCandidate, ...currentCandidates.slice(1)];
   expect(filterCandidateSourcesForSubmissionLifecycle(attached, submission(), true)).toEqual(attached);
 });
+
+it("reads and refreshes versioned component files without retaining the replaced Source", () => {
+  const candidate = (documentId: string, anchorVersion: number): CandidateSourceDocument => ({ documentId, binding: {
+    nomaRole: "emission_line_file", nomaRoleLabel: "Component file", lineage: { entityType: "emission_line", entityId: "anchor", entityLabel: "Component file" },
+    lineFile: { creditBatchId: "batch", anchorVersion }, intendedTarget: { kind: "explicit", componentId: "component", inputKey: "electricity_use" }, mappingRevision: "revision",
+  } });
+  const old = candidate("old", 1);
+  const current = candidate("new", 2);
+  const row = submission({ payloadSnapshot: { semantic: { candidateSources: [frozenOperatorCandidate, old] } } });
+  expect(filterCandidateSourcesForSubmissionLifecycle([current], row, true)).toEqual([current]);
+  expect(filterCandidateSourcesForSubmissionLifecycle([current], row)).toEqual([frozenOperatorCandidate, current]);
+});

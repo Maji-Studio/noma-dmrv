@@ -2,7 +2,7 @@ import { EMPTY_REMOVAL_LINE } from "@/lib/certification/emission-entry-messages"
 import { DomainError } from "@/lib/domain-errors";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
 import type { AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
-import { effectiveFilePolicy, type FilePolicy } from "@/lib/isometric/template-observations/file-policies";
+import { effectiveFilePolicy, recordsNeedFile, type FilePolicy } from "@/lib/isometric/template-observations/file-policies";
 import { effectiveContract, validateLineSources, type LineSources, type LineSourceProblem } from "@/lib/isometric/template-observations/line-sources";
 import type { TemplateDefinition } from "@/lib/isometric/template-observations/types";
 import { canonicalDecimal } from "@/lib/isometric/template-observations/units";
@@ -61,6 +61,7 @@ export interface BatchEmissionLineFacts {
   definition: TemplateDefinition; lineSources: LineSources; problems: readonly LineSourceProblem[];
   enrichmentComplete: boolean;
   entriesCanSubmit?: boolean;
+  lineFiles?: readonly { anchor: { id: string; componentId: string; version: number }; document: { id: string; fileName: string; version: number } | null }[];
   automaticFigures: Partial<Record<AutomaticSourceId, EmissionFigure | null>>;
   /** The batches counting this batch's linked feedstock transport, when every leg is owned elsewhere. */
   feedstockTransportCountedOn?: readonly CountedOnBatch[];
@@ -103,7 +104,7 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     const entries = facts.entries.filter((entry) => entry.componentId === component.id);
     const counting = entries.filter((entry) => entry.counts);
     const values = counting.filter((entry) => entry.kind === "value");
-    const automaticFigure = contract?.automaticSource ? ownValue(facts.automaticFigures, contract.automaticSource) ?? null : null;
+    const automaticFigure = contract?.automaticSource && !facts.omittedAutomaticSources?.includes(contract.automaticSource) ? ownValue(facts.automaticFigures, contract.automaticSource) ?? null : null;
     const calculatedByIsometric = contract?.automaticSource === "sequestration" && (facts.automaticRecordCounts?.sequestration ?? 0) > 0;
     const records: EmissionLineRecords | null = contract?.automaticSource ? {
       source: RECORD_SOURCES[contract.automaticSource],
@@ -119,6 +120,12 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     else if (values.some((entry) => entryFileMissing(filePolicy, entry))) {
       state = "missingEvidence";
       blocker = { code: "entryMissingEvidence", message: MISSING_EVIDENCE_INSTRUCTION, copy: { instruction: MISSING_EVIDENCE_INSTRUCTION }, fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+    } else if (recordsNeedFile(filePolicy, automaticFigure?.magnitude ?? "0") &&
+      !facts.lineFiles?.some(({ anchor, document }) => anchor.componentId === component.id && document)) {
+      state = "missingEvidence";
+      const instruction = "Add a file for the From records amount on this credit batch.";
+      blocker = { code: "lineMissingEvidence", message: instruction, copy: { instruction }, fixTarget: "emissions",
+        lineRef: { componentId: component.id, displayName: component.displayName } };
     } else if (automaticFigure || values.length) state = "filled";
     else if (counting.some((entry) => entry.kind === "zero")) state = "confirmedZero";
     // Display completeness only: preserve the binding decision's submission blocker.

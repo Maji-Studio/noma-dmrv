@@ -127,6 +127,8 @@ it.each(["0", "1"])("uses an automatic figure of %s instead of a Removal-owned z
   const f = facts();
   f.entries = [entry(f, { kind: "zero", confirmedForRemovalId: "removal", total: null, hasEvidence: false })];
   f.automaticFigures = { "run-electricity": { magnitude, unit: "kWh" } };
+  f.lineFiles = [{ anchor: { id: "anchor", componentId: f.entries[0].componentId, version: 2 },
+    document: { id: "proof", fileName: "proof.pdf", version: 1 } }];
   expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state: "filled", total: { magnitude, unit: "kWh" } });
 });
 

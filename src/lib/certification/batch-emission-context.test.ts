@@ -1,3 +1,4 @@
+import { listEmissionLineFilesForBatches } from "@/data-access/emission-line-files";
 import { removalEntryOwner } from "@/lib/certification/removal-emission-contributions";
 import { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 import { loadRemovalEntryCorrection } from "./removal-correction-core";
@@ -50,6 +51,7 @@ function storedEntry(creditBatchId: string, overrides: Partial<StoredEntry> = {}
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(listEmissionLineFilesForBatches).mockResolvedValue([]);
   vi.mocked(loadFacilityEmissionEntryCarry).mockResolvedValue({ entries: [], contenders: [], ownContenders: [], batches: [] });
   vi.mocked(listEmissionEntryAvailableApplications).mockResolvedValue([]);
   vi.mocked(loadEmissionEntryReservations).mockResolvedValue([]);
@@ -192,6 +194,8 @@ it("uses batch-wide automatic figures instead of empty placeholders", async () =
   const facts = structuredClone(facilityFacts);
   facts.templatesById.template!.observation!.lineSources.line.automaticSource = "run-electricity";
   vi.mocked(loadBatchesEmissionAutomaticFacts).mockResolvedValue({ one: { automaticFigures: { "run-electricity": { magnitude: "3", unit: "kWh" } } } });
+  vi.mocked(listEmissionLineFilesForBatches).mockResolvedValue([{ anchor: { id: "anchor", componentId: "line", creditBatchId: "one", version: 2 },
+    document: { id: "proof", fileName: "proof.pdf", version: 1 } }] as never);
   const batches = [{ id: "one", removalTemplateId: "template" }];
   const { batchFacts: loaded } = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facts);
   expect(resolveRemovalTemplate(batches, facts, loaded).emissionLinesByBatchId.one[0]).toMatchObject({ state: "filled", total: { magnitude: "3", unit: "kWh" } });
@@ -381,3 +385,5 @@ it("refreshes an A-only contender set for a Removal covering A+B, retaining B's 
   expect(removalEntryOwner(entry, advisory.batchFacts.two.contenders!)).toBe("R2");
   expect(removalEntryOwner(entry, guard.batchFacts.two.contenders!)).toBe("R2");
 });
+
+vi.mock("@/data-access/emission-line-files", () => ({ listEmissionLineFilesForBatches: vi.fn() }));

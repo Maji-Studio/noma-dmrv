@@ -55,6 +55,7 @@ export function resolveRemovalTemplate(
       lineSources: withTemplateOrder(facts.template, facts.observation!.lineSources),
       problems: facts.lineSourceProblems, enrichmentComplete: facts.enrichmentProblems.length === 0,
       automaticFigures: batchFacts[id]?.automaticFigures ?? {},
+      lineFiles: batchFacts[id]?.lineFiles,
       omittedAutomaticSources: batchFacts[id]?.omittedAutomaticSources,
       entries: batchFacts[id]?.entries ?? [],
       previousObservations: batchFacts[id]?.previousObservations,

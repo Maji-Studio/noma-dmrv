@@ -1,3 +1,4 @@
+import type { LineFileEvidence } from "./emission-line-file-evidence";
 import { automaticSourceAvailable, catalogSourceForRole } from "@/lib/isometric/template-observations/catalog-sources";
 import { carriedEntrySourceDescription, type CarriedEntryNote } from "./emission-entry-carry-copy";
 import { isInFrozenEntrySet } from "./removal-entry-snapshot";
@@ -44,6 +45,7 @@ export type RemovalSourceIntendedTarget = EvidenceIntendedTarget | {
 };
 
 export interface ClassifiedRemovalSource {
+  lineFile?: { creditBatchId: string; anchorVersion: number };
   carriedEntry?: Pick<CarriedEntryNote, "creditBatchCode" | "occurredOn">;
   nomaRole: NomaEvidenceRole;
   nomaRoleLabel: string;
@@ -84,7 +86,7 @@ export interface OptionalRemovalEvidenceTarget
 const EVIDENCE_TARGETS = projectEvidenceTargets();
 
 function sourceBindingRule(
-  nomaRole: Exclude<NomaEvidenceRole, "durability_evidence_ledger" | "emission_entry">,
+  nomaRole: Exclude<NomaEvidenceRole, "durability_evidence_ledger" | "emission_entry" | "emission_line_file">,
   nomaRoleLabel: string,
 ): SourceBindingRule {
   const [intendedTarget, ...additionalIntendedTargets] =
@@ -153,12 +155,13 @@ export const REMOVAL_SOURCE_TARGET_VOCABULARY = (() => {
 // Datapoints. This makes the semantic submission hash supersede an already
 // submitted Removal whose target list is unchanged but whose wire attachment
 // behavior was corrected.
-const SOURCE_BINDING_MATERIALIZATION_REVISION = 5;
+const SOURCE_BINDING_MATERIALIZATION_REVISION = 6;
 
 export const SOURCE_BINDING_MAPPING_REVISION = payloadHash({
   rules: SOURCE_BINDING_RULES,
   durabilityLedgerTargets: DURABILITY_LEDGER_TARGETS,
   materializationRevision: SOURCE_BINDING_MATERIALIZATION_REVISION,
+  explicitLineRole: { role: "emission_line_file", targetKeys: ["componentId", "inputKey"] },
   explicitEntryRole: { role: "emission_entry", targetKeys: ["componentId", "inputKey"] },
 });
 
@@ -302,6 +305,7 @@ export interface SourceBindingCandidate {
 }
 
 export interface RemovalSourceBindingPlanEntry {
+  lineFile?: { creditBatchId: string; anchorVersion: number };
   documentId: string;
   sourceId: string;
   nomaRole: NomaEvidenceRole;
@@ -444,6 +448,7 @@ export function buildRemovalSourceBindingPlan(args: {
   candidates: SourceBindingCandidate[];
   removalId?: string;
   entryContributions?: Pick<RemovalEntryContributions, "manifest" | "entrySet">;
+  lineFileEvidence?: readonly LineFileEvidence[];
   lineSources?: LineSources;
   template: IsometricGhgEntryTemplate;
   applicationIdsByCreditBatchId: Map<string, string[]>;
@@ -464,6 +469,19 @@ export function buildRemovalSourceBindingPlan(args: {
               component.inputs.some((input) => input.input_key === target.inputKey && input.type === "monitored"))
               .map((component) => ({ group, component })),
           );
+          if (binding.nomaRole === "emission_line_file") {
+            const files = args.lineFileEvidence?.filter(file => file.anchorId === binding.lineage.entityId &&
+              file.documentId === documentId && file.componentId === target.componentId && file.inputKey === target.inputKey &&
+              file.creditBatchId === binding.lineFile?.creditBatchId && file.anchorVersion === binding.lineFile?.anchorVersion) ?? [];
+            if (binding.lineage.entityType !== "emission_line" || matches.length !== 1 || files.length !== 1) {
+              throw new SafeError("The component file changed. Reload and review this Removal again.");
+            }
+            const { group, component } = matches[0];
+            return [{ documentId, sourceId, nomaRole: binding.nomaRole, lineage: binding.lineage, lineFile: binding.lineFile,
+              intendedTarget: { kind: "ordinary", groupKey: group.key, componentId: component.id,
+                componentBlueprintKey: component.blueprint_key, inputKey: target.inputKey, creditBatchIds: [] },
+              mappingRevision: binding.mappingRevision }];
+          }
           const contribution = args.entryContributions?.manifest.find((input) =>
             input.componentId === target.componentId && input.inputKey === target.inputKey);
           const entries = contribution?.entries.filter((entry) =>
@@ -483,6 +501,7 @@ export function buildRemovalSourceBindingPlan(args: {
               componentBlueprintKey: component.blueprint_key, inputKey: target.inputKey, creditBatchIds: [] },
             mappingRevision: binding.mappingRevision }];
         }
+        if (binding.nomaRole === "emission_line_file") throw new SafeError("A component file must target its exact input.");
         if (binding.nomaRole === "emission_entry") {
           throw new EmissionEntryEvidenceError(EMISSION_ENTRY_FILE_MISMATCH, {
             inputKey: target.inputKey, entryId: binding.lineage.entityId, documentId,

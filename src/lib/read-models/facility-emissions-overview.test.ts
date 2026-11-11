@@ -1,3 +1,4 @@
+import { listEmissionLineFilesForBatches } from "@/data-access/emission-line-files";
 import { loadBatchEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 vi.mock("@/data-access/emission-entry-carry", () => ({ loadBatchEmissionEntryCarry: vi.fn() }));
 import { assert, afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -40,6 +41,7 @@ function entry(componentId: string, overrides = {}) {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(listEmissionLineFilesForBatches).mockResolvedValue([]);
   vi.mocked(loadBatchEmissionEntryCarry).mockResolvedValue([]);
   vi.mocked(listEmissionLineCommentsForBatches).mockResolvedValue([]);
   vi.useFakeTimers();
@@ -139,4 +141,24 @@ it("isolates unread and unpinned templates while deriving review lines for a sib
   expect(result.get("unpinned")).toEqual({ status: "blocked", blocker: "unpinnedTemplate", storedEntries: [] });
   expect(getLatestTemplateObservations).toHaveBeenCalledExactlyOnceWith(ctx, "isometric", ["template", "unread-template"]);
   expect(loadBatchesEmissionAutomaticFacts).toHaveBeenCalledExactlyOnceWith(ctx, ["new"]);
+});
+
+vi.mock("@/data-access/emission-line-files", () => ({ listEmissionLineFilesForBatches: vi.fn() }));
+
+it("counts missing From records proof per batch through the shared read model", async () => {
+  const energy = structuredClone(observation);
+  energy.definition.groups[0].components = energy.definition.groups[0].components.filter(component => component.id === "recorded");
+  energy.lineSources = { recorded: { scope: "operating", entryPolicy: "additive", origin: "reviewed", automaticSource: "run-electricity", filePolicy: "lineFile" } };
+  vi.mocked(getLatestTemplateObservations).mockResolvedValue([energy] as never);
+  vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([]);
+  vi.mocked(loadBatchesEmissionAutomaticFacts).mockResolvedValue({
+    new: { automaticFigures: { "run-electricity": { magnitude: "0.5", unit: "kWh" } } },
+    old: { automaticFigures: { "run-electricity": { magnitude: "0.5", unit: "kWh" } } },
+  });
+  vi.mocked(listEmissionLineFilesForBatches).mockResolvedValue([{ anchor: { id: "anchor", creditBatchId: "new", componentId: "recorded", version: 2 },
+    document: { id: "file", fileName: "proof.pdf", version: 1 } }] as never);
+  const result = await loadFacilityEmissionsOverview(ctx, "facility");
+  expect(result.batches[0].lineCounts).toMatchObject({ recorded: 1, open: 0, fileMissing: 0 });
+  expect(result.batches[1].lineCounts).toMatchObject({ recorded: 0, open: 1, fileMissing: 1 });
+  expect(listEmissionLineFilesForBatches).toHaveBeenCalledExactlyOnceWith(ctx, ["new", "old"]);
 });

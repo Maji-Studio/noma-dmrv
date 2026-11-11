@@ -1,9 +1,10 @@
 import type { BatchHealthFixTarget } from "./batch-health";
 import { removalTemplateBlocker, removalTemplateBlockerDestination, type RemovalTemplateBlockerCode } from "./removal-template-blockers";
 
-export type RemovalBlockerCode = RemovalTemplateBlockerCode | "sentEntryOutsideWindow" | "entryHasNoRemoval" | "singleLineMultipleEntries" | "lineNeedsReview" | "lineNeedsSetup" | "entryMissingEvidence" | "lineHasNoSource" | "feedstockTypeMapping" | "entityReadiness" | "reviewIncomplete" | "durabilityTier" | "durabilityUnresolved" | "durabilityConfiguration" | "buildRefused" | "legacy";
+export type RemovalBlockerCode = RemovalTemplateBlockerCode | "sentEntryOutsideWindow" | "entryHasNoRemoval" | "singleLineMultipleEntries" | "lineNeedsReview" | "lineNeedsSetup" | "lineMissingEvidence" | "entryMissingEvidence" | "lineHasNoSource" | "feedstockTypeMapping" | "entityReadiness" | "reviewIncomplete" | "durabilityTier" | "durabilityUnresolved" | "durabilityConfiguration" | "buildRefused" | "legacy";
 export interface RemovalBlocker {
   code: RemovalBlockerCode;
+  creditBatchId?: string;
   message: string;
   fixTarget: BatchHealthFixTarget | null;
   lineRef?: { componentId: string; displayName: string; inputKey?: string };

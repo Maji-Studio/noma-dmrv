@@ -1,4 +1,5 @@
 import { SOURCE_IDS, type AutomaticSourceId } from "./catalog-sources";
+import { canonicalDecimal } from "./units";
 import type { LineContract } from "./line-sources";
 
 export const FILE_POLICIES = ["lineFile", "entryFiles", "generated", "none"] as const;
@@ -36,4 +37,9 @@ export function effectiveFilePolicy(contract: FileContract): FilePolicy {
 /** A component file covers From records; manual entries still need their own files. */
 export function entriesNeedFiles(policy: FilePolicy): boolean {
   return policy !== "none";
+}
+
+/** Unknown totals fail closed; exact recorded zero needs no component file. */
+export function recordsNeedFile(policy: FilePolicy, recordsTotal: string): boolean {
+  return policy === "lineFile" && canonicalDecimal(recordsTotal) !== "0";
 }

@@ -1,3 +1,4 @@
+import { listEmissionLineFilesForBatches } from "@/data-access/emission-line-files";
 import { loadBatchEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 vi.mock("@/data-access/emission-entry-carry", () => ({ loadBatchEmissionEntryCarry: vi.fn() }));
 import { assert, beforeEach, describe, expect, it, vi } from "vitest";
@@ -33,6 +34,7 @@ const stored = { id: "stored", creditBatchId: "unread", observationId: "previous
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(listEmissionLineFilesForBatches).mockResolvedValue([]);
   vi.mocked(loadBatchEmissionEntryCarry).mockResolvedValue([]);
   vi.mocked(getLatestTemplateObservations).mockResolvedValue([observation] as never);
   vi.mocked(getTemplateObservationsByIds).mockResolvedValue([]);
@@ -169,3 +171,5 @@ describe("time-based lines", () => {
     expect(lineOf(observation).timeEmission).toBeNull();
   });
 });
+
+vi.mock("@/data-access/emission-line-files", () => ({ listEmissionLineFilesForBatches: vi.fn() }));

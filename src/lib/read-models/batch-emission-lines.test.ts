@@ -1,3 +1,4 @@
+import { listEmissionLineFilesForBatches } from "@/data-access/emission-line-files";
 import { loadBatchEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 vi.mock("@/data-access/emission-entry-carry", () => ({ loadBatchEmissionEntryCarry: vi.fn() }));
 import { legacyTransportObservation } from "../../../tests/helpers/legacy-transport-observation";
@@ -41,6 +42,7 @@ import { withTemplateOrder } from "@/lib/isometric/template-observations/templat
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(listEmissionLineFilesForBatches).mockResolvedValue([]);
   vi.mocked(loadBatchEmissionEntryCarry).mockResolvedValue([]);
   vi.mocked(listEmissionLineCommentsForBatches).mockResolvedValue([]);
   vi.mocked(getCreditBatchById).mockResolvedValue({
@@ -317,3 +319,5 @@ it("marks a stored legacy pair for review", () => {
   const [line] = buildBatchEmissionLines(observation, [], new Map(), { automaticFigures: {} });
   expect(line.state).toBe("needsReview");
 });
+
+vi.mock("@/data-access/emission-line-files", () => ({ listEmissionLineFilesForBatches: vi.fn() }));

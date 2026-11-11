@@ -28,15 +28,15 @@ function components(semantic: Record<string, unknown>): string[] {
     .flatMap(input => typeof input.rtcId === "string" ? [input.rtcId] : []);
 }
 
-/** Entry evidence already has exact component/batch attribution in the manifest. */
+/** Entry and component evidence are compared on their exact component below. */
 function sharedEvidence(semantic: Record<string, unknown>) {
-  const entrySourceIds = new Set(rows(semantic.sourceBindingPlan)
-    .filter(binding => binding.nomaRole === "emission_entry").map(binding => binding.sourceId));
+  const componentSourceIds = new Set(rows(semantic.sourceBindingPlan)
+    .filter(binding => ["emission_entry", "emission_line_file"].includes(String(binding.nomaRole))).map(binding => binding.sourceId));
   return {
-    sourceIds: Array.isArray(semantic.sourceIds) ? semantic.sourceIds.filter(id => !entrySourceIds.has(id)) : [],
+    sourceIds: Array.isArray(semantic.sourceIds) ? semantic.sourceIds.filter(id => !componentSourceIds.has(id)) : [],
     candidateSources: rows(semantic.candidateSources).filter(candidate => {
       const binding = candidate.binding;
-      return !binding || typeof binding !== "object" || !("nomaRole" in binding) || binding.nomaRole !== "emission_entry";
+      return !binding || typeof binding !== "object" || !("nomaRole" in binding) || !["emission_entry", "emission_line_file"].includes(String(binding.nomaRole));
     }),
   };
 }

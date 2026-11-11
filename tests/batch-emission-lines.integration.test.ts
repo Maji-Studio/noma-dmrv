@@ -90,7 +90,7 @@ it("loads pinned lines using all and only the batch's runs, including unapplied 
   assert(linesResult.status === "ready");
   const lines = linesResult.lines;
   expect(lines).toHaveLength(1);
-  expect(lines[0]).toMatchObject({ componentId: group.components[0].id, state: "filled", automaticFigure: { magnitude: "20", unit: "kWh" }, total: { magnitude: "20", unit: "kWh" }, entries: [], comment: null });
+  expect(lines[0]).toMatchObject({ componentId: group.components[0].id, state: "missingEvidence", blocker: { code: "lineMissingEvidence", fixTarget: "emissions" }, automaticFigure: { magnitude: "20", unit: "kWh" }, total: { magnitude: "20", unit: "kWh" }, entries: [], comment: null });
 });
 it("rejects a cross-organization batch read", async () => {
   await expect(loadBatchEmissionLines({ ...ctx, organizationId: `other-${crypto.randomUUID()}` }, lineage.facilityId, lineage.batchId)).rejects.toThrow();

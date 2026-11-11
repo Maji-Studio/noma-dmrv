@@ -18,19 +18,19 @@ function isGeneratedEvidence(candidate: CandidateSourceDocument): boolean {
   );
 }
 
-function isEntryEvidence(candidate: CandidateSourceDocument): boolean {
-  return candidate.binding?.nomaRole === "emission_entry";
+function isComponentEvidence(candidate: CandidateSourceDocument): boolean {
+  return candidate.binding?.nomaRole === "emission_entry" || candidate.binding?.nomaRole === "emission_line_file";
 }
 
 function followsCurrentManifest(candidate: CandidateSourceDocument): boolean {
-  return isGeneratedEvidence(candidate) || isEntryEvidence(candidate);
+  return isGeneratedEvidence(candidate) || isComponentEvidence(candidate);
 }
 
 /**
  * A blocking Removal submission freezes its operator evidence tuple, not just
  * document IDs. Draft retries preserve reviewed operator uploads and ledgers.
- * A terminal claim may use freshly generated ledgers. Entry files always follow
- * the current contribution manifest, which applies the frozen or live entry set
+ * A terminal claim may use freshly generated ledgers. Entry and component files follow
+ * their current evidence manifests, which apply production ownership and the frozen or live entry set
  * for the attempt. Superseded/rejected attempts rebuild live.
  */
 export function filterCandidateSourcesForSubmissionLifecycle(
@@ -50,8 +50,8 @@ export function filterCandidateSourcesForSubmissionLifecycle(
   if (latestSubmission.status === "draft") {
     const refreshed = getMetadataValue(latestSubmission.metadata, SUBMISSION_METADATA_KEYS.evidenceRefreshCandidates);
     if (!refreshed) return [
-      ...frozenCandidates.filter((candidate) => !isEntryEvidence(candidate)),
-      ...candidates.filter((candidate) => isEntryEvidence(candidate)),
+      ...frozenCandidates.filter((candidate) => !isComponentEvidence(candidate)),
+      ...candidates.filter((candidate) => isComponentEvidence(candidate)),
     ];
     const reviewed = readRemovalCandidateSources({ ...latestSubmission, payloadSnapshot: { semantic: { candidateSources: refreshed } } });
     return [

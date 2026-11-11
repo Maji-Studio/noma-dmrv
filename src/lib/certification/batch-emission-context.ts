@@ -1,3 +1,4 @@
+import { listEmissionLineFilesForBatches } from "@/data-access/emission-line-files";
 import { coversBatches, type CoveredContenders } from "@/lib/certification/covered-contenders";
 import { mergeEntryCarryFacts } from "@/lib/certification/merge-entry-carry-facts";
 import { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
@@ -22,7 +23,7 @@ export interface EntryTemplateContext {
 }
 
 export type BatchEmissionContext = Record<string,
-  Pick<BatchEmissionLineFacts, "automaticFigures" | "omittedAutomaticSources"> & Awaited<ReturnType<typeof loadBatchEmissionEntryFacts>> & { corrections?: EntryCorrectionState[]; productionReservationSubmissionId?: string | null; contenders?: EntryContender[]; entriesWithoutRemoval?: string[] }>;
+  Pick<BatchEmissionLineFacts, "automaticFigures" | "omittedAutomaticSources" | "lineFiles"> & Awaited<ReturnType<typeof loadBatchEmissionEntryFacts>> & { corrections?: EntryCorrectionState[]; productionReservationSubmissionId?: string | null; contenders?: EntryContender[]; entriesWithoutRemoval?: string[] }>;
 
 export interface LoadedBatchEmissionContext {
   batchFacts: BatchEmissionContext;
@@ -64,11 +65,12 @@ export async function loadBatchEmissionContext(
   for (const id of ids) {
     if (rollups[id]?.batch.facilityId !== facilityId) throw new SafeError("Credit batch was not found.");
   }
-  const [storedEntries, automatic, contenders, availableApplications] = await Promise.all([
+  const [storedEntries, automatic, contenders, availableApplications, lineFiles] = await Promise.all([
     listEmissionEntriesForBatches(ctx, ids),
     loadBatchesEmissionAutomaticFacts(ctx, ids),
     coversBatches(coveredContenders, ids, claimedAttempt) ? coveredContenders.contenders : listEmissionEntryDraftContenders(ctx, ids, undefined, claimedAttempt),
     listEmissionEntryAvailableApplications(ctx, ids),
+    listEmissionLineFilesForBatches(ctx, ids),
   ]);
   const carryKey = JSON.stringify([ctx.organizationId, facilityId, claimedAttempt]);
   let carryRead = carryReads?.get(carryKey);
@@ -102,7 +104,7 @@ export async function loadBatchEmissionContext(
       [entry.observationId, observationsById.get(entry.observationId) ?? null] as const,
     ));
     const entries = mergeEntryCarryFacts(deriveEmissionEntryFacts(stored, observation, previousObservations), carryContext.entries);
-    result[id] = { productionReservationSubmissionId: rollups[id].batch.productionEmissionsClaimReservedBySubmissionId, entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
+    result[id] = { lineFiles: lineFiles.filter(row => row.anchor.creditBatchId === id), productionReservationSubmissionId: rollups[id].batch.productionEmissionsClaimReservedBySubmissionId, entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
       entriesWithoutRemoval: entriesWithoutRemoval(entries, contenders, liveReservationIds, availableApplications) };
   }
   for (const contender of contenders.filter((item) => loadCorrection && item.contenderKind === "correction")) {

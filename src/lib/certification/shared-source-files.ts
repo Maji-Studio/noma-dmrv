@@ -18,7 +18,7 @@ import type { NomaEvidenceRole } from "@/lib/isometric/semantic-binding-catalog"
 export const APPLICATION_EVIDENCE_ROLE = "application_evidence";
 export type SourceFileRole = NomaEvidenceRole | typeof APPLICATION_EVIDENCE_ROLE;
 
-type FixedKindRole = Exclude<SourceFileRole, "emission_entry">;
+type FixedKindRole = Exclude<SourceFileRole, "emission_entry" | "emission_line_file">;
 
 /**
  * The grouping table: each evidence role and the kind it belongs to. Roles in
@@ -76,7 +76,7 @@ interface EvidenceKind {
 
 /** The kind a use belongs to. */
 export function evidenceKindOf(use: Pick<SourceFileUse, "role" | "component">): EvidenceKind {
-  if (use.role !== "emission_entry") return EVIDENCE_KINDS[use.role];
+  if (use.role !== "emission_entry" && use.role !== "emission_line_file") return EVIDENCE_KINDS[use.role];
   const componentId = use.component?.id ?? "unknown";
   return {
     key: `emission-component:${componentId}`,

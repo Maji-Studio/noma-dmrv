@@ -72,7 +72,8 @@ What a Removal-template **component** needs as files before a Removal can go out
 noma generates, or no file. Manual entries keep their own files under every setting
 but "no file", and an entry whose amount is 0 needs no file. For paired inputs,
 the amount is the readout difference or the product of the factors. The credit
-batch file covers only the From records amount.
+batch file covers only the From records amount. An exact From records total of 0
+needs no file. Only the Removal claiming the batch's production emissions sends it.
 It is separate from **Proof of delivery** and from a component's **Evidence method**.
 _Avoid_: proof type, file policy (in prose).
 
