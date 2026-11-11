@@ -65,6 +65,15 @@ It is an emissions entry owned by that Removal, contributes 0, and needs no file
 It is never pooled into another Removal. On screen it is a component recorded as zero.
 _Avoid_: zero stub.
 
+**Proof setting**:
+What a Removal-template **component** needs as files before a Removal can go out
+(`filePolicy` in code): one file per credit batch for the From records amount
+(production-run diesel and electricity only), a file on each manual entry, evidence
+noma generates, or no file. Manual entries keep their own files under every setting
+but "no file", and an entry whose values are all 0 needs no file.
+It is separate from **Proof of delivery** and from a component's **Evidence method**.
+_Avoid_: proof type, file policy (in prose).
+
 **Component comment**:
 One editable comment on a credit batch's Removal-template component, identified by
 component ID. It stays in noma and never changes the component's state or blocks a Removal.

@@ -1,8 +1,8 @@
 import { SOURCE_IDS, type AutomaticSourceId } from "./catalog-sources";
 import type { LineContract } from "./line-sources";
 
-export type FilePolicy = "lineFile" | "entryFiles" | "generated" | "none";
 export const FILE_POLICIES = ["lineFile", "entryFiles", "generated", "none"] as const;
+export type FilePolicy = typeof FILE_POLICIES[number];
 export const LINE_FILE_SOURCES = [
   SOURCE_IDS.totalGensetDieselLitres,
   SOURCE_IDS.totalStartupDieselLitres,
