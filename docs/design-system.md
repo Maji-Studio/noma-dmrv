@@ -56,7 +56,8 @@ Read these first. Each one fails quietly rather than loudly.
   such as Sign in and Set password, outcome actions, Accept invitation). A `<select>` cannot take a pseudo-element, so it grows instead.
 - **Explicit small control heights are checked.** `pnpm check:touch-targets`
   flags only unprefixed (phone-level) height/size classes below 44px on JSX
-  controls, ignoring all breakpoint (including min-/max-) and state variants.
+  controls, ignoring min-width breakpoint (`sm:` to `2xl:`, `min-`) and state variants;
+  `max-*` variants count as phone-level.
   Use a shared
   hit-area recipe on the control or its action/label slot; native selects use
   `PHONE_TOUCH_TARGET`. Button size props are outside this static check.

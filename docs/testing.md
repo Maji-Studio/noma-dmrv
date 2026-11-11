@@ -65,8 +65,8 @@ enforces the list and rejects stale entries.
 `pnpm verify:static` includes `pnpm check:ux-copy` (banned dashes and retired
 GLOSSARY phrases) and `pnpm check:touch-targets`, which flags only unprefixed
 (phone-level) JSX control height/size classes below 44px without a shared hit-area
-recipe or reasoned exception, ignoring all breakpoint (including min-/max-)
-and state variants.
+recipe or reasoned exception, ignoring min-width breakpoint (including `min-`)
+and state variants; `max-*` variants count as phone-level.
 Scanner regression tests live in `tests/check-ux-copy.test.ts` and
 `tests/check-touch-targets.test.ts`. The height check reads literal className
 fragments, templates and cn/clsx arguments; it does not compute rendered CSS

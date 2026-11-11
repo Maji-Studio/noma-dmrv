@@ -19,4 +19,8 @@ export const TOUCH_TARGET_ALLOWLIST: ReadonlyArray<{
     reason: "The full grid label toggles the checkbox; two text rows plus py-12 exceed 44px." },
   { file: "src/components/storage-locations/sub-bin-bays.tsx", tag: "Button", utility: "min-h-0",
     reason: "Proportional diagram bands cannot grow without changing the mass chart; adjacent BinParts exposes the same details through row controls." },
+  { file: "src/components/emissions/emission-entry-files.tsx", tag: "a", utility: "min-h-24",
+    reason: "File links stack 2px apart; a 44px hit area on each would overlap its neighbour and open the wrong file. 24px meets WCAG 2.5.8." },
+  { file: "src/components/chain-of-custody/run-picker.tsx", tag: "button", utility: "h-40",
+    reason: "Clear button sits inside the picker trigger; a 44px area would cover the trigger it sits on and clear the filter on a missed tap." },
 ];

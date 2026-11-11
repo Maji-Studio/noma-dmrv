@@ -1,6 +1,5 @@
 "use client";
 
-import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
 import {
   CaretDownIcon,
   CheckIcon,
@@ -201,7 +200,6 @@ export function RunPicker({
           aria-label="Clear production run filter"
           data-testid="chain-run-select-clear"
           className={cn(
-            CENTRED_HIT_AREA,
             CLEAR_BUTTON_RIGHT_CLASS,
             "absolute top-0 flex h-40 cursor-pointer items-center px-8 text-[var(--clr-dark-purple-40)] transition-colors hover:text-[var(--clr-dark-purple)]"
           )}

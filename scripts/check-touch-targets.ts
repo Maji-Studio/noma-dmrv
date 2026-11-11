@@ -10,11 +10,13 @@ const ROOT = process.cwd();
 const INTERACTIVE_TAGS = new Set(["button", "a", "Link", "Button", "select"]);
 const INTERACTIVE_ROLES = new Set(["button", "link", "tab"]);
 const HIT_RECIPES = new Set([
-  "CENTRED_HIT_AREA", "INLINE_HIT_AREA", "INLINE_HIT_AREA_FROM_SM",
-  "ROW_ACTION_HIT_AREA", "ICON_BUTTON_TOUCH_PROPS", "PHONE_TOUCH_TARGET",
+  "CENTRED_HIT_AREA", "INLINE_HIT_AREA", "ROW_ACTION_HIT_AREA", "ICON_BUTTON_TOUCH_PROPS", "PHONE_TOUCH_TARGET",
 ]);
 const SMALL_HEIGHT = /^(?:h|size|min-h)-(\d+(?:\.\d+)?|\[\d+(?:\.\d+)?px\])$/;
-const PSEUDO_HIT_AREA = /(?:^|:)(?:before|after):(?:h|min-h)-(?:44|\[44px\])!?$/;
+// Unprefixed only: a breakpoint-gated pseudo area does not exist on a phone.
+const PSEUDO_HIT_AREA = new RegExp(`^(?:before|after):(?:h|min-h)-(?:${TOUCH_TARGET_PX}|\\[${TOUCH_TARGET_PX}px\\])!?$`);
+/** `max-sm:` and friends apply below a breakpoint, so they are phone-level. */
+const MAX_VARIANT = /^max-(?:sm|md|lg|xl|2xl):/;
 const TEST_FILE = /\.(?:test|spec)\.tsx?$/;
 
 type Opening = ts.JsxOpeningElement | ts.JsxSelfClosingElement;
@@ -90,13 +92,15 @@ export function findTouchTargetViolations(
         || (role && literals(role).some(value => INTERACTIVE_ROLES.has(value)))
         || (tag === "input" && type && literals(type).some(value => value === "checkbox" || value === "radio"));
       const classes = attribute(node, "className");
-      if (interactive && classes) {
+      // A hidden duplicate (aria-hidden, tabIndex -1) is not a touch target.
+      const hidden = attribute(node, "aria-hidden") !== undefined;
+      if (interactive && classes && !hidden) {
         const tokens = literals(classes).flatMap(value => value.split(/\s+/));
         if (!hasRecipe(node.attributes) && !coveredBySlot(node)
           && !tokens.some(token => PSEUDO_HIT_AREA.test(token))) {
           const smallTokens = new Set(tokens.filter(token => {
             // Only unprefixed phone-level sizes count; all variants are out of scope.
-            const match = SMALL_HEIGHT.exec(token.replace(/^!|!$/g, ""));
+            const match = SMALL_HEIGHT.exec(token.replace(MAX_VARIANT, "").replace(/^!|!$/g, ""));
             if (!match) return false;
             const value = Number(match[1].replace(/^\[|px\]$/g, ""));
             return value < TOUCH_TARGET_PX && (match[1].startsWith("[") || spacingScale.has(value));
