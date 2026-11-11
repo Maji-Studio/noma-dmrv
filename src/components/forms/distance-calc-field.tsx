@@ -13,6 +13,7 @@
  * configured server-side; when disabled, the tooltip names what's missing.
  */
 
+import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
 import { cn } from "@/lib/utils";
 import { useState, type ComponentProps, type ReactNode } from "react";
 import { Button } from "@/components/ui";
@@ -229,7 +230,7 @@ export function DistanceCalcField({
               <Button
                 type="button"
                 variant="default"
-                className="h-40 px-12"
+                className={cn(CENTRED_HIT_AREA, "h-40 px-12")}
                 disabled={!canCalc}
                 busy={route.isPending}
                 aria-label={`Estimate road distance ${originLabel} to ${destinationLabel}`}

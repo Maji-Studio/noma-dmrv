@@ -1,5 +1,5 @@
 /**
- * Guard against en and em dashes in user-facing copy.
+ * Guard against en/em dashes and retired domain phrases in user-facing copy.
  *
  * docs/ux-writing.md bans both characters in interface text: "Do not use an
  * en dash or em dash. Use a full stop, comma, colon, or parentheses instead."
@@ -26,11 +26,14 @@ const SCANNED_EXTENSIONS = new Set([".ts", ".tsx"]);
 const TEST_FILE = /\.test\.tsx?$/;
 const EXCLUDED_DIRS = [join("src", "lib", "isometric", "generated")];
 
+// GLOSSARY.md: Component, Removal template, Automatic datapoints (_Avoid_).
+// cc79130a4 retired "template line" and "emission line" in favor of component.
+// Deliberately omit contextual/common words such as bare "line" and "needs review".
+const RETIRED_TERMS = /\b(?:template\s+lines?|emission\s+lines?|template\s+pins?|GHG\s+entry\s+templates?|automatic\s+figures?|records\s+source)\b/gi;
+
 const BANNED = /[–—]/;
 /** JSX renders HTML entities, so an entity-encoded dash is still a dash. */
 const BANNED_JSX_ENTITY = /&(?:mdash|ndash|#8211|#8212|#x201[34]);/i;
-/** TypeScript decodes these escapes before exposing literal node text. */
-const BANNED_UNICODE_ESCAPE = /\\u(?:201[34]|\{0*201[34]\})/i;
 const BANNED_NAMES: Record<string, string> = {
   "–": "en dash",
   "—": "em dash",
@@ -142,31 +145,43 @@ export function findDashViolations(
   return violations;
 }
 
+/** Retired domain phrases in the same copy-bearing nodes as the dash check. */
+export function findTermViolations(source: string, fileName: string): Omit<Violation, "file">[] {
+  const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true,
+    fileName.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  const violations: Omit<Violation, "file">[] = [];
+  const visit = (node: ts.Node): void => {
+    if (isCopyBearingNode(node)) {
+      for (const match of node.text.matchAll(RETIRED_TERMS)) {
+        const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+        violations.push({ line: line + 1, character: `retired term: ${match[0]}`,
+          excerpt: node.text.replace(/\s+/g, " ").trim() });
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return violations;
+}
+
 function main(): void {
   const violations: Violation[] = [];
   for (const file of walkSourceFiles(SCANNED_DIR)) {
     const source = readFileSync(file, "utf8");
-    if (
-      !BANNED.test(source) &&
-      !BANNED_JSX_ENTITY.test(source) &&
-      !BANNED_UNICODE_ESCAPE.test(source)
-    ) {
-      continue;
-    }
-    for (const violation of findDashViolations(source, file)) {
+    for (const violation of [...findDashViolations(source, file), ...findTermViolations(source, file)]) {
       violations.push({ ...violation, file: relative(ROOT, file) });
     }
   }
 
   if (violations.length === 0) {
     console.log(
-      "check:ux-copy — no en or em dashes in string literals or JSX text.",
+      "check:ux-copy: no banned dashes or retired terms in string literals or JSX text.",
     );
     return;
   }
 
   console.error(
-    `check:ux-copy — ${violations.length} dash(es) in copy-bearing strings:\n`,
+    `check:ux-copy: ${violations.length} violation(s) in copy-bearing strings:\n`,
   );
   for (const violation of violations) {
     console.error(
@@ -175,7 +190,7 @@ function main(): void {
     );
   }
   console.error(
-    "\ndocs/ux-writing.md bans en and em dashes in user-facing copy. Use a\n" +
+    "\nUse GLOSSARY.md terms. docs/ux-writing.md bans en and em dashes in user-facing copy. Use a\n" +
       "full stop, comma, colon, or parentheses instead. If the string is not\n" +
       "copy, restructure so the dash lives outside a string literal.",
   );

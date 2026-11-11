@@ -1,5 +1,7 @@
 "use client";
 
+import { cn } from "@/lib/utils";
+import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import { DatabaseIcon, MagnifyingGlassIcon, ArrowRightIcon, ArrowUpRightIcon, ArrowDownLeftIcon } from "@phosphor-icons/react/dist/ssr";
@@ -131,7 +133,7 @@ export function SchemaExplorer({ tables, relationshipCount }: SchemaExplorerProp
             </label>
           </div>
           <div className="flex items-center justify-between flex-wrap gap-16">
-            <label className="inline-flex items-center gap-[8px] body-small text-[var(--color-text-secondary)] select-none cursor-pointer">
+            <label className={cn(CENTRED_HIT_AREA, "inline-flex items-center gap-[8px] body-small text-[var(--color-text-secondary)] select-none cursor-pointer")}>
               <input
                 type="checkbox"
                 checked={hideLegacy}

@@ -1,5 +1,6 @@
 "use client";
 
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import * as React from "react";
 import {
   flexRender,
@@ -697,6 +698,7 @@ function DataTableFilterSelect({
   return (
     <select
       className={cn(
+        PHONE_TOUCH_TARGET,
         "h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small text-[var(--color-text-primary)] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:max-w-[320px] truncate",
         className,
       )}

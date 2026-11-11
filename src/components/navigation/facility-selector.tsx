@@ -62,7 +62,7 @@ export function FacilitySelector() {
       <div className="mx-8 px-10 py-10">
         <Link
           href="/facilities"
-          className="flex items-center gap-8 h-36 px-10 border border-dashed border-[var(--color-white-25)] text-[var(--color-white-50)] hover:text-white hover:border-[var(--clr-purple)] transition-colors duration-150"
+          className="flex items-center gap-8 h-44 px-10 border border-dashed border-[var(--color-white-25)] text-[var(--color-white-50)] hover:text-white hover:border-[var(--clr-purple)] transition-colors duration-150"
         >
           <PlusIcon size={14} weight="bold" />
           <span className="body-caption">Add first facility</span>
@@ -113,7 +113,7 @@ export function FacilitySelector() {
                         setFacilityId(facility.id);
                         setIsOpen(false);
                       }}
-                      className={`w-full h-40 px-10 flex items-center justify-between gap-8 body-caption text-left transition-colors duration-150 ${
+                      className={`w-full h-44 px-10 flex items-center justify-between gap-8 body-caption text-left transition-colors duration-150 ${
                         isSelected
                           ? "text-white bg-[var(--color-white-100)]/[0.08]"
                           : "text-[var(--color-white-75)] hover:text-white hover:bg-[var(--color-white-100)]/[0.06]"
@@ -142,7 +142,7 @@ export function FacilitySelector() {
                   setIsOpen(false);
                   router.push("/facilities");
                 }}
-                className="w-full h-40 px-10 flex items-center gap-8 body-caption text-[var(--color-white-75)] hover:text-white hover:bg-[var(--color-white-100)]/[0.06] transition-colors duration-150"
+                className="w-full h-44 px-10 flex items-center gap-8 body-caption text-[var(--color-white-75)] hover:text-white hover:bg-[var(--color-white-100)]/[0.06] transition-colors duration-150"
               >
                 <GearSixIcon size={14} weight="bold" className="shrink-0" />
                 <span>Manage facilities</span>

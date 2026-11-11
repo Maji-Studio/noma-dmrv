@@ -76,6 +76,7 @@ jobs:
           git fetch --no-tags --depth=1 origin staging:refs/remotes/origin/staging || echo "::warning::Could not fetch staging; migration staging comparison will be skipped."
 
       - name: Static quality checks
+        # Includes check:ux-copy and check:touch-targets.
         run: pnpm verify:static
 
   openapi-breaking:

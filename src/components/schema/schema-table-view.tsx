@@ -1,5 +1,7 @@
 "use client";
 
+import { cn } from "@/lib/utils";
+import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
 import { useMemo, useState, useCallback, type ReactNode } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -261,7 +263,7 @@ export function SchemaTableView({ tables, relationships }: SchemaTableViewProps)
             />
           </div>
           <div className="flex items-center justify-between flex-wrap gap-16">
-            <label className="inline-flex items-center gap-[8px] body-small text-[var(--color-text-secondary)] select-none cursor-pointer">
+            <label className={cn(CENTRED_HIT_AREA, "inline-flex items-center gap-[8px] body-small text-[var(--color-text-secondary)] select-none cursor-pointer")}>
               <input
                 type="checkbox"
                 checked={hideLegacy}
@@ -319,7 +321,7 @@ export function SchemaTableView({ tables, relationships }: SchemaTableViewProps)
                     role="tab"
                     aria-selected={isActive}
                     onClick={() => updateParams({ area: resolvedArea, table: t.name })}
-                    className="h-[32px] px-[10px] body-caption-fit-bold border transition-colors cursor-pointer"
+                    className={cn(CENTRED_HIT_AREA, "h-[32px] px-[10px] body-caption-fit-bold border transition-colors cursor-pointer")}
                     style={{
                       borderColor: isActive ? accent : "var(--color-border-tertiary)",
                       color: isActive ? accent : "var(--color-text-secondary)",

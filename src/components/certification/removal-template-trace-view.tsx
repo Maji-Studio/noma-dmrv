@@ -1,5 +1,7 @@
 "use client";
 
+import { cn } from "@/lib/utils";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { useState } from "react";
 import {
   MagnifyingGlassIcon,
@@ -129,7 +131,7 @@ export function RemovalTemplateTraceView({
         <label className="flex max-w-[640px] flex-col gap-6">
           <span className="label-input">Removal</span>
           <select
-            className="h-40 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small"
+            className={cn(PHONE_TOUCH_TARGET, "h-40 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small")}
             value={removalId}
             onChange={(event) => setRemovalId(event.target.value)}
           >

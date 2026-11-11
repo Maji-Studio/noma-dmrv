@@ -135,6 +135,7 @@ export function RecordsSourceLink({ records, scope, className }: { records: Line
       href={recordsHref(records, scope)}
       aria-label={`${text}. ${openSourceLabel(records.source)}`}
       className={cn(
+        CENTRED_HIT_AREA,
         "inline-flex min-h-24 items-baseline gap-6 body-small underline decoration-[color:var(--color-border-primary)] underline-offset-4 hover:decoration-current",
         gap ? "text-[var(--st-wait)]" : "text-[var(--color-text-primary)]",
         className,
@@ -230,7 +231,7 @@ export function EntryEvidence({ entry, filePolicy, scope, actions, className, re
               href={file.href}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-h-24 max-w-full min-w-0 items-center gap-4 underline-offset-4 hover:text-[var(--color-text-primary)] hover:underline"
+              className={cn(CENTRED_HIT_AREA, "inline-flex min-h-24 max-w-full min-w-0 items-center gap-4 underline-offset-4 hover:text-[var(--color-text-primary)] hover:underline")}
             >
               <FileIcon size={ICON} aria-hidden="true" className="shrink-0" />
               <span className="truncate">{file.fileName}</span>

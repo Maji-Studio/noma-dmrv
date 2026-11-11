@@ -5,6 +5,8 @@
  */
 "use client";
 
+import { cn } from "@/lib/utils";
+import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
 import { useQueryClient } from "@tanstack/react-query";
 import { FileIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
@@ -60,7 +62,7 @@ export function EntryFileNames({ entry }: { entry: EmissionEntry }) {
             href={file.href}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex min-h-24 max-w-full items-center gap-4 body-caption text-[var(--color-text-secondary)] underline-offset-4 hover:text-[var(--color-text-primary)] hover:underline"
+            className={cn(CENTRED_HIT_AREA, "inline-flex min-h-24 max-w-full items-center gap-4 body-caption text-[var(--color-text-secondary)] underline-offset-4 hover:text-[var(--color-text-primary)] hover:underline")}
           >
             <FileIcon size={14} aria-hidden="true" className="shrink-0" />
             <span className="truncate">{file.fileName}</span>

@@ -32,6 +32,7 @@ Never skip layers: UI → `hooks/` → `fn/` → `data-access/` → `db/`, plus 
 - Branch `<type>/<kebab-desc>`; commit/PR title `<type>: <imperative, lowercase verb>` (PR title < 70 chars). Types: `feat` · `fix` · `refactor` · `chore` · `docs` · `test`.
 - **Confirm the target branch before every commit** (`git branch --show-current`) — misplaced commits are a recurring failure mode.
 - Run git/gh operations as **discrete steps**, not chained `&&` one-liners.
+- **Claim an issue** with `gh issue edit <n> --add-assignee @me`, not a message to every session; message peers only when an issue's scope changes.
 - Default PR base is `staging`; `staging` → `main` promotions are their own explicit step.
 - **One writer per worktree.** Cut new work with `scripts/worktree.sh new <name> <branch>` (own DBs, port, env) and remove it with `scripts/worktree.sh teardown <name>`; never branch in the main checkout. This includes worktrees that skills create for subagents (e.g. `implement-spec`). See `docs/testing.md#worktrees`. Use the server command `new` prints; `pnpm dev` binds port 3100.
 

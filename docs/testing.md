@@ -60,6 +60,18 @@ enforces the list and rejects stale entries.
   facility) and the output are documented at the top of
   `tests/visual/form-capture.spec.ts`.
 
+## Static checks
+
+`pnpm verify:static` includes `pnpm check:ux-copy` (banned dashes and retired
+GLOSSARY phrases) and `pnpm check:touch-targets`, which flags only unprefixed
+(phone-level) JSX control height/size classes below 44px without a shared hit-area
+recipe or reasoned exception, ignoring all breakpoint (including min-/max-)
+and state variants.
+Scanner regression tests live in `tests/check-ux-copy.test.ts` and
+`tests/check-touch-targets.test.ts`. The height check reads literal className
+fragments, templates and cn/clsx arguments; it does not compute rendered CSS
+or follow arbitrary variables and component implementations.
+
 ## Static check caches
 
 Static checks cache locally: `pnpm lint` uses content-based `.cache/eslint`,

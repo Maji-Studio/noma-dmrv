@@ -13,7 +13,7 @@ import { useState, type CSSProperties, type ReactNode } from "react";
 import { PreviewCard } from "@base-ui/react/preview-card";
 import { Tooltip as BaseTooltip } from "@base-ui/react/tooltip";
 import { TooltipPopup } from "@/components/ui/tooltip";
-import { INLINE_HIT_AREA } from "@/components/ui/touch-target";
+import { INLINE_HIT_AREA, CENTRED_HIT_AREA } from "@/components/ui/touch-target";
 import {
   applyTooltipOpenChange,
   pressToggletip,
@@ -282,8 +282,8 @@ export function DetailedRemovalBar({ groups, facilityId }: { groups: RemovalBarG
           return (
             <div key={group.id} className="flex min-w-0 flex-col gap-4" style={{ flexGrow: group.dryKg, flexBasis: 0, minWidth: MIN_GROUP_PX }}>
               {named && (href ? (
-                <Link href={href} tabIndex={-1} aria-hidden className="block h-18 truncate body-caption underline-offset-2 hover:underline">
-                  {group.removal?.code}
+                <Link href={href} tabIndex={-1} aria-hidden className={cn(CENTRED_HIT_AREA, "block h-18 body-caption underline-offset-2 hover:underline")}>
+                  <span className="block truncate">{group.removal?.code}</span>
                 </Link>
               ) : (
                 <span aria-hidden className="block h-18" />

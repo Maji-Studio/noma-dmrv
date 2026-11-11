@@ -14,6 +14,8 @@
  */
 "use client";
 
+import { cn } from "@/lib/utils";
+import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
 import { useRef, useState } from "react";
 import { UploadSimpleIcon, FileIcon, XIcon, CheckCircleIcon, WarningCircleIcon, SpinnerIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
@@ -391,7 +393,7 @@ export function FormFileUpload({
                 size="icon"
                 disabled={disabled}
                 onClick={() => onDeferredRemove?.(key)}
-                className="h-24 w-24 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]"
+                className={cn(CENTRED_HIT_AREA, "h-24 w-24 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]")}
                 aria-label={`Remove ${file.name}`}
               >
                 <XIcon size={14} weight="bold" />
@@ -454,7 +456,7 @@ export function FormFileUpload({
                 variant="noOutline"
                 size="icon"
                 onClick={() => removeUpload(u.tempKey)}
-                className="ml-auto h-24 w-24 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]"
+                className={cn(CENTRED_HIT_AREA, "ml-auto h-24 w-24 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]")}
                 aria-label={`Remove ${u.name}`}
               >
                 <XIcon size={14} weight="bold" />
@@ -488,7 +490,7 @@ export function FormFileUpload({
                 size="icon"
                 disabled={disabled}
                 onClick={() => removeMockup(i)}
-                className="ml-auto h-24 w-24 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]"
+                className={cn(CENTRED_HIT_AREA, "ml-auto h-24 w-24 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]")}
                 aria-label={`Remove ${file.name}`}
               >
                 <XIcon size={14} weight="bold" />

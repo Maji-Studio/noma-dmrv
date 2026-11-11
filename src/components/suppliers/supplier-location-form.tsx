@@ -5,6 +5,8 @@
  */
 "use client";
 
+import { cn } from "@/lib/utils";
+import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useId } from "react";
 import { useController, useForm } from "react-hook-form";
@@ -287,7 +289,7 @@ export function SupplierLocationForm({
         <div className="flex flex-col gap-4">
           <label
             htmlFor={defaultId}
-            className="flex items-center gap-12 cursor-pointer"
+            className={cn(CENTRED_HIT_AREA, "flex items-center gap-12 cursor-pointer")}
           >
             <input
               type="checkbox"

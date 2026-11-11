@@ -6,6 +6,7 @@
  */
 "use client";
 
+import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
 import {
   createContext,
   useContext,
@@ -248,7 +249,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
           variant="noOutline"
           size="icon"
           onClick={() => onDismiss(toast.id)}
-          className="h-28 w-28 shrink-0 text-[var(--color-text-tertiary)] hover:bg-[var(--color-surface-light)] hover:text-[var(--color-text-primary)]"
+          className={cn(CENTRED_HIT_AREA, "h-28 w-28 shrink-0 text-[var(--color-text-tertiary)] hover:bg-[var(--color-surface-light)] hover:text-[var(--color-text-primary)]")}
           aria-label="Dismiss notification"
         >
           <XIcon size={14} weight="bold" />

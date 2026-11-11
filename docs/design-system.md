@@ -54,6 +54,15 @@ Read these first. Each one fails quietly rather than loudly.
   `PHONE_TOUCH_TARGET` for a footer button or a select that must be 44px tall
   on a phone, and for every full-width action on the auth pages (form submits
   such as Sign in and Set password, outcome actions, Accept invitation). A `<select>` cannot take a pseudo-element, so it grows instead.
+- **Explicit small control heights are checked.** `pnpm check:touch-targets`
+  flags only unprefixed (phone-level) height/size classes below 44px on JSX
+  controls, ignoring all breakpoint (including min-/max-) and state variants.
+  Use a shared
+  hit-area recipe on the control or its action/label slot; native selects use
+  `PHONE_TOUCH_TARGET`. Button size props are outside this static check.
+  `scripts/touch-target-allowlist.ts` records narrow exceptions with reasons,
+  including the sanctioned 24px glyphs. Runtime layout and spacing still need
+  visual review.
 - **Radius: default to `rounded-none`** — the aesthetic is brutalist, and it is
   the majority (30 of 54 call sites). Sanctioned exceptions, all generated from
   the `--radius-*` tokens: `rounded-full` (dots, pills, avatars — 11),

@@ -4,6 +4,8 @@
  */
 "use client";
 
+import { cn } from "@/lib/utils";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { useEffect, useState } from "react";
 import { parseAsString, useQueryState } from "nuqs";
 import { ARCHIVED_FACILITY_PARAM, RECORD_LINKS } from "@/lib/record-links";
@@ -361,7 +363,7 @@ export function FacilityList() {
                 setCountryFilter(event.target.value);
                 setCurrentPage(1);
               }}
-              className="h-40 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small"
+              className={cn(PHONE_TOUCH_TARGET, "h-40 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small")}
             >
               <option value="">All countries</option>
               {countries?.map((country) => (

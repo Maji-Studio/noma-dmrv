@@ -13,6 +13,8 @@
  */
 "use client";
 
+import { cn } from "@/lib/utils";
+import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
 import { Button, EmptyState, ListPagination } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import type { StorageLocationLaneSummary } from "@/data-access/storage-location-lane-summary";
@@ -323,7 +325,7 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
         </label>
 
         <div className="flex flex-wrap items-center justify-between gap-8">
-          <label className="flex cursor-pointer items-center gap-8 body-small text-[var(--color-text-secondary)]">
+          <label className={cn(CENTRED_HIT_AREA, "flex cursor-pointer items-center gap-8 body-small text-[var(--color-text-secondary)]")}>
             <input
               type="checkbox"
               checked={showArchived}
