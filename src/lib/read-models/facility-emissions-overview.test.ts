@@ -162,3 +162,21 @@ it("counts missing From records proof per batch through the shared read model", 
   expect(result.batches[1].lineCounts).toMatchObject({ recorded: 0, open: 1, fileMissing: 1 });
   expect(listEmissionLineFilesForBatches).toHaveBeenCalledExactlyOnceWith(ctx, ["new", "old"]);
 });
+
+it.each(["claimed", "reserved"])("omits the fileMissing count for %s production with no file", async kind => {
+  const energy = structuredClone(observation);
+  energy.definition.groups[0].components = energy.definition.groups[0].components.filter(component => component.id === "recorded");
+  energy.lineSources = { recorded: { scope: "operating", entryPolicy: "additive", origin: "reviewed",
+    automaticSource: "run-electricity", filePolicy: "lineFile" } };
+  vi.mocked(getLatestTemplateObservations).mockResolvedValue([energy] as never);
+  vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([]);
+  vi.mocked(loadFacilityEmissionsOverviewScope).mockResolvedValue({ timezone: "UTC", batches: [{ ...batch,
+    productionEmissionsClaimedByRemovalId: kind === "claimed" ? "sent" : null,
+    productionEmissionsClaimReservedBySubmissionId: kind === "reserved" ? "submission" : null,
+  }] } as never);
+  vi.mocked(loadBatchesEmissionAutomaticFacts).mockResolvedValue({
+    new: { automaticFigures: { "run-electricity": { magnitude: "0.5", unit: "kWh" } } },
+  });
+  const result = await loadFacilityEmissionsOverview(ctx, "facility");
+  expect(result.batches[0].lineCounts).toMatchObject({ recorded: 1, open: 0, fileMissing: 0 });
+});

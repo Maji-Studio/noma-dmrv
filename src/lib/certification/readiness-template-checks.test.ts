@@ -1,3 +1,4 @@
+import { LINE_FILE_MISSING_INSTRUCTION } from "@/lib/certification/emission-entry-messages";
 import { lineFileEvidenceFacts } from "../../../tests/helpers/line-file-evidence-facts";
 import { deriveBatchEmissionLines } from "./emission-lines";
 import { buildCreditBatchOpenItems } from "@/lib/credit-batches/open-items";
@@ -291,5 +292,5 @@ it("uses File missing for component proof in readiness, batch health and open it
   expect(health.state).toBe("incomplete");
   const items = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true, health, emissionLines });
   expect(items.blocking).toContainEqual(expect.objectContaining({ title: "File missing",
-    instruction: "Add a file for the From records amount on this credit batch.", target: { tab: "emissions" } }));
+    instruction: LINE_FILE_MISSING_INSTRUCTION, target: { tab: "emissions" } }));
 });

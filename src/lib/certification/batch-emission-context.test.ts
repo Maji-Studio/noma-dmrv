@@ -387,3 +387,27 @@ it("refreshes an A-only contender set for a Removal covering A+B, retaining B's 
 });
 
 vi.mock("@/data-access/emission-line-files", () => ({ listEmissionLineFilesForBatches: vi.fn() }));
+
+it.each(["claimed", "reserved", "unclaimed"])("loads the batch proof lock and preserves readiness (%s)", async kind => {
+  const facts = structuredClone(facilityFacts);
+  const contract = facts.templatesById.template!.observation!.lineSources.line;
+  contract.automaticSource = "run-electricity";
+  contract.filePolicy = "lineFile";
+  const batches = [{ id: "one", removalTemplateId: "template" }];
+  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ one: { batch: {
+    facilityId: "facility", productionEmissionsClaimedByRemovalId: kind === "claimed" ? "sent" : null,
+    productionEmissionsClaimReservedBySubmissionId: kind === "reserved" ? "submission" : null,
+  } } } as never);
+  vi.mocked(loadBatchesEmissionAutomaticFacts).mockResolvedValue({ one: { automaticFigures: {
+    "run-electricity": { magnitude: "5", unit: "kWh" },
+  } } });
+  const { batchFacts } = await loadBatchEmissionContext(makeTestOrgContext(), "facility", batches, facts);
+  expect(batchFacts.one.recordsFileLocked).toBe(kind !== "unclaimed");
+  const resolved = resolveRemovalTemplate(batches, facts, batchFacts);
+  expect(resolved.emissionLinesByBatchId.one[0].blocker?.code).toBe(kind === "unclaimed" ? "lineMissingEvidence" : undefined);
+  const context = { ...resolved, memberBatches: batches, requiredTransportCategories: [], mapping: {},
+    hasSubmittableRuns: true, entityReadinessGaps: [], submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
+  } as unknown as RemovalCertifyContext;
+  const health = deriveBatchHealth(toBatchHealthFacts(context, "one"));
+  expect(health.checks.find(check => check.key === "emissions")?.status).toBe(kind === "unclaimed" ? "unmet" : "met");
+});

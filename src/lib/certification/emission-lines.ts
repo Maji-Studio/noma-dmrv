@@ -1,4 +1,4 @@
-import { EMPTY_REMOVAL_LINE } from "@/lib/certification/emission-entry-messages";
+import { LINE_FILE_MISSING_INSTRUCTION, EMPTY_REMOVAL_LINE } from "@/lib/certification/emission-entry-messages";
 import { DomainError } from "@/lib/domain-errors";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
 import type { AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
@@ -61,7 +61,8 @@ export interface BatchEmissionLineFacts {
   definition: TemplateDefinition; lineSources: LineSources; problems: readonly LineSourceProblem[];
   enrichmentComplete: boolean;
   entriesCanSubmit?: boolean;
-  lineFiles?: readonly { anchor: { id: string; componentId: string; version: number }; document: { id: string; fileName: string; version: number } | null }[];
+  recordsFileLocked?: boolean;
+  lineFiles?: readonly { anchor: { id: string; componentId: string; version: number }; documents: { id: string; fileName: string; version: number }[] }[];
   automaticFigures: Partial<Record<AutomaticSourceId, EmissionFigure | null>>;
   /** The batches counting this batch's linked feedstock transport, when every leg is owned elsewhere. */
   feedstockTransportCountedOn?: readonly CountedOnBatch[];
@@ -121,9 +122,10 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
       state = "missingEvidence";
       blocker = { code: "entryMissingEvidence", message: MISSING_EVIDENCE_INSTRUCTION, copy: { instruction: MISSING_EVIDENCE_INSTRUCTION }, fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     } else if (recordsNeedFile(filePolicy, automaticFigure?.magnitude ?? "0") &&
-      !facts.lineFiles?.some(({ anchor, document }) => anchor.componentId === component.id && document)) {
+      !facts.recordsFileLocked &&
+      !facts.lineFiles?.some(({ anchor, documents }) => anchor.componentId === component.id && documents.length > 0)) {
       state = "missingEvidence";
-      const instruction = "Add a file for the From records amount on this credit batch.";
+      const instruction = LINE_FILE_MISSING_INSTRUCTION;
       blocker = { code: "lineMissingEvidence", message: instruction, copy: { instruction }, fixTarget: "emissions",
         lineRef: { componentId: component.id, displayName: component.displayName } };
     } else if (automaticFigure || values.length) state = "filled";

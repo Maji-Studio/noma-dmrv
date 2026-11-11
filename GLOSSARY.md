@@ -67,13 +67,15 @@ _Avoid_: zero stub.
 
 **Proof setting**:
 What a Removal-template **component** needs as files before a Removal can go out
-(`filePolicy` in code): one file per credit batch for the From records amount
+(`filePolicy` in code): one set of files per credit batch and component for the From records amount
 (production-run diesel and electricity only), a file on each manual entry, evidence
 noma generates, or no file. Manual entries keep their own files under every setting
 but "no file", and an entry whose amount is 0 needs no file. For paired inputs,
 the amount is the readout difference or the product of the factors. The credit
 batch file covers only the From records amount. An exact From records total of 0
-needs no file. Only the Removal claiming the batch's production emissions sends it.
+needs no file. Only the Removal claiming the batch's production emissions sends
+these files. While that Removal is returned, add a corrected file; files already
+sent stay in history. The set belongs to the credit batch and component, not each run.
 It is separate from **Proof of delivery** and from a component's **Evidence method**.
 _Avoid_: proof type, file policy (in prose).
 

@@ -16,7 +16,7 @@ export function lineFileEvidenceFacts(fuel = false) {
   };
   const batch: BatchEmissionContext[string] = { entries: [], previousObservations: new Map(),
     automaticFigures: { [source]: { magnitude: "0.5", unit: fuel ? "l" : "kWh" } },
-    lineFiles: [{ anchor: { id: "anchor", componentId: "component", version: 2 }, document: { id: "document", fileName: "proof.pdf", version: 1 } }],
+    lineFiles: [{ anchor: { id: "anchor", componentId: "component", version: 2 }, documents: [{ id: "document", fileName: "proof.pdf", version: 1 }] }],
   };
   return { template, observation, batch, source, inputKey };
 }

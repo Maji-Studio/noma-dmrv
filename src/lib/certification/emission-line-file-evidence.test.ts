@@ -1,3 +1,4 @@
+import { EMISSION_LINE_FILE_CHANGED, LINE_FILE_MISSING_INSTRUCTION } from "@/lib/certification/emission-entry-messages";
 import { projectEvidenceTargets, projectDurabilityLedgerInputKeys } from "@/lib/isometric/semantic-binding-projections";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import { expect, it } from "vitest";
@@ -20,7 +21,7 @@ it.each([false, true])("binds the exact From records input (fuel=%s)", fuel => {
   expect(sourceIdsForDatapointTarget(plan, { componentId: "component", inputKey })).toEqual(["source"]);
   expect(sourceIdsForDatapointTarget(plan, { componentId: "other", inputKey })).toEqual([]);
   expect(sourceIdsForDatapointTarget(plan, { componentId: "component", inputKey: "other" })).toEqual([]);
-  expect(() => buildRemovalSourceBindingPlan({ candidates, template, lineFileEvidence: [], applicationIdsByCreditBatchId: new Map() })).toThrow("component file changed");
+  expect(() => buildRemovalSourceBindingPlan({ candidates, template, lineFileEvidence: [], applicationIdsByCreditBatchId: new Map() })).toThrow(EMISSION_LINE_FILE_CHANGED);
 });
 
 it.each([
@@ -38,7 +39,7 @@ it.each([
   const [line] = deriveRemovalBatchEmissionLines({ ...batch, ...observation, problems: [], enrichmentComplete: true, entriesCanSubmit: true }, "batch");
   expect(line.blocker?.code).toBe(missing ? "lineMissingEvidence" : undefined);
   if (missing) expect(line).toMatchObject({ state: "missingEvidence", blocker: { creditBatchId: "batch", fixTarget: "emissions",
-    message: "Add a file for the From records amount on this credit batch.", lineRef: { componentId: "component" } } });
+    message: LINE_FILE_MISSING_INSTRUCTION, lineRef: { componentId: "component" } } });
   const evidence = deriveLineFileEvidence({ batch }, observation);
   expect(evidence).toHaveLength(hasFile && !otherClaim && policy === "lineFile" ? 1 : 0);
 });
@@ -62,9 +63,9 @@ it("excludes an uploaded file when another Removal claims production", () => {
 it("attaches the stored file and its requirement to the read model", () => {
   const { batch, observation } = lineFileEvidenceFacts();
   const build = () => buildBatchEmissionLines(observation, [], new Map(), batch, [], batch.lineFiles)[0];
-  expect(build().lineFile).toEqual({ anchorId: "anchor", document: { id: "document", fileName: "proof.pdf", version: 1 }, needsFile: true, policy: "lineFile" });
-  batch.lineFiles = [{ ...batch.lineFiles![0], document: null }];
-  expect(build()).toMatchObject({ state: "missingEvidence", lineFile: { anchorId: "anchor", document: null, needsFile: true } });
+  expect(build().lineFile).toEqual({ anchorId: "anchor", documents: [{ id: "document", fileName: "proof.pdf", version: 1 }], needsFile: true, policy: "lineFile" });
+  batch.lineFiles = [{ ...batch.lineFiles![0], documents: [] }];
+  expect(build()).toMatchObject({ state: "missingEvidence", lineFile: { anchorId: "anchor", documents: [], needsFile: true } });
   batch.automaticFigures["run-electricity"]!.magnitude = "0.000";
   expect(build()).toMatchObject({ state: "filled", lineFile: { needsFile: false } });
 });
@@ -80,7 +81,7 @@ it("detects a replacement and uses live component files in the returned window",
   };
   const previous = semantic();
   batch.lineFiles![0].anchor.version++;
-  batch.lineFiles![0].document!.id = "replacement";
+  batch.lineFiles![0].documents[0].id = "replacement";
   const current = semantic();
   expect(deriveRemovalSemanticCorrection({ previous, current, windowOpen: true, previousEntries: [], currentEntries: [], componentIds: ["component"], batchIds: ["batch"] }))
     .toMatchObject({ correctionNeeded: true, changedComponentIds: ["component"], changedBatchIds: ["batch"] });
@@ -118,4 +119,31 @@ it("keeps manual-entry proof separate from the From records file", () => {
   expect(derive().blocker?.code).toBe("lineMissingEvidence");
   batch.automaticFigures["run-electricity"]!.magnitude = "0";
   expect(derive().blocker).toBeUndefined();
+});
+
+it("binds both uploaded documents on one component to its exact input", () => {
+  const { template, observation, batch, inputKey } = lineFileEvidenceFacts();
+  batch.lineFiles![0].documents.push({ id: "second", fileName: "corrected.pdf", version: 1 });
+  const lineFileEvidence = deriveLineFileEvidence({ batch }, observation);
+  const candidates = lineFileSourceCandidates(lineFileEvidence).map(candidate => ({ ...candidate, sourceId: candidate.documentId }));
+  const plan = buildRemovalSourceBindingPlan({ candidates, template, lineFileEvidence, applicationIdsByCreditBatchId: new Map() });
+  expect(plan).toHaveLength(2);
+  expect(sourceIdsForDatapointTarget(plan, { componentId: "component", inputKey })).toEqual(["document", "second"]);
+  batch.lineFiles![0].anchor.version++;
+  expect(() => buildRemovalSourceBindingPlan({ candidates, template,
+    lineFileEvidence: deriveLineFileEvidence({ batch }, observation), applicationIdsByCreditBatchId: new Map(),
+  })).toThrow(EMISSION_LINE_FILE_CHANGED);
+});
+
+it("suppresses locked batch proof without hiding the records figure or weakening Removal proof", () => {
+  const { batch, observation } = lineFileEvidenceFacts();
+  batch.lineFiles = [];
+  batch.recordsFileLocked = true;
+  const line = buildBatchEmissionLines(observation, [], new Map(), batch)[0];
+  expect(line).toMatchObject({ state: "filled", records: { figure: { magnitude: "0.5", unit: "kWh" } },
+    lineFile: { documents: [], needsFile: false } });
+  expect(line.blocker).toBeUndefined();
+  const [claimingLine] = deriveRemovalBatchEmissionLines({ ...batch, ...observation, recordsFileLocked: false,
+    problems: [], enrichmentComplete: true }, "batch");
+  expect(claimingLine.blocker?.code).toBe("lineMissingEvidence");
 });

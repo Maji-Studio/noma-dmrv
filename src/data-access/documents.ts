@@ -1,5 +1,5 @@
 import { emissionLineFiles } from "@/db/schema/emission-line-files";
-import { bumpEmissionLineFileEvidence, assertEmissionLineDocumentWritable, assertEmissionLineFileSlotEmpty } from "./emission-line-file-lock";
+import { bumpEmissionLineFileEvidence, assertEmissionLineDocumentWritable } from "./emission-line-file-lock";
 import { assertEmissionEntryDocumentWritable, bumpEmissionEntryEvidence } from "./emission-entry-lock";
 import { type ActivityScope, recordDocumentActivity } from "./write-activity";
 import type { ActivityEventInput } from "./activity-events";
@@ -431,7 +431,6 @@ export async function insertDocument(
     if (input.entityType === "emission_entry") await assertEmissionEntryDocumentWritable(ctx, input.entityId, tx);
     if (input.entityType === "emission_line") {
       await assertEmissionLineDocumentWritable(ctx, input.entityId, tx);
-      await assertEmissionLineFileSlotEmpty(ctx, tx, input.entityType, input.entityId);
     }
     const [row] = await tx.insert(documents).values({ ...input, organizationId: ctx.organizationId }).returning();
     await bumpEmissionEntryEvidence(ctx, tx, row.entityType, row.entityId);

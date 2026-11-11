@@ -1,6 +1,6 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
-import { certificationSubmissions, documents, emissionLineFiles } from "@/db/schema";
+import { certificationSubmissions, emissionLineFiles } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
 import { effectiveFilePolicy } from "@/lib/isometric/template-observations/file-policies";
@@ -54,17 +54,6 @@ export async function assertEmissionLineDocumentWritable(ctx: OrgContext, id: st
   const { anchor } = await lockEmissionLineDocumentOwner(ctx, tx, id);
   await lockEmissionLineFileBatch(ctx, tx, anchor.creditBatchId, anchor.componentId);
   return anchor;
-}
-
-/** Called under the owner lock, including generic document-upload requests. */
-export async function assertEmissionLineFileSlotEmpty(ctx: OrgContext, tx: DbTransaction, entityType: string, entityId: string) {
-  requireOrgScope(ctx);
-  if (entityType !== "emission_line") return;
-  const [existing] = await tx.select({ id: documents.id }).from(documents).where(and(
-    eq(documents.organizationId, ctx.organizationId), eq(documents.entityType, entityType), eq(documents.entityId, entityId),
-    inArray(documents.uploadStatus, ["pending", "uploaded"]),
-  )).limit(1);
-  if (existing) throw new DomainError("conflict", "This component already has a file. Remove it before attaching another file.");
 }
 
 export async function bumpEmissionLineFileEvidence(ctx: OrgContext, tx: DbTransaction, entityType: string, entityId: string) {

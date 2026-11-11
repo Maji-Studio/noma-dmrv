@@ -26,7 +26,7 @@ export async function listEmissionLineFilesForBatches(ctx: OrgContext, creditBat
     .leftJoin(documents, and(eq(documents.organizationId, ctx.organizationId), eq(documents.entityType, "emission_line"),
       eq(documents.entityId, emissionLineFiles.id), eq(documents.uploadStatus, "uploaded")))
     .where(and(eq(emissionLineFiles.organizationId, ctx.organizationId), inArray(emissionLineFiles.creditBatchId, creditBatchIds)))
-    .orderBy(asc(emissionLineFiles.id));
+    .orderBy(asc(emissionLineFiles.id), asc(documents.id));
 }
 
 export async function getOrCreateEmissionLineFile(ctx: OrgContext, input: EmissionLineFileAnchorInput, tx?: DbTransaction): Promise<typeof emissionLineFiles.$inferSelect> {
@@ -60,7 +60,7 @@ export async function attachEmissionLineFile(ctx: OrgContext, input: AttachEmiss
   });
 }
 
-/** Replacement follows entry files: delete the old document, then request another upload. */
+/** Unsent files may be removed; correct sent evidence by adding another file. */
 export async function removeEmissionLineFile(ctx: OrgContext, input: RemoveEmissionLineFileInput) {
   requireOrgScope(ctx);
   const data = removeEmissionLineFileSchema.parse(input);

@@ -1,3 +1,4 @@
+import { groupEmissionLineFiles } from "@/lib/certification/emission-line-file-facts";
 import { listEmissionLineFilesForBatches } from "@/data-access/emission-line-files";
 import { recordsNeedFile } from "@/lib/isometric/template-observations/file-policies";
 import type { LateEntryFacts } from "@/lib/certification/late-entry-view";
@@ -26,7 +27,7 @@ type StoredEntries = Awaited<ReturnType<typeof listEmissionEntriesForBatches>>;
 /** Shared display read for an already authorized set of batches. */
 export async function loadBatchesEmissionLines(
   ctx: OrgContext,
-  batches: readonly { id: string; removalTemplateId: string | null }[],
+  batches: readonly { id: string; removalTemplateId: string | null; productionEmissionsClaimedByRemovalId?: string | null; productionEmissionsClaimReservedBySubmissionId?: string | null }[],
   { comments = false }: { comments?: boolean } = {},
 ): Promise<Map<string, BatchEmissionLinesResult>> {
   if (!batches.length) return new Map();
@@ -69,7 +70,8 @@ export async function loadBatchesEmissionLines(
     if (!batch.removalTemplateId) return [batch.id, { status: "blocked", blocker: "unpinnedTemplate", storedEntries: stored }];
     if (!observation) return [batch.id, { status: "blocked", blocker: "templateNotFullyRead", storedEntries: stored }];
     const entries = mergeEntryCarryFacts(deriveEmissionEntryFacts(stored, observation, byId), carryEntries);
-    const lines = buildBatchEmissionLines(observation, entries, byId, automatic[batch.id], commentsByBatch.get(batch.id), lineFiles.filter(row => row.anchor.creditBatchId === batch.id));
+    const lines = buildBatchEmissionLines(observation, entries, byId, { ...automatic[batch.id], recordsFileLocked: !!(batch.productionEmissionsClaimedByRemovalId || batch.productionEmissionsClaimReservedBySubmissionId) },
+      commentsByBatch.get(batch.id), groupEmissionLineFiles(lineFiles.filter(row => row.anchor.creditBatchId === batch.id)));
     return [batch.id, { status: "ready", lines, storedEntries: stored }];
   }));
 }
@@ -79,7 +81,7 @@ export function buildBatchEmissionLines(
   observation: EntryObservation,
   entries: readonly (ReturnType<typeof deriveEmissionEntryFacts>[number] & LateEntryFacts)[],
   previousObservations: ReadonlyMap<string, EntryObservation | null>,
-  automaticFacts: Pick<BatchEmissionLineFacts, "automaticFigures" | "automaticRecordCounts" | "feedstockTransportCountedOn">,
+  automaticFacts: Pick<BatchEmissionLineFacts, "automaticFigures" | "automaticRecordCounts" | "feedstockTransportCountedOn" | "recordsFileLocked">,
   comments: Awaited<ReturnType<typeof listEmissionLineCommentsForBatches>> = [],
   lineFiles: NonNullable<BatchEmissionLineFacts["lineFiles"]> = [],
 ) {
@@ -122,8 +124,8 @@ export function buildBatchEmissionLines(
     return {
       ...line,
       lineFile: line.filePolicy === "lineFile" ? { anchorId: file?.anchor.id ?? null,
-        document: file?.document ? { id: file.document.id, fileName: file.document.fileName, version: file.document.version } : null,
-        needsFile: recordsNeedFile(line.filePolicy, line.records?.figure?.magnitude ?? "0"), policy: line.filePolicy } : null,
+        documents: file?.documents ?? [],
+        needsFile: !automaticFacts.recordsFileLocked && recordsNeedFile(line.filePolicy, line.records?.figure?.magnitude ?? "0"), policy: line.filePolicy } : null,
       label: line.displayName,
       description: component.description,
       inputShape,

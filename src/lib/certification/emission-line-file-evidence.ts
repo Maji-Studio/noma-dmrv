@@ -33,10 +33,10 @@ export function deriveLineFileEvidence(batches: BatchEmissionContext, observatio
         !recordsNeedFile(effectiveFilePolicy(contract), batch.automaticFigures[source]?.magnitude ?? "0")) return [];
       const inputKey = RECORD_INPUT_KEYS[source as keyof typeof RECORD_INPUT_KEYS];
       if (!inputKey || !component.inputs.some(input => input.key === inputKey && input.type === "monitored")) return [];
-      const file = batch.lineFiles?.find(row => row.anchor.componentId === component.id && row.document);
-      if (!file?.document) return [];
-      return [{ creditBatchId, componentId: component.id, componentDisplayName: component.displayName,
-        inputKey, anchorId: file.anchor.id, anchorVersion: file.anchor.version, documentId: file.document.id }];
+      const file = batch.lineFiles?.find(row => row.anchor.componentId === component.id);
+      if (!file) return [];
+      return file.documents.map(document => ({ creditBatchId, componentId: component.id, componentDisplayName: component.displayName,
+        inputKey, anchorId: file.anchor.id, anchorVersion: file.anchor.version, documentId: document.id }));
     })));
 }
 

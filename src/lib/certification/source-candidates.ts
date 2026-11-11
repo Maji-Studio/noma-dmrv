@@ -1,3 +1,4 @@
+import { EMISSION_LINE_FILE_CHANGED } from "@/lib/certification/emission-entry-messages";
 import { includesProductionInputs } from "./production-claim-policy";
 import { EMISSION_ENTRY_FILE_UNAVAILABLE, formatEmissionEntryMessageLabel } from "@/lib/certification/emission-entry-messages";
 import { withEmissionEntryEvidenceDiagnostics } from "./emission-entry-evidence-diagnostics";
@@ -506,7 +507,7 @@ export async function collectLineFileSourceDocuments(ctx: OrgContext, evidence: 
       row.anchor.version === candidate.binding.lineFile?.anchorVersion &&
       row.anchor.creditBatchId === candidate.binding.lineFile?.creditBatchId && row.document?.id === candidate.documentId &&
       row.document.entityType === "emission_line" && row.document.entityId === row.anchor.id && row.document.uploadStatus === "uploaded");
-    if (!row?.document) throw new SafeError("The component file changed. Reload and review this Removal again.");
+    if (!row?.document) throw new SafeError(EMISSION_LINE_FILE_CHANGED);
     return { document: row.document, binding: candidate.binding };
   });
 }

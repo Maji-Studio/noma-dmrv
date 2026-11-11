@@ -23,7 +23,7 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
   const batchFacts: BatchEmissionContext = Object.fromEntries(Object.entries(facts).map(([id, batch]) => {
     const member = scope.memberBatches.find((item) => item.id === id);
     const omittedAutomaticSources = omittedProductionSources(member?.productionEmissionsClaimedByRemovalId, scope.removalId!);
-    return [id, { ...batch, ...(frozen ? { entries: batch.entries.filter(belongsToFrozenView), entriesWithoutRemoval: [] } : {}), omittedAutomaticSources, automaticFigures: Object.fromEntries(
+    return [id, { ...batch, recordsFileLocked: false, ...(frozen ? { entries: batch.entries.filter(belongsToFrozenView), entriesWithoutRemoval: [] } : {}), omittedAutomaticSources, automaticFigures: Object.fromEntries(
       Object.entries(batch.automaticFigures).filter(([source]) => !omittedAutomaticSources.some((id) => id === source)),
     ) }];
   }));

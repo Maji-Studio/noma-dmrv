@@ -211,7 +211,7 @@ it.each([false, true])("runs follow-up line derivation through compilation, incl
   if (mixed) batchFacts.current = { entries: [], previousObservations: new Map(), automaticFigures: {
     "run-electricity": { magnitude: String(agg.totalElectricityKwh), unit: "kWh" }, "delivery-transport": { magnitude: "12", unit: "km * tonne" },
   }, lineFiles: Object.keys(sources).filter((id) => sources[id].automaticSource === "run-electricity").map((componentId) => ({
-    anchor: { id: `anchor-${componentId}`, componentId, version: 1 }, document: { id: `document-${componentId}`, fileName: "meter.pdf", version: 1 },
+    anchor: { id: `anchor-${componentId}`, componentId, version: 1 }, documents: [{ id: `document-${componentId}`, fileName: "meter.pdf", version: 1 }],
   })) };
   const resolved = resolveRemovalTemplate(Object.keys(batchFacts).map((id) => ({ id, removalTemplateId: template.id })), facility, batchFacts, contributions);
   expect(resolved.emissionLines).toHaveLength(mixed ? 4 : 2);

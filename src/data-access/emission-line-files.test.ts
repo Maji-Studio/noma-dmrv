@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { activityEvents, certificationSubmissions, creditBatches, documents, emissionLineFiles } from "@/db/schema";
+import { activityEvents, certifierDocumentUploads, certificationSubmissions, creditBatches, documents, emissionLineFiles } from "@/db/schema";
 import { deleteCreditBatch } from "./credit-batches";
 import { attachEmissionLineFile, getOrCreateEmissionLineFile, listEmissionLineFiles, listEmissionLineFilesForBatches, removeEmissionLineFile } from "./emission-line-files";
 import { setComponentFilePolicy } from "./component-file-policy";
@@ -21,7 +21,11 @@ beforeEach(async () => {
   remote.submitted_at = STATEMENT_SENT_AT;
   remote.ghg_entry_ids = [];
 });
-afterEach(async () => { if (fixture) await cleanupEmissionLineFileFixture(fixture); });
+afterEach(async () => {
+  if (!fixture) return;
+  await db.delete(certifierDocumentUploads).where(eq(certifierDocumentUploads.organizationId, fixture.ctx.organizationId));
+  await cleanupEmissionLineFileFixture(fixture);
+});
 const anchorInput = () => ({ creditBatchId: fixture.batch.id, componentId: COMPONENT_ID });
 const attach = () => attachEmissionLineFile(fixture.ctx, { ...anchorInput(), upload: FILE_UPLOAD }, FILE_STORAGE);
 async function confirm(row: typeof documents.$inferSelect) {
@@ -122,17 +126,20 @@ it("ignores an inactive reservation but preserves an active reservation", async 
   await expect(attach()).resolves.toMatchObject({ uploadStatus: "pending" });
 });
 
-it("serializes concurrent uploads to one active file and refuses stale deletion", async () => {
-  const attempts = await Promise.allSettled([attach(), attach()]);
-  expect(attempts.filter(result => result.status === "fulfilled")).toHaveLength(1);
-  expect(attempts.find(result => result.status === "rejected")).toMatchObject({ reason: { code: "conflict" } });
-  const [anchor] = await db.select().from(emissionLineFiles).where(eq(emissionLineFiles.organizationId, fixture.ctx.organizationId));
-  const [document] = await db.select().from(documents).where(and(eq(documents.organizationId, fixture.ctx.organizationId), eq(documents.entityId, anchor.id)));
+it("concurrent uploads both succeed and both count, while stale deletion is refused", async () => {
+  const pending = await Promise.all([attach(), attach()]);
+  expect(pending[0].entityId).toBe(pending[1].entityId);
+  expect(pending[0].id).not.toBe(pending[1].id);
+  const confirmed = await Promise.all(pending.map(confirm));
+  expect(confirmed.map(result => result.kind)).toEqual(["uploaded", "uploaded"]);
+  const rows = await listEmissionLineFilesForBatches(fixture.ctx, [fixture.batch.id]);
+  expect(rows.map(row => row.document?.id).sort()).toEqual(pending.map(row => row.id).sort());
+  const document = rows[0].document!;
   await expect(removeEmissionLineFile(fixture.ctx, { documentId: document.id, expectedVersion: document.version + 1 }))
     .rejects.toMatchObject({ code: "stale_version" });
   await expect(db.transaction(tx => requestDocumentUploadInTransaction(fixture.ctx, tx, {
-    ...FILE_UPLOAD, ...FILE_STORAGE, entityType: "emission_line", entityId: anchor.id,
-  }))).rejects.toMatchObject({ code: "conflict" });
+    ...FILE_UPLOAD, ...FILE_STORAGE, entityType: "emission_line", entityId: document.entityId,
+  }))).resolves.toMatchObject({ uploadStatus: "pending" });
 });
 
 it("retires the component file when its credit batch is deleted", async () => {
@@ -146,4 +153,21 @@ it("retires the component file when its credit batch is deleted", async () => {
   ))).resolves.toEqual([]);
   await expect(db.select().from(emissionLineFiles).where(eq(emissionLineFiles.organizationId, fixture.ctx.organizationId)))
     .resolves.toEqual([]);
+});
+
+it("adds a corrected file while keeping the sent file and Source history", async () => {
+  const sent = await uploaded();
+  const sourceId = `source-${sent.id}`;
+  const { externalId } = await claimEmissionLineFileFixture(fixture, "returned", { sourceBindingPlan: [{ sourceId }] });
+  remote.ghg_entry_ids = [externalId];
+  await db.insert(certifierDocumentUploads).values({ organizationId: fixture.ctx.organizationId,
+    documentId: sent.id, provider: "isometric", externalDocumentId: sourceId });
+  await expect(removeEmissionLineFile(fixture.ctx, { documentId: sent.id, expectedVersion: sent.version }))
+    .rejects.toMatchObject({ code: "certification_locked" });
+  const corrected = await uploaded();
+  expect(corrected.entityId).toBe(sent.entityId);
+  const rows = await listEmissionLineFilesForBatches(fixture.ctx, [fixture.batch.id]);
+  expect(rows.map(row => row.document?.id).sort()).toEqual([sent.id, corrected.id].sort());
+  const mappings = await db.select().from(certifierDocumentUploads).where(eq(certifierDocumentUploads.organizationId, fixture.ctx.organizationId));
+  expect(mappings).toMatchObject([{ documentId: sent.id, externalDocumentId: sourceId }]);
 });

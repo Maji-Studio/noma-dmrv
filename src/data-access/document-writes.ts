@@ -1,4 +1,4 @@
-import { bumpEmissionLineFileEvidence, assertEmissionLineFileSlotEmpty } from "./emission-line-file-lock";
+import { bumpEmissionLineFileEvidence } from "./emission-line-file-lock";
 import { bumpEmissionEntryEvidence } from "./emission-entry-lock";
 import type { CaptureActivity } from "@/lib/activity-changes";
 import { nextVersion } from "./row-version";
@@ -52,7 +52,6 @@ export async function requestDocumentUploadInTransaction(ctx: OrgContext, tx: Db
   if (data.entityType === "production_run" && data.documentType === "sensor_data" && !isProductionReadingsCsvFormat(data)) throw new DomainError("validation_failed", "Readings files must use CSV format.");
   const scope = await lockDocumentOwner(ctx, tx, data.entityType, data.entityId, data.documentType);
   await assertDocumentOwnerWritable(ctx, tx, scope);
-  await assertEmissionLineFileSlotEmpty(ctx, tx, data.entityType, data.entityId);
   const id = randomUUID();
   const key = buildUploadKey({ organizationId: ctx.organizationId, documentId: id });
   const [row] = await tx.insert(documents).values({

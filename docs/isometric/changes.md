@@ -7,6 +7,7 @@ API traps belong in [registry behavior](./registry-behavior.md). Existing entry
 anchors remain here so older links still work. Add future dated logs to the
 archive and link them here.
 
+- <a id="2026-11-11-credit-batch-component-file-for-run-energy-1519"></a> [2026-11-11: Credit batch component file for run energy (#1519)](../archive/2026-10-30-isometric-change-history.md#2026-11-11-credit-batch-component-file-for-run-energy-1519)
 - <a id="2026-11-05-enter-again-for-carried-emissions-entries-1580"></a> [2026-11-05: Enter again for carried emissions entries (#1580)](../archive/2026-10-30-isometric-change-history.md#2026-11-05-enter-again-for-carried-emissions-entries-1580)
 - <a id="2026-11-05-block-a-returned-removal-from-dropping-a-sent-entry-1575"></a> [2026-11-05: Block a returned Removal from dropping a sent entry (#1575)](../archive/2026-10-30-isometric-change-history.md#2026-11-05-block-a-returned-removal-from-dropping-a-sent-entry-1575)
 - <a id="2026-11-04-correct-carried-entries-under-their-receiving-removal-1572"></a> [2026-11-04: Correct carried entries under their receiving Removal (#1572)](../archive/2026-10-30-isometric-change-history.md#2026-11-04-correct-carried-entries-under-their-receiving-removal-1572)

@@ -1,3 +1,4 @@
+import { isComponentEvidenceRole } from "@/lib/isometric/semantic-binding-catalog";
 import { deriveEntryCorrection, type EntryCorrectionState } from "./removal-entry-correction";
 import type { EntryInputManifest } from "./removal-emission-contributions";
 
@@ -31,12 +32,12 @@ function components(semantic: Record<string, unknown>): string[] {
 /** Entry and component evidence are compared on their exact component below. */
 function sharedEvidence(semantic: Record<string, unknown>) {
   const componentSourceIds = new Set(rows(semantic.sourceBindingPlan)
-    .filter(binding => ["emission_entry", "emission_line_file"].includes(String(binding.nomaRole))).map(binding => binding.sourceId));
+    .filter(binding => isComponentEvidenceRole(binding.nomaRole)).map(binding => binding.sourceId));
   return {
     sourceIds: Array.isArray(semantic.sourceIds) ? semantic.sourceIds.filter(id => !componentSourceIds.has(id)) : [],
     candidateSources: rows(semantic.candidateSources).filter(candidate => {
       const binding = candidate.binding;
-      return !binding || typeof binding !== "object" || !("nomaRole" in binding) || !["emission_entry", "emission_line_file"].includes(String(binding.nomaRole));
+      return !binding || typeof binding !== "object" || !("nomaRole" in binding) || !isComponentEvidenceRole(binding.nomaRole);
     }),
   };
 }

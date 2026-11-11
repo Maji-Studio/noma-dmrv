@@ -1,3 +1,4 @@
+import { isComponentEvidenceRole } from "@/lib/isometric/semantic-binding-catalog";
 import { getMetadataValue, SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import type { NomaEvidenceRole } from "@/lib/certification/removal-source-bindings";
@@ -19,7 +20,7 @@ function isGeneratedEvidence(candidate: CandidateSourceDocument): boolean {
 }
 
 function isComponentEvidence(candidate: CandidateSourceDocument): boolean {
-  return candidate.binding?.nomaRole === "emission_entry" || candidate.binding?.nomaRole === "emission_line_file";
+  return isComponentEvidenceRole(candidate.binding?.nomaRole);
 }
 
 function followsCurrentManifest(candidate: CandidateSourceDocument): boolean {

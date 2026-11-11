@@ -1,3 +1,4 @@
+import { READOUT_INPUT_KEYS, CONCENTRATION_MASS_FLOW_INPUT_KEYS, MASS_DISTANCE_INPUT_KEYS } from "@/lib/isometric/template-observations/entry-policies";
 import { entriesNeedFiles, type FilePolicy } from "@/lib/isometric/template-observations/file-policies";
 import { canonicalDecimal } from "@/lib/isometric/template-observations/units";
 
@@ -8,9 +9,9 @@ export function entryAmountIsZero(values: readonly { inputKey: string; magnitude
   if (amounts.size !== values.length || [...amounts.values()].some(value => value === undefined)) return false;
   if (values.length === 1) return amounts.get(values[0].inputKey) === "0";
   if (values.length !== 2) return false;
-  if (amounts.has("initial_readout") && amounts.has("final_readout"))
-    return amounts.get("initial_readout") === amounts.get("final_readout");
-  for (const [left, right] of [["concentration", "mass_flow"], ["mass", "distance"]]) {
+  if (amounts.has(READOUT_INPUT_KEYS[0]) && amounts.has(READOUT_INPUT_KEYS[1]))
+    return amounts.get(READOUT_INPUT_KEYS[0]) === amounts.get(READOUT_INPUT_KEYS[1]);
+  for (const [left, right] of [CONCENTRATION_MASS_FLOW_INPUT_KEYS, MASS_DISTANCE_INPUT_KEYS]) {
     if (amounts.has(left) && amounts.has(right)) return amounts.get(left) === "0" || amounts.get(right) === "0";
   }
   return false;

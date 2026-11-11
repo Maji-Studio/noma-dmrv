@@ -3,7 +3,7 @@ import { automaticSourceAvailable, catalogSourceForRole } from "@/lib/isometric/
 import { carriedEntrySourceDescription, type CarriedEntryNote } from "./emission-entry-carry-copy";
 import { isInFrozenEntrySet } from "./removal-entry-snapshot";
 import { EmissionEntryEvidenceError } from "./emission-entry-evidence-error";
-import { EMISSION_ENTRY_FILE_MISMATCH } from "./emission-entry-messages";
+import { EMISSION_LINE_FILE_CHANGED, EMISSION_ENTRY_FILE_MISMATCH } from "./emission-entry-messages";
 import type { RemovalEntryContributions } from "./removal-emission-contributions";
 import { effectiveContract, type LineContract, type LineSources } from "@/lib/isometric/template-observations/line-sources";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
@@ -12,6 +12,7 @@ import { SafeError } from "@/lib/errors";
 import {
   normalizeComponentDisplayName,
   type NomaEvidenceRole,
+  type ComponentEvidenceRole,
 } from "@/lib/isometric/semantic-binding-catalog";
 import {
   projectDurabilityLedgerInputKeys,
@@ -86,7 +87,7 @@ export interface OptionalRemovalEvidenceTarget
 const EVIDENCE_TARGETS = projectEvidenceTargets();
 
 function sourceBindingRule(
-  nomaRole: Exclude<NomaEvidenceRole, "durability_evidence_ledger" | "emission_entry" | "emission_line_file">,
+  nomaRole: Exclude<NomaEvidenceRole, "durability_evidence_ledger" | ComponentEvidenceRole>,
   nomaRoleLabel: string,
 ): SourceBindingRule {
   const [intendedTarget, ...additionalIntendedTargets] =
@@ -474,7 +475,7 @@ export function buildRemovalSourceBindingPlan(args: {
               file.documentId === documentId && file.componentId === target.componentId && file.inputKey === target.inputKey &&
               file.creditBatchId === binding.lineFile?.creditBatchId && file.anchorVersion === binding.lineFile?.anchorVersion) ?? [];
             if (binding.lineage.entityType !== "emission_line" || matches.length !== 1 || files.length !== 1) {
-              throw new SafeError("The component file changed. Reload and review this Removal again.");
+              throw new SafeError(EMISSION_LINE_FILE_CHANGED);
             }
             const { group, component } = matches[0];
             return [{ documentId, sourceId, nomaRole: binding.nomaRole, lineage: binding.lineage, lineFile: binding.lineFile,

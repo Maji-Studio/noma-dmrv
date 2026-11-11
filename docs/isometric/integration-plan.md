@@ -81,13 +81,16 @@ Datapoints; propagation delay and a true mismatch are different outcomes.
 
 Each component has a proof setting (`src/lib/isometric/template-observations/file-policies.ts`):
 `lineFile` is for genset diesel, startup diesel and electricity from production
-runs. One file per credit batch and component is stored on an `emission_line_files`
-anchor as an uploaded `emission_line` document. A non-zero exact From records total
-requires that file, and only the Removal claiming the batch's production emissions
-sends it as the Source of that component's energy Datapoint. Missing proof blocks
-submission with "File missing". A non-claiming Removal omits the run amount and
-file. `entryFiles` requires a file per manual entry; `generated` means noma
-produces the evidence; `none` requires no files. Manual entries still need their
+runs. One set of files per credit batch and component, not per run, is stored on
+an `emission_line_files` anchor as uploaded `emission_line` documents. A non-zero
+exact From records total requires at least one uploaded file. Only the Removal
+claiming the batch's production emissions sends these files as Sources of that
+component's energy Datapoint. While that Removal is returned, add a corrected
+file; files already sent stay in history. Missing proof blocks
+the claiming Removal's submission with "File missing". Batches whose production
+emissions are claimed or reserved show no missing-file blocker at batch level.
+A non-claiming Removal omits the run amount and files. `entryFiles` requires a
+file per manual entry; `generated` means noma produces the evidence; `none` requires no files. Manual entries still need their
 own files under `lineFile` and `generated`.
 An amount of zero needs no file. For a single-input manual entry, this is the
 recorded value (including operating hours for a time-based component). For

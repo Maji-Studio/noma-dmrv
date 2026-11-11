@@ -12,13 +12,13 @@
  * covers several entries of one emission component. A file used across kinds
  * gets a note; a file reused within one kind does not.
  */
-import type { NomaEvidenceRole } from "@/lib/isometric/semantic-binding-catalog";
+import { isComponentEvidenceRole, type ComponentEvidenceRole, type NomaEvidenceRole } from "@/lib/isometric/semantic-binding-catalog";
 
 /** Application evidence files that bind to the Biochar Application, not to a Datapoint. */
 export const APPLICATION_EVIDENCE_ROLE = "application_evidence";
 export type SourceFileRole = NomaEvidenceRole | typeof APPLICATION_EVIDENCE_ROLE;
 
-type FixedKindRole = Exclude<SourceFileRole, "emission_entry" | "emission_line_file">;
+type FixedKindRole = Exclude<SourceFileRole, ComponentEvidenceRole>;
 
 /**
  * The grouping table: each evidence role and the kind it belongs to. Roles in
@@ -76,7 +76,7 @@ interface EvidenceKind {
 
 /** The kind a use belongs to. */
 export function evidenceKindOf(use: Pick<SourceFileUse, "role" | "component">): EvidenceKind {
-  if (use.role !== "emission_entry" && use.role !== "emission_line_file") return EVIDENCE_KINDS[use.role];
+  if (!isComponentEvidenceRole(use.role)) return EVIDENCE_KINDS[use.role];
   const componentId = use.component?.id ?? "unknown";
   return {
     key: `emission-component:${componentId}`,

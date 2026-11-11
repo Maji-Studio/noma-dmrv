@@ -58,14 +58,16 @@ export async function cleanupEmissionLineFileFixture(fixture: EmissionLineFileFi
   await cleanupActivityWriteFixture(ctx);
 }
 
-export async function claimEmissionLineFileFixture(fixture: EmissionLineFileFixture, kind: "claimed" | "reserved" | "returned") {
+/** The snapshot freezes once the submission leaves draft, so set it at insert. */
+export async function claimEmissionLineFileFixture(fixture: EmissionLineFileFixture, kind: "claimed" | "reserved" | "returned",
+  payloadSnapshot: Record<string, unknown> = {}) {
   const { ctx, batch, removal, facility } = fixture;
   const externalId = `remote-${removal.id}`;
   const [submission] = await db.insert(certificationSubmissions).values({
     organizationId: ctx.organizationId, provider: "isometric", submissionType: "removal", localEntityType: "removal",
     localEntityId: removal.id, version: 1, status: kind === "reserved" ? "draft" : "submitted",
     lockedAt: kind === "reserved" ? new Date() : null, externalId: kind === "reserved" ? null : externalId,
-    submittedAt: kind === "reserved" ? null : REMOVAL_SENT_AT, payloadHash: crypto.randomUUID(), payloadSnapshot: {},
+    submittedAt: kind === "reserved" ? null : REMOVAL_SENT_AT, payloadHash: crypto.randomUUID(), payloadSnapshot,
   }).returning();
   await db.update(creditBatches).set(kind === "reserved"
     ? { productionEmissionsClaimReservedBySubmissionId: submission.id }

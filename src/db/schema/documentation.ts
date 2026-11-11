@@ -7,7 +7,6 @@ import {
   integer,
   check,
   index,
-  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import {
@@ -66,8 +65,6 @@ export const documents = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex('documents_emission_line_active_unique').on(table.organizationId, table.entityId)
-      .where(sql`${table.entityType} = 'emission_line' and ${table.uploadStatus} in ('pending', 'uploaded')`),
     index('documents_organization_id_idx').on(table.organizationId),
     // Every row must point to something: a storage object OR an external URL.
     check(

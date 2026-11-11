@@ -1,5 +1,5 @@
 {
-  "id": "2e826415-732f-406c-8c5a-7e9859f2b52a",
+  "id": "f4c45c57-d769-4dd9-838e-cc912969019c",
   "prevId": "45927d94-d882-4455-b6f1-c0b9f33e3eff",
   "version": "7",
   "dialect": "postgresql",
@@ -5982,28 +5982,6 @@
         }
       },
       "indexes": {
-        "documents_emission_line_active_unique": {
-          "name": "documents_emission_line_active_unique",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "entity_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"documents\".\"entity_type\" = 'emission_line' and \"documents\".\"upload_status\" in ('pending', 'uploaded')",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "documents_organization_id_idx": {
           "name": "documents_organization_id_idx",
           "columns": [

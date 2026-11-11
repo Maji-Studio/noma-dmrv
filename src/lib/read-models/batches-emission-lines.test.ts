@@ -173,3 +173,39 @@ describe("time-based lines", () => {
 });
 
 vi.mock("@/data-access/emission-line-files", () => ({ listEmissionLineFilesForBatches: vi.fn() }));
+
+it.each(["claimed", "reserved"])("keeps locked %s records visible without a file blocker", async kind => {
+  const proofObservation = structuredClone(observation);
+  proofObservation.lineSources.electricity = { ...proofObservation.lineSources.electricity,
+    automaticSource: "run-electricity", filePolicy: "lineFile" };
+  vi.mocked(getLatestTemplateObservations).mockResolvedValue([proofObservation] as never);
+  vi.mocked(loadBatchesEmissionAutomaticFacts).mockResolvedValue({ ready: { automaticFigures: {
+    "run-electricity": { magnitude: "5", unit: "kWh" },
+  } } });
+  const result = (await loadBatchesEmissionLines(ctx, [{ ...batches[0],
+    productionEmissionsClaimedByRemovalId: kind === "claimed" ? "sent" : null,
+    productionEmissionsClaimReservedBySubmissionId: kind === "reserved" ? "submission" : null,
+  }])).get("ready")!;
+  assert(result.status === "ready");
+  expect(result.lines[0].blocker).toBeUndefined();
+  expect(result.lines[0]).toMatchObject({ records: { figure: { magnitude: "5", unit: "kWh" } },
+    lineFile: { documents: [], needsFile: false } });
+});
+
+it("groups all uploaded documents under their one anchor in the read model", async () => {
+  const proofObservation = structuredClone(observation);
+  proofObservation.lineSources.electricity = { ...proofObservation.lineSources.electricity,
+    automaticSource: "run-electricity", filePolicy: "lineFile" };
+  vi.mocked(getLatestTemplateObservations).mockResolvedValue([proofObservation] as never);
+  vi.mocked(loadBatchesEmissionAutomaticFacts).mockResolvedValue({ ready: { automaticFigures: {
+    "run-electricity": { magnitude: "5", unit: "kWh" },
+  } } });
+  const documents = ["first", "second"].map(id => ({ id, fileName: id + ".pdf", version: 1 }));
+  vi.mocked(listEmissionLineFilesForBatches).mockResolvedValue(documents.map(document => ({
+    anchor: { id: "anchor", componentId: "electricity", creditBatchId: "ready", version: 3 }, document,
+  })) as never);
+  const result = (await loadBatchesEmissionLines(ctx, [batches[0]])).get("ready")!;
+  assert(result.status === "ready");
+  expect(result.lines[0].lineFile).toEqual({ anchorId: "anchor", documents, needsFile: true, policy: "lineFile" });
+  expect(result.lines[0].blocker).toBeUndefined();
+});
