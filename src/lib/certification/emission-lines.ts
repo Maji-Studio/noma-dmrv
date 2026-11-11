@@ -1,3 +1,5 @@
+import { effectiveFilePolicy } from "@/lib/isometric/template-observations/file-policies";
+import { entryNeedsFile } from "./emission-entry-evidence";
 import { EMPTY_REMOVAL_LINE } from "@/lib/certification/emission-entry-messages";
 import { DomainError } from "@/lib/domain-errors";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
@@ -51,6 +53,7 @@ export interface EmissionLineEntryFact {
   occurredOn?: string;
   documentCount?: number;
   componentId: string; kind: "value" | "zero"; hasEvidence: boolean;
+  isZero?: boolean;
   confirmedForRemovalId?: string | null;
   total: EmissionFigure | null; counts: boolean; reason?: string | null; unitMismatch?: boolean;
 }
@@ -112,7 +115,7 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     let state: EmissionLineState;
     let blocker: (RemovalBlocker & { copy?: BlockerCopy }) | undefined = decision?.blocker;
     if (decision && decision.state !== "empty") { state = decision.state; blocker = decision.blocker; }
-    else if (values.some((entry) => !entry.hasEvidence)) {
+    else if (values.some((entry) => entryNeedsFile(contract ? effectiveFilePolicy(contract) : "entryFiles", entry) && !entry.hasEvidence)) {
       state = "missingEvidence";
       blocker = { code: "entryMissingEvidence", message: MISSING_EVIDENCE_INSTRUCTION, copy: { instruction: MISSING_EVIDENCE_INSTRUCTION }, fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     } else if (automaticFigure || values.length) state = "filled";

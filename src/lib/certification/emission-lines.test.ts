@@ -1,3 +1,5 @@
+import { deriveEmissionEntryFacts } from "./emission-entry-facts";
+import { ENTRY_FILE_CASES } from "./emission-entry-evidence-test-fixtures";
 import { buildCreditBatchOpenItems, openItemText } from "@/lib/credit-batches/open-items";
 import { readOnlyOpenItems } from "@/lib/credit-batches/batch-page";
 import { describe, expect, it } from "vitest";
@@ -288,4 +290,28 @@ it("splits the stale-entry fallback instruction when no reason is supplied", () 
   const [line] = deriveBatchEmissionLines(f);
   expect(line.blocker?.message).toBe("Enter the values again for the current template component.");
   expect(line.blocker?.copy).toEqual({ instruction: line.blocker?.message });
+});
+
+
+it.each(ENTRY_FILE_CASES)("applies the entry file requirement to $label", ({ magnitudes, filePolicy, missing }) => {
+  const f = facts();
+  const component = f.definition.groups[0].components[0];
+  component.inputs = component.inputs.filter((input) => input.type === "monitored");
+  const paired = magnitudes.length > 1;
+  if (paired) {
+    component.blueprintKey = "metered_energy_based_ci_emissions";
+    component.inputs = ["initial_readout", "final_readout"].map((key) => ({ key, type: "monitored", quantityKind: "energy" }));
+    f.lineSources[component.id] = { scope: "operating", entryPolicy: "single", origin: "reviewed" };
+  }
+  if (filePolicy) f.lineSources[component.id].filePolicy = filePolicy;
+  const observation = { externalTemplateId: "template", definition: f.definition, lineSources: f.lineSources,
+    enrichment: { [component.id]: Object.fromEntries(component.inputs.map((input) => [input.key, { unit: "kWh" }])) } };
+  const stored = { ...entry(f, { hasEvidence: false }), observationId: "observation", documentCount: 0,
+    values: magnitudes.map((magnitude, index) => ({ inputKey: component.inputs[index].key, magnitude, unit: "kWh" })),
+  } as Parameters<typeof deriveEmissionEntryFacts>[0][number];
+  f.entries = deriveEmissionEntryFacts([stored], observation, new Map([["observation", observation]]));
+  f.entriesCanSubmit = true;
+  const [componentResult] = deriveBatchEmissionLines(f);
+  expect(componentResult.state).toBe(missing ? "missingEvidence" : "filled");
+  expect(componentResult.blocker?.code).toBe(missing ? "entryMissingEvidence" : undefined);
 });

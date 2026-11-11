@@ -4,10 +4,13 @@ import { automaticSourceAvailable, catalogCandidates, hasCatalogDisambiguation, 
 import { allowedEntryPolicies, isLegacyAutomaticPair } from "./entry-policies";
 import type { EntryPolicy, TemplateDefinition } from "./types";
 
+import type { FilePolicy } from "./file-policies";
+
 export interface LineContract {
   scope: "operating" | "forbidden" | "unassigned";
   automaticSource?: AutomaticSourceId;
   entryPolicy: EntryPolicy;
+  filePolicy?: FilePolicy;
   origin: "bootstrap" | "carried" | "reviewed" | "proposed";
   /** Display metadata from raw template arrays, excluded from entry compatibility. */
   templateOrder?: { groupPosition: number; position: number };

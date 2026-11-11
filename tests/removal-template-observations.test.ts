@@ -1,3 +1,4 @@
+import { effectiveFilePolicy } from "@/lib/isometric/template-observations/file-policies";
 import { legacyTransportObservation } from "./helpers/legacy-transport-observation";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -237,4 +238,15 @@ it("refuses to review another component beside an undecided legacy pair", async 
   const review = reviewLineContracts(ctx, { observationId: row.id, expectedVersion: row.version,
     assignments: { [pendingId]: { scope: "operating", entryPolicy: "additive" } } });
   await expect(review).rejects.toThrow("Choose valid, distinct sources");
+});
+
+
+it("reads an existing stored component contract with its default proof setting", async () => {
+  const value = template();
+  const row = await observe(value);
+  const componentId = value.groups[0].components[0].id;
+  const stored = await getTemplateObservationById(ctx, row.id);
+  expect(stored).not.toBeNull();
+  expect(Object.hasOwn(stored!.lineSources[componentId], "filePolicy")).toBe(false);
+  expect(effectiveFilePolicy(stored!.lineSources[componentId])).toBe("lineFile");
 });

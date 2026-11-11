@@ -85,6 +85,7 @@ describe("coverage health check", () => {
     { scope: "operating", entryPolicy: "typo" },
     { scope: "typo", entryPolicy: "additive" },
     { scope: "operating", entryPolicy: "additive", automaticSource: "typo" },
+    { scope: "operating", entryPolicy: "additive", filePolicy: "typo" },
     { scope: "operating", entryPolicy: "additive", origin: "bootstrap" },
     { scope: "operating", entryPolcy: "additive" },
   ])("rejects malformed fixture decisions: %j", (contract) => {
@@ -166,4 +167,14 @@ describe("coverage health check", () => {
     }));
     expect(entryOnly.some((finding) => finding.componentId === entryOnlyId)).toBe(false);
   });
+});
+
+
+it("accepts an optional stored proof setting in reviewed contracts", () => {
+  const componentId = timeComponentIds[0];
+  const fixture = { facilities: [{ ...coverageFixture.facilities[0], reviewedLineSources: {
+    [componentId]: { scope: "operating", entryPolicy: "additive", filePolicy: "none" },
+  } }] };
+  const parsed = coverageFixtureSchema.parse(fixture).facilities[0];
+  expect(resolveCoverageLineSources(timeTemplate, parsed.reviewedLineSources)[componentId].filePolicy).toBe("none");
 });
