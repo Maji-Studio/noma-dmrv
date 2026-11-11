@@ -102,6 +102,16 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
   bar a few pixels wide. Needs a design decision for bars whose 44px hit areas
   would overlap.
 
+## Credit batch state outside /credit-batches (#1046) - **deferred**
+
+- The stored credit batch status is gone (#1046). The facility Emissions
+  overview, the credit batch pickers and the Energy list no longer show one,
+  and none shows where the batch stands with Isometric yet. The state that
+  `/credit-batches` shows (`src/lib/credit-batches/batch-state.ts:creditBatchStateOf`)
+  needs each batch's health summary, a per-batch readiness read those surfaces
+  do not load. Resolve by deciding which surfaces need the state and adding a
+  bounded read for them ([design decision](./design-decisions.md#credit-batches-and-locks)).
+
 ## Answering components for a kept batch's older template - **open**
 
 - `src/components/credit-batches/credit-batch-removal-template.tsx:CreditBatchRemovalTemplate`

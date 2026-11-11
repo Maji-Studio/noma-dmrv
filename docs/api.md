@@ -139,6 +139,10 @@ Ratios and warnings come from the merged locked row
 Reads (`src/data-access/api-lab-samples.ts`, `api-credit-batches.ts`) hide
 samples on archived batches from lists and still serve them by id.
 
+Credit batch representation revision 2 has no `status` field and the list has no
+`status` filter (#1046): the stored status never left `pending`. Where a batch
+stands with Isometric lives on its Removal and GHG Statement.
+
 ### Documents
 
 Feedstocks, deliveries, lab samples and applications expose nested document

@@ -1,6 +1,7 @@
 /** Real handlers, credentials and Postgres. Written for reviewer execution; never run by the implementation agent. */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { and, desc, eq } from "drizzle-orm";
+import { CREDIT_BATCH_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { db } from "@/db";
 import { creditBatches, facilities, productionProcesses } from "@/db/schema";
 import { GET as LIST } from "@/app/api/v1/credit-batches/route";
@@ -50,7 +51,7 @@ describe("credit batch lookups", { timeout: TIMEOUT_MS }, () => {
       const response = await get(identifier);
       expect(response.status).toBe(200);
       expect(response.headers.get("cache-control")).toBe("private, no-store");
-      expect(response.headers.get("etag")).toBe('"1.1"');
+      expect(response.headers.get("etag")).toBe(`"1.${CREDIT_BATCH_REPRESENTATION_REVISION}"`);
       const { data } = await response.json();
       expect(creditBatchRepresentationSchema.parse(data)).toEqual(data);
       expect(data).toEqual({
@@ -69,7 +70,7 @@ describe("credit batch lookups", { timeout: TIMEOUT_MS }, () => {
     const read = await (await get(a.batchA.id)).text();
     expect(await (await get(a.batchA.id)).text()).toBe(read);
     await db.update(creditBatches).set({ version: 2 }).where(and(eq(creditBatches.id, a.batchA.id), eq(creditBatches.organizationId, a.ctx.organizationId)));
-    expect((await get(a.batchA.id)).headers.get("etag")).toBe('"2.1"');
+    expect((await get(a.batchA.id)).headers.get("etag")).toBe(`"2.${CREDIT_BATCH_REPRESENTATION_REVISION}"`);
   });
 
   it("lists newest first and paginates by cursor without totals", async () => {
