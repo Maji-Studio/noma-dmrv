@@ -2724,6 +2724,11 @@ export interface components {
             } | null;
             /** Description */
             description?: string | null;
+            /**
+             * Happens At Site Id
+             * @description Optional ID of the site this activity happens at.
+             */
+            happens_at_site_id?: string | null;
             /** Measurements */
             measurements?: components["schemas"]["CreateMeasurementRequest"][] | null;
             /**
@@ -2738,6 +2743,23 @@ export interface components {
              * @description The name of the activity. Must be at most 100 characters long.
              */
             name: string;
+            /** Output Materials */
+            output_materials?: components["schemas"]["CreateOutputMaterialRequest"][] | null;
+            /**
+             * Parent Activity Ids
+             * @description Optional set of activity IDs to set as parents of this activity.
+             */
+            parent_activity_ids?: string[] | null;
+            /**
+             * Preceding Activity Ids
+             * @description Optional set of activity IDs that this activity follows.
+             */
+            preceding_activity_ids?: string[] | null;
+            /**
+             * Referenced Material Ids
+             * @description Optional set of material IDs that this activity references.
+             */
+            referenced_material_ids?: string[] | null;
             /**
              * Supplier Reference Id
              * @description A string that must be unique for all resources created by a specific supplier. It can be used by a client to identify the correct objects in their system.
@@ -3336,6 +3358,43 @@ export interface components {
              * @description Signifies the end of the period that the submission is valid for.
              */
             valid_to: string;
+        };
+        /**
+         * CreateOutputMaterialRequest
+         * @description A material that the activity outputs. The activity creates it along with the activity.
+         */
+        CreateOutputMaterialRequest: {
+            /** Additional Metadata */
+            additional_metadata?: {
+                [key: string]: components["schemas"]["JsonValue-Input"];
+            } | null;
+            /** Description */
+            description?: string | null;
+            /**
+             * Material Type
+             * @description The type of the material. Use `GET /projects/{project_id}/supported_material_types` to discover which types are valid for your project.
+             * @example hfc_ods_container
+             */
+            material_type: string;
+            /** Measurements */
+            measurements?: components["schemas"]["CreateMeasurementRequest"][] | null;
+            /**
+             * Metadata
+             * @description Metadata fields that the project's protocol defines for this asset type.
+             */
+            metadata?: {
+                [key: string]: components["schemas"]["JsonValue-Input"];
+            };
+            /**
+             * Name
+             * @description The name of the material. Must be at most 100 characters long.
+             */
+            name: string;
+            /**
+             * Supplier Reference Id
+             * @description A string that must be unique for all resources created by a specific supplier. It can be used by a client to identify the correct objects in their system.
+             */
+            supplier_reference_id: string;
         };
         /** CreateProductionBatchRequest */
         CreateProductionBatchRequest: {
@@ -9346,6 +9405,14 @@ export interface operations {
             query?: {
                 activity_type?: string | null;
                 supplier_reference_id?: string | null;
+                /** @description Return only activities that start on or after this date. Use it with DATE and DATE_RANGE activity types, formatted as YYYY-MM-DD. */
+                start_date?: string | null;
+                /** @description Return only activities that end on or before this date. Use it with DATE and DATE_RANGE activity types, formatted as YYYY-MM-DD. */
+                end_date?: string | null;
+                /** @description Return only activities that start at or after this instant. Use it with DATETIME and DATETIME_RANGE activity types, with a UTC offset, such as `2026-01-01T00:00:00Z`. */
+                start_datetime?: string | null;
+                /** @description Return only activities that end at or before this instant. Use it with DATETIME and DATETIME_RANGE activity types, with a UTC offset, such as `2026-01-01T00:00:00Z`. */
+                end_datetime?: string | null;
                 /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
                 /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
@@ -9354,8 +9421,12 @@ export interface operations {
                 first?: number;
                 /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
-                /** @description Return only activities related to this site. Repeat the parameter to match any of several sites, which must all have the same site type. */
+                /** @description Return only assets related to this site. Repeat the parameter to match any of several sites, which must all have the same site type. */
                 related_site_id?: components["schemas"]["IsometricIDRequestParam_Site_"][] | null;
+                /** @description Return only assets related to this activity. Repeat the parameter to match any of several activities, which must all have the same activity type. */
+                related_activity_id?: components["schemas"]["IsometricIDRequestParam_Activity_"][] | null;
+                /** @description Return only assets related to this material. Repeat the parameter to match any of several materials, which must all have the same material type. */
+                related_material_id?: components["schemas"]["IsometricIDRequestParam_Material_"][] | null;
             };
             header: {
                 /** @description A secret token identifying the client connecting to the API */
@@ -9766,6 +9837,12 @@ export interface operations {
                 first?: number;
                 /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
+                /** @description Return only assets related to this site. Repeat the parameter to match any of several sites, which must all have the same site type. */
+                related_site_id?: components["schemas"]["IsometricIDRequestParam_Site_"][] | null;
+                /** @description Return only assets related to this activity. Repeat the parameter to match any of several activities, which must all have the same activity type. */
+                related_activity_id?: components["schemas"]["IsometricIDRequestParam_Activity_"][] | null;
+                /** @description Return only assets related to this material. Repeat the parameter to match any of several materials, which must all have the same material type. */
+                related_material_id?: components["schemas"]["IsometricIDRequestParam_Material_"][] | null;
             };
             header: {
                 /** @description A secret token identifying the client connecting to the API */
