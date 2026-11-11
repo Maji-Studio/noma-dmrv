@@ -351,7 +351,7 @@ export function FacilityList() {
                   setSearchQuery(event.target.value);
                   setCurrentPage(1);
                 }}
-                className="h-40 max-sm:h-auto max-sm:min-h-44 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] pl-36 pr-12 body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+                className={cn(PHONE_TOUCH_TARGET, "h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] pl-36 pr-12 body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]")}
                 aria-label="Search facilities"
               />
             </div>
@@ -380,6 +380,7 @@ export function FacilityList() {
               size="small"
               onClick={toggleShowArchived}
               aria-pressed={showArchived}
+              className={PHONE_TOUCH_TARGET}
             >
               <ArchiveIcon size={16} weight="bold" />
               Archived
