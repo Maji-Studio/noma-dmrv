@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
 import { PgDialect, PgReal, pgTable } from "drizzle-orm/pg-core";
-import { realColumn } from "./schema/real-column";
+import { normalizeRealUnderflow, realColumn } from "./schema/real-column";
 
 const table = pgTable("real_column_test", {
   value: realColumn("value"),
@@ -10,6 +10,16 @@ const table = pgTable("real_column_test", {
 const dialect = new PgDialect();
 const UNDERFLOW_VALUES = [4.0781595846974355e-194, 2.225073858507203e-309, -1e-60];
 const UNCHANGED_VALUES = [1e-40, 0, 12.5, 100, 1e39];
+
+describe("normalizeRealUnderflow", () => {
+  it.each(UNDERFLOW_VALUES)("normalizes %s to plain zero", (value) => {
+    expect(normalizeRealUnderflow(value)).toBe(0);
+  });
+
+  it.each(UNCHANGED_VALUES)("preserves %s without rounding", (value) => {
+    expect(normalizeRealUnderflow(value)).toBe(value);
+  });
+});
 
 describe("realColumn", () => {
   it.each(UNDERFLOW_VALUES)("maps underflow %s to plain zero", (value) => {
