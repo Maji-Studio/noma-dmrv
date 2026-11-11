@@ -324,7 +324,6 @@ export const activityFieldPolicies: Record<string, ActivityEntityPolicy> = {
     feedstockTypeId: { link: "feedstock_type" },
     productionProcessId: { link: "production_process" },
     removalTemplateId: { link: "removal_template" },
-    status: "value",
     sampling: "value",
     startDate: "value",
     endDate: "value",

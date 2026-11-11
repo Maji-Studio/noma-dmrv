@@ -30,13 +30,10 @@ import {
   certifierRemovals,
   certificationSubmissions,
 } from "@/db/schema/certification";
-import { creditBatchStatus } from "@/db/schema/common";
 import { updateFacility } from "@/data-access/facilities";
 import { acquireFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
 import { SafeError } from "@/lib/errors";
 import { DURABILITY_TIER_ROLE_REFUSAL } from "@/data-access/facility-mutations";
-
-type CreditBatchStatus = (typeof creditBatchStatus.enumValues)[number];
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000909";
 const LOCK_OBSERVATION_DELAY_MS = 200;
@@ -100,10 +97,9 @@ async function setupFacility(
   };
 }
 
-/** Insert a credit batch under the chain with the given status / archived flag. */
+/** Insert a credit batch under the chain with the given archived flag. */
 async function insertBatch(
   chain: FacilityChain,
-  status: CreditBatchStatus,
   archived = false,
 ): Promise<string> {
   seq += 1;
@@ -115,7 +111,6 @@ async function insertBatch(
       facilityId: chain.facilityId,
       feedstockTypeId: chain.feedstockTypeId,
       productionProcessId: chain.productionProcessId,
-      status,
       startDate: "2025-06-01",
       endDate: "2025-06-30",
       archivedAt: archived ? new Date() : null,
@@ -128,9 +123,7 @@ async function insertBatch(
 /**
  * Build a registry-consequential Removal for the facility: a `certifier_removals`
  * row plus a `certification_submissions` ledger row in a blocking status. This
- * is the registry lifecycle the tier guard must respect — it is tracked here,
- * NOT on `credit_batches.status`, so a submitted removal can coexist with
- * `pending` member batches (the gap this regression covers).
+ * is the registry lifecycle the tier guard must respect.
  */
 async function insertBlockingRemoval(
   chain: FacilityChain,
@@ -197,30 +190,11 @@ afterAll(async () => {
   }
 });
 
-
 describe("updateFacility durability-tier guard", () => {
-  // Neither unwritten legacy batch status locks the tier. Registry submissions do.
-  for (const status of ["verified", "issued"] as const) {
-    it(`ignores the unwritten legacy ${status} batch status`, async () => {
-      const chain = await setupFacility(`blocked-${status}`, "200_year");
-      await insertBatch(chain, status);
-
-      await expect(
-        updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, { expectedVersion: await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "facilities", chain.facilityId),
-          durabilityOption: "1000_year",
-        }),
-      ).resolves.toMatchObject({ durabilityOption: "1000_year" });
-
-      expect(await tierOf(chain.facilityId)).toBe("1000_year");
-    });
-  }
-
-  it("rejects a tier change when a submitted removal exists but its batches are still pending", async () => {
-    // Registry submission does not flip `credit_batches.status`; a submitted
-    // removal can leave member batches at `pending`. The tier must still lock,
-    // since registry data was already built under the current tier.
+  it("rejects a tier change when a submitted removal exists", async () => {
+    // Registry data was already built under the current tier.
     const chain = await setupFacility("registry", "200_year");
-    await insertBatch(chain, "pending");
+    await insertBatch(chain);
     await insertBlockingRemoval(chain, "submitted");
 
     await expect(
@@ -234,10 +208,10 @@ describe("updateFacility durability-tier guard", () => {
 
   it("allows a tier change on a facility with no consequential batches", async () => {
     const chain = await setupFacility("clean", "200_year");
-    // Non-consequential statuses (draft/pending) and archived batches don't lock.
-    await insertBatch(chain, "draft");
-    await insertBatch(chain, "pending");
-    await insertBatch(chain, "issued", /* archived */ true);
+    // Active and archived batches alone do not lock the tier.
+    await insertBatch(chain);
+    await insertBatch(chain);
+    await insertBatch(chain, /* archived */ true);
 
     const updated = await updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, { expectedVersion: await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "facilities", chain.facilityId),
       durabilityOption: "1000_year",
@@ -274,9 +248,10 @@ describe("updateFacility durability-tier guard", () => {
     expect(updated.durabilityOption).toBe("200_year");
   });
 
-  it("allows a non-tier update even when a blocking batch exists", async () => {
+  it("allows a non-tier update even when a blocking removal exists", async () => {
     const chain = await setupFacility("noop", "200_year");
-    await insertBatch(chain, "verified");
+    await insertBatch(chain);
+    await insertBlockingRemoval(chain);
 
     // Same tier passed through + an unrelated field change must still succeed.
     const updated = await updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, { expectedVersion: await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "facilities", chain.facilityId),

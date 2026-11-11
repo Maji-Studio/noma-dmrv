@@ -256,13 +256,12 @@ export async function getCreditBatchesByRemovalId(
   }));
 }
 
-// A credit batch summarised for the GHG-statement cross-link accordion — the
-// few fields an operator needs to recognise a batch (code, status, crediting
+// A credit batch summarised for the GHG-statement cross-link accordion: the
+// few fields an operator needs to recognise a batch (code, crediting
 // window) without opening it.
 export interface RemovalCreditBatchSummary {
   id: string;
   code: string;
-  status: CreditBatchRow["status"];
   startDate: string;
   endDate: string;
 }
@@ -285,7 +284,6 @@ export async function getCreditBatchSummariesByRemovalIds(
       removalId: creditBatchApplications.removalId,
       id: creditBatches.id,
       code: creditBatches.code,
-      status: creditBatches.status,
       startDate: creditBatches.startDate,
       endDate: creditBatches.endDate,
     })
@@ -306,7 +304,6 @@ export async function getCreditBatchSummariesByRemovalIds(
     const summary: RemovalCreditBatchSummary = {
       id: row.id,
       code: row.code,
-      status: row.status,
       startDate: row.startDate,
       endDate: row.endDate,
     };

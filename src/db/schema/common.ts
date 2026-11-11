@@ -30,14 +30,6 @@ export const applicationStatus = pgEnum('application_status', [
   'applied',
 ]);
 
-export const creditBatchStatus = pgEnum('credit_batch_status', [
-  'draft',
-  'pending',
-  'verified',
-  'issued',
-  'rejected',
-]);
-
 // ============================================
 // Type Enums
 // ============================================

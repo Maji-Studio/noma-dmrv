@@ -7,7 +7,7 @@ import { FACILITY_TIME_ZONE, LAB_CASES, LAB_REPLICATES, LAB_SAMPLING_LOCAL_TIME,
 import { assertOrganicCarbonRequired, labSampleDays, scoreLabCase, type LabDatabaseSnapshot, type LabTarget } from "./score-lab";
 import type { Transcript } from "./transcript";
 
-const batch = { id: "batch-x", code: "CB-X", facilityId: "facility", status: "pending", startDate: "2026-09-12", endDate: "2026-10-12", archivedAt: null };
+const batch = { id: "batch-x", code: "CB-X", facilityId: "facility", startDate: "2026-09-12", endDate: "2026-10-12", archivedAt: null };
 const facility = { id: "facility", timeZone: FACILITY_TIME_ZONE, durabilityOption: "200_year" };
 const target: LabTarget = { batch, facility, sampleDays: ["2026-10-11"] };
 const sampledAt = combineDateAndTime("2026-10-11", LAB_SAMPLING_LOCAL_TIME, FACILITY_TIME_ZONE).toISOString();

@@ -103,22 +103,13 @@ export interface DashboardActivityItem {
   href: string;
 }
 
-export type DashboardCreditBatchStatus =
-  | "draft"
-  | "pending"
-  | "verified"
-  | "issued"
-  | "rejected";
-
 export interface DashboardCertificationBatch {
   id: string;
   code: string;
-  status: DashboardCreditBatchStatus;
 }
 
 export interface DashboardCertification {
   totalBatches: number;
-  pendingBatches: number;
   /** Latest batches, newest first. */
   batches: DashboardCertificationBatch[];
   /** Batches with zero pooled lab samples — the classic certification blocker. */
@@ -253,7 +244,6 @@ async function loadStationAggregates(
   const batchAgg = db
     .select({
       total: countRows().as("batch_total"),
-      pending: countRows(eq(creditBatches.status, "pending")).as("batch_pending"),
       withoutSamples: countRows(
         sql`coalesce(${sampleCounts.sampleCount}, 0) = 0`,
       ).as("batch_without_samples"),
@@ -282,7 +272,6 @@ async function loadStationAggregates(
       applicationTotal: applicationAgg.total,
       evidenceGaps: applicationAgg.evidenceGaps,
       batchTotal: batchAgg.total,
-      pendingBatches: batchAgg.pending,
       batchesWithoutSamples: batchAgg.withoutSamples,
     })
     .from(feedstockAgg)
@@ -309,8 +298,6 @@ interface ActivityRow {
   kind: ActivityKind;
   id: string;
   code: string;
-  /** Credit batch status; null for every other kind. */
-  status: string | null;
   /** Never null in practice: every branch filters its date column not-null. */
   sortMs: number | null;
 }
@@ -334,14 +321,12 @@ async function loadActivityRows(
   recordIds?: readonly string[],
 ): Promise<ActivityRow[]> {
   const orgId = ctx.organizationId;
-  const noStatus = sql<string | null>`null::text`;
   return unionAll(
     db
       .select({
         kind: activityKind("feedstock"),
         id: feedstocks.id,
         code: feedstocks.code,
-        status: noStatus,
         sortMs: epochMs(feedstocks.deliveryDate),
       })
       .from(feedstocks)
@@ -361,7 +346,6 @@ async function loadActivityRows(
         kind: activityKind("run"),
         id: productionRuns.id,
         code: productionRuns.code,
-        status: noStatus,
         sortMs: epochMs(productionRuns.endTime),
       })
       .from(productionRuns)
@@ -382,7 +366,6 @@ async function loadActivityRows(
         kind: activityKind("delivery"),
         id: deliveries.id,
         code: deliveries.code,
-        status: noStatus,
         sortMs: epochMs(deliveries.deliveryDate),
       })
       .from(deliveries)
@@ -403,7 +386,6 @@ async function loadActivityRows(
         kind: activityKind("application"),
         id: applications.id,
         code: applications.code,
-        status: noStatus,
         sortMs: epochMs(applications.applicationDate),
       })
       .from(applications)
@@ -433,7 +415,6 @@ async function loadActivityRows(
         kind: activityKind("batch"),
         id: creditBatches.id,
         code: creditBatches.code,
-        status: sql<string | null>`${creditBatches.status}::text`,
         sortMs: epochMs(creditBatches.createdAt),
       })
       .from(creditBatches)
@@ -518,7 +499,6 @@ function buildRecentBatches(rows: ActivityRow[]): DashboardCertificationBatch[] 
     .map((row) => ({
       id: row.id,
       code: row.code,
-      status: row.status as DashboardCreditBatchStatus,
     }));
 }
 
@@ -626,7 +606,6 @@ export async function getDashboardStations(
     activity: buildActivity(activityRows, facilityId),
     certification: {
       totalBatches: counts.batchTotal,
-      pendingBatches: counts.pendingBatches,
       batches: buildRecentBatches(activityRows),
       batchesWithoutSamples: counts.batchesWithoutSamples,
     },

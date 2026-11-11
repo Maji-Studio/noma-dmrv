@@ -40,7 +40,7 @@ pre-filled an independently-editable per-batch toggle.
   batch, whose CO₂e-stored preview was computed under the current tier, and
   (2) a registry submission (Removal / GHG Statement) already built for the
   facility — tracked in `certification_submissions`, **not**
-  `credit_batches.status` (the submit path never writes it), so the guard reuses
+  `credit_batches.status` (column dropped in #1046, 2026-11-11; the submit path never wrote it), so the guard reuses
   `hasBlockingFacilitySubmission`, the same probe that gates removal regroup and
   certifier-mapping repoint. Either case is rejected with a `SafeError`. This
   relocates the "locked after `verified`/`issued`" invariant that previously

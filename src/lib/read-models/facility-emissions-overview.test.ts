@@ -31,7 +31,7 @@ const observation: EntryObservation & { id: string } = {
     scope: id === "setup" ? "forbidden" : "operating", origin: "reviewed", entryPolicy: id === "setup" ? "none" : "additive",
   }])),
 };
-const batch = { id: "new", code: "CB-2", startDate: "2026-10-01", endDate: null, status: "open", removalTemplateId: "template" };
+const batch = { id: "new", code: "CB-2", startDate: "2026-10-01", endDate: null, removalTemplateId: "template" };
 function entry(componentId: string, overrides = {}) {
   return { id: componentId, creditBatchId: "new", componentId, observationId: "current", kind: "value",
     confirmedForRemovalId: null, documentCount: 1, occurredOn: "2026-10-15", createdAt: new Date("2026-11-01T02:00:00Z"),
@@ -63,7 +63,7 @@ afterEach(() => vi.useRealTimers());
 it("derives all six states, facility-month counts and last occurrence with bulk calls", async () => {
   const result = await loadFacilityEmissionsOverview(ctx, "facility");
   expect(result.batches.map((row) => row.creditBatchId)).toEqual(["new", "old"]);
-  expect(result.batches[0]).toMatchObject({ status: "open", templateName: null, entriesThisMonth: 3,
+  expect(result.batches[0]).toMatchObject({ templateName: null, entriesThisMonth: 3,
     lastEntryOn: "2026-10-16", lineCounts: { total: 6, open: 3, fileMissing: 1, needsReview: 1,
       notRecorded: 0, needsSetup: 1, recorded: 3 } });
   expect(result.batches[1]).toMatchObject({ entriesThisMonth: 0, lastEntryOn: null,

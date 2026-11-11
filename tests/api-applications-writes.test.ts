@@ -191,12 +191,12 @@ it("hides a foreign delivery UUID with the delivery pointer", async () => {
     expect(await rows()).toEqual([]);
   } finally { await cleanupMutationFixture(foreign); await removeApiOrderReadFixture(other); }
 }, TIMEOUT);
-it("does not use the retired batch status to lock DELETE", async () => {
+it("allows DELETE for batch membership without a Removal", async () => {
   const first = await saved();
   const organizationId = f.ctx.organizationId;
   const [process] = await db.insert(productionProcesses).values({ organizationId, facilityId: chain.facilityId, feedstockTypeId: f.ingredientType.id }).returning();
   const [batch] = await db.insert(creditBatches).values({ organizationId, facilityId: chain.facilityId, feedstockTypeId: f.ingredientType.id,
-    productionProcessId: process.id, code: `CB-API-${randomUUID()}`, startDate: "2025-07-01", endDate: "2025-07-31", status: "verified" }).returning();
+    productionProcessId: process.id, code: `CB-API-${randomUUID()}`, startDate: "2025-07-01", endDate: "2025-07-31" }).returning();
   try {
     await db.insert(creditBatchApplications).values({ organizationId, creditBatchId: batch.id, applicationId: first.data.id, allocatedWetMassKg: 4001, allocatedDryMassKg: 3200.8 });
     expect((await remove(first.data.id, first.tag)).status).toBe(204);

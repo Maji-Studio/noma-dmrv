@@ -292,7 +292,6 @@ export async function seedGroupedRemovalWithChain(
         productionProcessId: id.productionProcess,
         startDate: today,
         endDate: today,
-        status: "draft",
         removalTemplateId: await facilityDefaultRemovalTemplateId(tx, refs.facilityId),
         // Tier is inherited from the facility (ADR 0021), not a batch column.
       });
@@ -757,7 +756,6 @@ export async function seedUngroupedReadyBatchWithChain(
         productionProcessId: id.productionProcess,
         startDate: today,
         endDate: today,
-        status: "draft",
         removalTemplateId: await facilityDefaultRemovalTemplateId(tx, refs.facilityId),
         // Tier is inherited from the facility (ADR 0021), not a batch column.
       });

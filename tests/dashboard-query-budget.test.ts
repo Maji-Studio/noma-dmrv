@@ -134,7 +134,6 @@ beforeAll(async () => {
         feedstockTypeId: feedstockType.id,
         productionProcessId: process.id,
         code: `QB-CB${n}-${tag}`,
-        status: n === 0 ? ("pending" as const) : ("draft" as const),
         startDate: "2026-07-01",
         endDate: "2026-07-31",
       })),
@@ -209,12 +208,6 @@ describe("dashboard query budget", () => {
     expect(result.kpis.find((kpi) => kpi.key === "feedstockProcessed")?.value).toBe(6);
     expect(result.stations.find((s) => s.key === "feedstock")?.attention).toBe(1);
     expect(result.stations.find((s) => s.key === "production")?.total).toBe(BATCH_COUNT);
-    expect(result.certification.pendingBatches).toBe(1);
-    expect(result.certification.batches.map((b) => b.status).sort()).toEqual([
-      "draft",
-      "draft",
-      "pending",
-    ]);
     // Activity: newest first, ISO dates, runs and batches interleaved by date.
     const activityTitles = result.activity.map((item) => item.title);
     expect(activityTitles.filter((t) => t === "Production run completed")).toHaveLength(BATCH_COUNT);
@@ -225,26 +218,27 @@ describe("dashboard query budget", () => {
     expect(result.activity.find((item) => item.title === "Feedstock received")?.dateIso).toBe(
       "2026-06-22T00:00:00.000Z",
     );
-    // Attention: flags before pending batches, the overdue pending batch counted
-    // once. It holds no Removal, so it is not awaiting verification (#1528).
+    // Attention: flags before batches. Every batch's period has ended and none
+    // holds a Removal, so none awaits verification (#1528); they fold into one
+    // grouped row without a date.
     expect(result.attention.map((item) => item.title)).toEqual([
       "Feedstock record missing data",
       "Period ended, not submitted yet",
     ]);
-    expect(result.attention[1]?.date).toBe("2026-07-31");
+    expect(result.attention[1]).toMatchObject({ count: BATCH_COUNT, date: null });
     // Timestamp-backed dates stay UTC instants (a zone-less string would
     // shift the day for viewers outside UTC); date-only columns stay text.
     const feedstockDate = result.attention[0]?.date;
     expect(feedstockDate).toBeInstanceOf(Date);
     expect((feedstockDate as Date).toISOString()).toBe("2026-06-20T00:00:00.000Z");
-    // "N open" counts records: the feedstock record, the batch, each gap's affected records.
+    // "N open" counts records: the feedstock record, the batches, each gap's affected records.
     expect(result.attentionTotal).toBe(
-      1 + 1 + result.structuralGaps.reduce((total, gap) => total + gap.count, 0),
+      1 + BATCH_COUNT + result.structuralGaps.reduce((total, gap) => total + gap.count, 0),
     );
-    // The overdue batch lights Production, where the attention view shows it (#1532 F5).
+    // The overdue batches light Production, where the attention view shows them (#1532 F5).
     expect(result.stations.find((s) => s.key === "production")).toMatchObject({
-      attention: 1,
-      reasons: [{ state: "warning", text: "1 credit batch not submitted" }],
+      attention: BATCH_COUNT,
+      reasons: [{ state: "warning", text: `${BATCH_COUNT} credit batches not submitted` }],
     });
     expect(queries).toBeLessThanOrEqual(OVERVIEW_QUERY_BUDGET);
 

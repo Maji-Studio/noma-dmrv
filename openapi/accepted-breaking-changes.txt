@@ -236,3 +236,8 @@ PATCH /production-runs/{idOrCode} request property `feedstockMoisturePercent` li
 PATCH /production-runs/{idOrCode} request property `preprocessingFuelLiters` list-of-types was narrowed by removing types `null` from media type `application/json`
 POST /storage-locations/{idOrCode}/stock-movements request property `moisturePercent` list-of-types was narrowed by removing types `null` from media type `application/json`
 # Remove once this contract reaches the base branch.
+# #1046: credit batches no longer carry the dormant status (it never left "pending").
+# Clients drop the `status` field and the `status` list filter (a warning only, not listed).
+# Remove these acceptances once this contract reaches the base branch.
+GET /credit-batches removed the required property `data/items/status` from the response with the `200` status [response-required-property-removed].
+GET /credit-batches/{idOrCode} removed the required property `data/status` from the response with the `200` status [response-required-property-removed].

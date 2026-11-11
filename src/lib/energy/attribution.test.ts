@@ -47,8 +47,8 @@ const sumFlows = (breakdown: ReturnType<typeof buildEnergyBreakdown>, source: st
 function sharedFeedstockInputs(): EnergyInputs {
   return inputs({
     creditBatches: [
-      { id: "feb-batch", code: "CB-FEB", startDate: "2026-02-01", endDate: "2026-02-28", status: "pending" },
-      { id: "mar-batch", code: "CB-MAR", startDate: "2026-03-01", endDate: "2026-03-31", status: "pending" },
+      { id: "feb-batch", code: "CB-FEB", startDate: "2026-02-01", endDate: "2026-02-28" },
+      { id: "mar-batch", code: "CB-MAR", startDate: "2026-03-01", endDate: "2026-03-31" },
     ],
     runs: [
       run({ id: "feb", day: "2026-02-10", creditBatchId: "feb-batch", biocharDryMassKg: 900 }),
@@ -135,8 +135,8 @@ describe("buildEnergyBreakdown", () => {
     const breakdown = buildEnergyBreakdown(
       inputs({
         creditBatches: [
-          { id: "b1", code: "CB-1", startDate: "2026-09-01", endDate: "2026-09-30", status: "pending" },
-          { id: "b2", code: "CB-2", startDate: "2026-09-01", endDate: "2026-09-30", status: "pending" },
+          { id: "b1", code: "CB-1", startDate: "2026-09-01", endDate: "2026-09-30" },
+          { id: "b2", code: "CB-2", startDate: "2026-09-01", endDate: "2026-09-30" },
         ],
         runs: [run({ id: "a", creditBatchId: "b1" }), run({ id: "b", creditBatchId: "b2", biocharDryMassKg: 600 })],
         feedstocks: [
@@ -302,7 +302,7 @@ describe("buildEnergyBreakdown", () => {
 
   it("shares production and transport with an application by dry mass", () => {
     const base = inputs({
-      creditBatches: [{ id: "b1", code: "CB-1", startDate: "2026-09-01", endDate: "2026-09-30", status: "pending" }],
+      creditBatches: [{ id: "b1", code: "CB-1", startDate: "2026-09-01", endDate: "2026-09-30" }],
       runs: [run({ id: "a", creditBatchId: "b1", biocharDryMassKg: 900 })],
       feedstocks: [
         { id: "f", code: "FS-1", day: "2026-09-01", transportOwnerRunId: "a", legs: [{ distanceKm: 10, loadMassKg: 2000, method: "road" }] },
@@ -372,7 +372,7 @@ describe("buildEnergyBreakdown", () => {
   it("counts production as missing for an application with no dry mass to scale by", () => {
     const breakdown = buildEnergyBreakdown(
       inputs({
-        creditBatches: [{ id: "b1", code: "CB-1", startDate: "2026-09-01", endDate: "2026-09-30", status: "pending" }],
+        creditBatches: [{ id: "b1", code: "CB-1", startDate: "2026-09-01", endDate: "2026-09-30" }],
         runs: [run({ id: "a", creditBatchId: "b1", biocharDryMassKg: 900 })],
         feedstocks: [
           { id: "f", code: "FS-1", day: "2026-09-01", transportOwnerRunId: "a", legs: [{ distanceKm: 10, loadMassKg: 2000, method: "road" }] },
@@ -398,7 +398,7 @@ describe("buildEnergyBreakdown", () => {
     const breakdown = buildEnergyBreakdown(
       inputs({
         creditBatches: [
-          { id: "b1", code: "CB-1", startDate: "2026-09-01", endDate: "2026-09-30", status: "pending" },
+          { id: "b1", code: "CB-1", startDate: "2026-09-01", endDate: "2026-09-30" },
         ],
         runs: [run({ id: "a", creditBatchId: "b1" }), run({ id: "b", creditBatchId: "b1", electricityKwh: 50 })],
         feedstocks: [
@@ -430,8 +430,8 @@ describe("buildEnergyBreakdown", () => {
     const breakdown = buildEnergyBreakdown(
       inputs({
         creditBatches: [
-          { id: "old", code: "CB-OLD", startDate: "2026-07-01", endDate: "2026-07-31", status: "pending" },
-          { id: "now", code: "CB-NOW", startDate: "2026-08-25", endDate: "2026-09-24", status: "pending" },
+          { id: "old", code: "CB-OLD", startDate: "2026-07-01", endDate: "2026-07-31" },
+          { id: "now", code: "CB-NOW", startDate: "2026-08-25", endDate: "2026-09-24" },
         ],
         runs: [
           run({ id: "a", day: "2026-07-10", creditBatchId: "old" }),

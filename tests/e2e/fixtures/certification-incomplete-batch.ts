@@ -40,7 +40,6 @@ export async function seedUngroupedIncompleteBatch(
         productionProcessId: id.productionProcess,
         startDate: today,
         endDate: today,
-        status: "draft",
       });
     });
   } finally {

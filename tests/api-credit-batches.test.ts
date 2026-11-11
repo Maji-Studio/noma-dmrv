@@ -38,7 +38,7 @@ beforeEach(async () => {
   const [process] = await db.select({ id: productionProcesses.id }).from(productionProcesses).where(eq(productionProcesses.organizationId, a.ctx.organizationId));
   const [row] = await db.insert(creditBatches).values({
     organizationId: a.ctx.organizationId, code: `E2E-LAB-CB-${a.tag}-U`, facilityId: a.facility.id, feedstockTypeId: a.feedstockTypeId,
-    productionProcessId: process.id, status: "draft", sampling: "unsampled", startDate: "2026-10-01", endDate: "2026-10-31",
+    productionProcessId: process.id, sampling: "unsampled", startDate: "2026-10-01", endDate: "2026-10-31",
   }).returning();
   unsampled = row;
 }, TIMEOUT_MS);
@@ -55,13 +55,14 @@ describe("credit batch lookups", { timeout: TIMEOUT_MS }, () => {
       expect(creditBatchRepresentationSchema.parse(data)).toEqual(data);
       expect(data).toEqual({
         id: a.batchA.id, code: a.batchA.code, version: 1, facilityId: a.facility.id, feedstockTypeId: a.feedstockTypeId,
-        status: "pending", sampling: "sampled", startDate: "2026-09-01", endDate: "2026-09-30", archivedAt: null,
+        sampling: "sampled", startDate: "2026-09-01", endDate: "2026-09-30", archivedAt: null,
         createdAt: expect.any(String), updatedAt: expect.any(String),
       });
+      expect(data).not.toHaveProperty("status");
       for (const field of PRIVATE_FIELDS) expect(data).not.toHaveProperty(field);
     }
     const { data } = await (await get(unsampled.id)).json();
-    expect(data).toMatchObject({ status: "draft", sampling: "unsampled", startDate: "2026-10-01", endDate: "2026-10-31" });
+    expect(data).toMatchObject({ sampling: "unsampled", startDate: "2026-10-01", endDate: "2026-10-31" });
   });
 
   it("returns identical bytes on repeated reads and bumps the ETag with the row version", async () => {
@@ -85,15 +86,12 @@ describe("credit batch lookups", { timeout: TIMEOUT_MS }, () => {
     expect(seen).toEqual(order);
   });
 
-  it("filters by facility, status, sampling, exact code and code prefix", async () => {
+  it("filters by facility, sampling, exact code and code prefix", async () => {
     const only = async (query: string) => (await ids(await list(`?${query}`))).sort();
     const sorted = (...rows: { id: string }[]) => rows.map((row) => row.id).sort();
     expect(await only(`facilityId=${a.facility.id}`)).toEqual(sorted(a.batchA, a.batchB!, unsampled));
-    expect(await only("status=pending")).toEqual(sorted(a.batchA, a.batchB!));
-    expect(await only("status=draft")).toEqual(sorted(unsampled));
-    expect(await only("status=issued")).toEqual([]);
     expect(await only("sampling=unsampled")).toEqual(sorted(unsampled));
-    expect(await only("sampling=sampled&status=pending")).toEqual(sorted(a.batchA, a.batchB!));
+    expect(await only("sampling=sampled")).toEqual(sorted(a.batchA, a.batchB!));
     expect(await only(`code=${encodeURIComponent(a.batchA.code)}`)).toEqual(sorted(a.batchA));
     expect(await only("code=missing")).toEqual([]);
     expect(await only(`q=${encodeURIComponent(a.batchA.code.toLowerCase())}`)).toEqual(sorted(a.batchA));
@@ -103,12 +101,12 @@ describe("credit batch lookups", { timeout: TIMEOUT_MS }, () => {
 
   it("binds cursors to the organization and the filter set", async () => {
     const page = await (await list(`?limit=${PAGE_LIMIT}`)).json();
-    await expectProblem(await list(`?status=pending&cursor=${page.nextCursor}`), 400, "invalid_cursor");
+    await expectProblem(await list(`?sampling=sampled&cursor=${page.nextCursor}`), 400, "invalid_cursor");
     await expectProblem(await list(`?cursor=${page.nextCursor}`, b.key), 400, "invalid_cursor");
   });
 
   it("rejects invalid, repeated and unknown queries", async () => {
-    for (const query of ["?unknown=1", "?status=archived", "?sampling=maybe", "?limit=0", "?limit=1&limit=2", "?q=a&q=b", "?facilityId=nope", "?creditBatchId=x"]) {
+    for (const query of ["?unknown=1", "?status=archived", "?status=pending", "?sampling=maybe", "?limit=0", "?limit=1&limit=2", "?q=a&q=b", "?facilityId=nope", "?creditBatchId=x"]) {
       await expectProblem(await list(query), 400, "invalid_query");
     }
     await expectProblem(await get(a.batchA.id, a.key, "?q=a"), 400, "invalid_query");
