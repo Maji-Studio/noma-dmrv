@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { certificationSubmissions, certifierGhgStatements, certifierRemovals, creditBatchApplications,
   creditBatches, emissionEntries, emissionEntryValues, removalTemplateObservations } from "@/db/schema";
@@ -63,9 +63,13 @@ export async function claimEmissionLineFileFixture(fixture: EmissionLineFileFixt
   payloadSnapshot: Record<string, unknown> = {}) {
   const { ctx, batch, removal, facility } = fixture;
   const externalId = `remote-${removal.id}`;
+  const [previous] = await db.select({ version: certificationSubmissions.version }).from(certificationSubmissions).where(and(
+    eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.localEntityId, removal.id),
+    eq(certificationSubmissions.submissionType, "removal"), eq(certificationSubmissions.provider, "isometric"),
+  )).orderBy(desc(certificationSubmissions.version)).limit(1);
   const [submission] = await db.insert(certificationSubmissions).values({
     organizationId: ctx.organizationId, provider: "isometric", submissionType: "removal", localEntityType: "removal",
-    localEntityId: removal.id, version: 1, status: kind === "reserved" ? "draft" : "submitted",
+    localEntityId: removal.id, version: (previous?.version ?? 0) + 1, status: kind === "reserved" ? "draft" : "submitted",
     lockedAt: kind === "reserved" ? new Date() : null, externalId: kind === "reserved" ? null : externalId,
     submittedAt: kind === "reserved" ? null : REMOVAL_SENT_AT, payloadHash: crypto.randomUUID(), payloadSnapshot,
   }).returning();

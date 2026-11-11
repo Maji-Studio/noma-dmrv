@@ -1,3 +1,4 @@
+import { assertComponentFileClaimFresh } from "./component-file-claim";
 import { isCarriedToRemoval } from "@/lib/certification/emission-entry-carry";
 import { loadFacilityEmissionEntryCarry } from "./emission-entry-carry";
 import { loadEmissionEntryHolds } from "./emission-entry-holds";
@@ -54,6 +55,7 @@ export async function reserveProductionEmissionsClaims(
     submissionId: string;
     creditBatchIds: string[];
     now?: Date;
+    frozenLineFileSet?: { anchorId: string; version: number }[];
     entryClaim?: { memberBatchIds: string[]; frozenEntrySet: { entryId: string; contentRevision: number }[] };
   },
 ): Promise<void> {
@@ -84,6 +86,8 @@ export async function reserveProductionEmissionsClaims(
         "A credit batch changed while reserving production inputs. Reload and retry.",
       );
     }
+
+    await assertComponentFileClaimFresh(ctx, tx, batches.filter(batch => productionIds.includes(batch.id)), args.frozenLineFileSet ?? []);
 
     const members = entryClaim ? await tx.select({ creditBatchId: creditBatchApplications.creditBatchId }).from(creditBatchApplications)
       .where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.removalId, args.removalId))) : [];

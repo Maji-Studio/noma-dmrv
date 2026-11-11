@@ -171,3 +171,21 @@ it("adds a corrected file while keeping the sent file and Source history", async
   const mappings = await db.select().from(certifierDocumentUploads).where(eq(certifierDocumentUploads.organizationId, fixture.ctx.organizationId));
   expect(mappings).toMatchObject([{ documentId: sent.id, externalDocumentId: sourceId }]);
 });
+
+it.each(["resubmitting", "retained"])("locks attach, confirmation and deletion during a returned Removal's active reservation (%s)", async kind => {
+  const document = await uploaded();
+  const pending = await attach();
+  const { externalId, submission } = await claimEmissionLineFileFixture(fixture, "returned");
+  remote.ghg_entry_ids = [externalId];
+  if (kind === "resubmitting") await claimEmissionLineFileFixture(fixture, "reserved");
+  else {
+    // A sent attempt is not transferable even after its correction window opens.
+    await db.update(creditBatches).set({ productionEmissionsClaimReservedBySubmissionId: submission.id }).where(and(
+      eq(creditBatches.organizationId, fixture.ctx.organizationId), eq(creditBatches.id, fixture.batch.id),
+    ));
+  }
+  await expect(attach()).rejects.toMatchObject({ code: "certification_locked" });
+  expect(await confirm(pending)).toMatchObject({ kind: "refused", reason: "certification_locked" });
+  await expect(removeEmissionLineFile(fixture.ctx, { documentId: document.id, expectedVersion: document.version }))
+    .rejects.toMatchObject({ code: "certification_locked" });
+});

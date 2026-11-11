@@ -1,7 +1,8 @@
-import { lockEmissionLineDocumentOwner, assertEmissionLineDocumentWritable } from "./emission-line-file-lock";
+import { assertDocumentOwnerEvidenceWritable } from "./document-owner-evidence";
+import { lockEmissionLineDocumentOwner } from "./emission-line-file-lock";
 import { emissionLineFiles } from "@/db/schema/emission-line-files";
 import { isTransportEvidenceDocumentType } from "@/lib/certification/transport-evidence";
-import { lockEmissionEntryDocumentOwner, lockWritableEmissionEntry } from "./emission-entry-lock";
+import { lockEmissionEntryDocumentOwner } from "./emission-entry-lock";
 import { emissionEntries } from "@/db/schema/emission-entries";
 import { and, eq, sql } from "drizzle-orm";
 import type { AnyPgColumn, AnyPgTable } from "drizzle-orm/pg-core";
@@ -103,8 +104,7 @@ export async function lockDocumentOwner(ctx: OrgContext, tx: DbTransaction, enti
 export async function assertDocumentOwnerWritable(ctx: OrgContext, tx: DbTransaction, scope: DocumentWriteScope, allowArchived = false): Promise<void> {
   requireOrgScope(ctx);
   if (!allowArchived && scope.links.some((row) => row.archived)) throw documentNotFound(scope.field);
-  for (const link of scope.links) if (link.type === "emission_entry") await lockWritableEmissionEntry(ctx, tx, link.id);
-  for (const link of scope.links) if (link.type === "emission_line") await assertEmissionLineDocumentWritable(ctx, link.id, tx);
+  for (const link of scope.links) await assertDocumentOwnerEvidenceWritable(ctx, link.type, link.id, tx, true);
   const currentTargets = targetsFor(scope.links, scope.documentType);
   if (JSON.stringify(currentTargets) !== JSON.stringify(scope.targets)) throw changedOwner();
   try {

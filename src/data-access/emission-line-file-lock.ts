@@ -5,7 +5,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
 import { effectiveFilePolicy } from "@/lib/isometric/template-observations/file-policies";
 import { entryLine } from "@/lib/certification/emission-entry-rules";
-import { canTransferProductionReservation } from "@/lib/certification/production-reservation-policy";
+import { componentFileLocked } from "@/lib/certification/component-file-lock";
 import { emissionCorrectionWindow } from "./emission-entry-corrections";
 import { lockEmissionEntryBatch } from "./emission-entry-lock";
 import { getLatestTemplateObservation } from "./removal-template-observations";
@@ -28,8 +28,8 @@ export async function lockEmissionLineFileBatch(ctx: OrgContext, tx: DbTransacti
   const [reservation] = reservationId ? await tx.select().from(certificationSubmissions).where(and(
     eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.id, reservationId),
   )) : [];
-  const reserved = reservationId && !canTransferProductionReservation(reservation, Date.now());
-  if ((claimingRemovalId || reserved) && !correctionOpen)
+  if (componentFileLocked({ claimedByRemovalId: claimingRemovalId,
+    reservation: reservationId ? reservation : null, correctionOpen: !!correctionOpen }, Date.now()))
     throw new DomainError("certification_locked", "This credit batch's production emissions are reserved or sent. Its component file cannot be changed.");
   return batch;
 }

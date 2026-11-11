@@ -1,6 +1,5 @@
+import { bumpDocumentOwnerEvidence, assertDocumentOwnerEvidenceWritable } from "./document-owner-evidence";
 import { emissionLineFiles } from "@/db/schema/emission-line-files";
-import { bumpEmissionLineFileEvidence, assertEmissionLineDocumentWritable } from "./emission-line-file-lock";
-import { assertEmissionEntryDocumentWritable, bumpEmissionEntryEvidence } from "./emission-entry-lock";
 import { type ActivityScope, recordDocumentActivity } from "./write-activity";
 import type { ActivityEventInput } from "./activity-events";
 import { enqueueDocumentKeys } from "./document-storage-deletions";
@@ -428,13 +427,9 @@ export async function insertDocument(
 ): Promise<DocumentRow> {
   requireOrgScope(ctx);
   return db.transaction(async (tx) => {
-    if (input.entityType === "emission_entry") await assertEmissionEntryDocumentWritable(ctx, input.entityId, tx);
-    if (input.entityType === "emission_line") {
-      await assertEmissionLineDocumentWritable(ctx, input.entityId, tx);
-    }
+    await assertDocumentOwnerEvidenceWritable(ctx, input.entityType, input.entityId, tx);
     const [row] = await tx.insert(documents).values({ ...input, organizationId: ctx.organizationId }).returning();
-    await bumpEmissionEntryEvidence(ctx, tx, row.entityType, row.entityId);
-    await bumpEmissionLineFileEvidence(ctx, tx, row.entityType, row.entityId);
+    await bumpDocumentOwnerEvidence(ctx, tx, row.entityType, row.entityId);
     await recordDocumentActivity(ctx, tx, row, "created", { source: "form" });
     return row;
   });
@@ -449,13 +444,11 @@ export async function deleteDocumentRow(
   requireOrgScope(ctx);
   if (!tx) return db.transaction(writerTx => deleteDocumentRow(ctx, id, source, writerTx));
   const [initial] = await tx.select().from(documents).where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId)));
-  if (initial?.entityType === "emission_entry" && !(source === "system" && initial.uploadStatus === "failed")) await assertEmissionEntryDocumentWritable(ctx, initial.entityId, tx);
-  if (initial?.entityType === "emission_line" && !(source === "system" && initial.uploadStatus === "failed")) await assertEmissionLineDocumentWritable(ctx, initial.entityId, tx);
+  if (initial && !(source === "system" && initial.uploadStatus === "failed")) await assertDocumentOwnerEvidenceWritable(ctx, initial.entityType, initial.entityId, tx);
   const [row] = await tx.select().from(documents)
     .where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId))).for("update");
   if (!row) return null;
-  if (row.uploadStatus === "uploaded") await bumpEmissionEntryEvidence(ctx, tx, row.entityType, row.entityId);
-  if (row.uploadStatus === "uploaded") await bumpEmissionLineFileEvidence(ctx, tx, row.entityType, row.entityId);
+  if (row.uploadStatus === "uploaded") await bumpDocumentOwnerEvidence(ctx, tx, row.entityType, row.entityId);
   await recordDocumentActivity(ctx, tx, row, "deleted", { source });
   await tx.delete(documents).where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId)));
   return row;
@@ -606,11 +599,9 @@ async function retireOwnedDocuments(
       ]),
     ).values(),
   ];
-  for (const entity of uniqueEntities.filter(entity => entity.entityType === "emission_entry").sort((a, b) => a.entityId.localeCompare(b.entityId))) {
-    if (!tombstonedEntries) await assertEmissionEntryDocumentWritable(ctx, entity.entityId, tx);
-  }
-  for (const entity of uniqueEntities.filter(entity => entity.entityType === "emission_line").sort((a, b) => a.entityId.localeCompare(b.entityId))) {
-    if (!tombstonedEntries) await assertEmissionLineDocumentWritable(ctx, entity.entityId, tx);
+  for (const entity of uniqueEntities.filter(entity => entity.entityType === "emission_entry" || entity.entityType === "emission_line")
+    .sort((a, b) => a.entityType.localeCompare(b.entityType) || a.entityId.localeCompare(b.entityId))) {
+    if (!tombstonedEntries) await assertDocumentOwnerEvidenceWritable(ctx, entity.entityType, entity.entityId, tx);
   }
   const ownershipConditions = uniqueEntities.map((entity) =>
     and(
@@ -688,8 +679,7 @@ async function retireOwnedDocuments(
   }
 
   for (const document of ownedDocuments) {
-    if (!tombstonedEntries) await bumpEmissionEntryEvidence(ctx, tx, document.entityType, document.entityId);
-    if (!tombstonedEntries) await bumpEmissionLineFileEvidence(ctx, tx, document.entityType, document.entityId);
+    if (!tombstonedEntries) await bumpDocumentOwnerEvidence(ctx, tx, document.entityType, document.entityId);
     const owner = uniqueEntities.find(entity => entity.entityType === document.entityType && entity.entityId === document.entityId);
     await recordDocumentActivity(ctx, tx, document, "deleted", { scopes: owner?.activityScopes, source, actorUserId });
     await enqueueDocumentKeys(ctx, tx, document);

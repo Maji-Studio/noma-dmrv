@@ -32,7 +32,7 @@ it("uses the write scope's full batch union, including a blocking holder beyond 
   const executor = reader();
   expect(await listEmissionEntryDraftContenders(ctx, ["a"], executor)).toEqual([]);
   expect(readPerCorrectionUnion).toHaveBeenCalledWith(ctx, executor, ["a"], expect.any(Function));
-  expect(getCertifiedLineageForBatches).toHaveBeenCalledWith(ctx, executor, ["a", "b"], expect.any(Map), undefined);
+  expect(getCertifiedLineageForBatches).toHaveBeenCalledWith(ctx, executor, ["a", "b"], expect.any(Map), undefined, false);
 });
 it("offers the correction when the same union has no blocking holder", async () => {
   vi.mocked(getCertifiedLineageForBatches).mockResolvedValue([lineage(returned)]);
@@ -67,4 +67,16 @@ it.each(["current", "missing", null])("prefers the current returned statement wi
   const result = await listEmissionEntryDraftContenders(makeTestOrgContext(), ["a"], reader(undefined, ghgStatementId));
   expect(result[0].returnedStatement).toEqual(ghgStatementId === "current"
     ? { id: "current", status: "DRAFT" } : { id: "statement", status: "FAILED_VERIFICATION" });
+});
+
+it("uses persisted correction state without requesting registry refresh for batch displays", async () => {
+  vi.mocked(getCertifiedLineageForBatches).mockResolvedValue([lineage({ ...returned,
+    statements: returned.statements.map(statement => ({ ...statement, fresh: false })),
+  })]);
+  const ctx = makeTestOrgContext();
+  const executor = reader();
+  expect(await listEmissionEntryDraftContenders(ctx, ["a"], executor, undefined, { savedOnly: true }))
+    .toMatchObject([{ removalId: "returned", contenderKind: "correction", creditBatchIds: ["a"], returnedStatement: { id: "statement" } }]);
+  expect(getCertifiedLineageForBatches).toHaveBeenCalledWith(ctx, executor, ["a", "b"], expect.any(Map), undefined, true);
+  expect(await listEmissionEntryDraftContenders(ctx, ["a"], reader())).toEqual([]);
 });

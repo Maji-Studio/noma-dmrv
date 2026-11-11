@@ -1,3 +1,7 @@
+import { listEmissionEntryDraftContenders } from "@/data-access/emission-entry-contenders";
+vi.mock("@/data-access/emission-entry-contenders", () => ({ listEmissionEntryDraftContenders: vi.fn() }));
+import { loadComponentFileReservations } from "@/data-access/component-file-reservations";
+vi.mock("@/data-access/component-file-reservations", () => ({ loadComponentFileReservations: vi.fn() }));
 import { listEmissionLineFilesForBatches } from "@/data-access/emission-line-files";
 import { loadBatchEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 vi.mock("@/data-access/emission-entry-carry", () => ({ loadBatchEmissionEntryCarry: vi.fn() }));
@@ -41,6 +45,8 @@ function entry(componentId: string, overrides = {}) {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(loadComponentFileReservations).mockResolvedValue([]);
+  vi.mocked(listEmissionEntryDraftContenders).mockResolvedValue([]);
   vi.mocked(listEmissionLineFilesForBatches).mockResolvedValue([]);
   vi.mocked(loadBatchEmissionEntryCarry).mockResolvedValue([]);
   vi.mocked(listEmissionLineCommentsForBatches).mockResolvedValue([]);

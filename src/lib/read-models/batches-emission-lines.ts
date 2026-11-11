@@ -1,3 +1,6 @@
+import { listEmissionEntryDraftContenders } from "@/data-access/emission-entry-contenders";
+import { componentFileLocked } from "@/lib/certification/component-file-lock";
+import { loadComponentFileReservations } from "@/data-access/component-file-reservations";
 import { groupEmissionLineFiles } from "@/lib/certification/emission-line-file-facts";
 import { listEmissionLineFilesForBatches } from "@/data-access/emission-line-files";
 import { recordsNeedFile } from "@/lib/isometric/template-observations/file-policies";
@@ -44,12 +47,16 @@ export async function loadBatchesEmissionLines(
   const readyIdSet = new Set(readyIds);
   const previousIds = [...new Set(storedEntries.filter((entry) => readyIdSet.has(entry.creditBatchId))
     .map((entry) => entry.observationId))].filter((id) => !byId.has(id));
-  const [previous, automatic, storedComments, carryEntries, lineFiles] = await Promise.all([
+  const claimedReadyIds = batches.filter((batch) => readyIdSet.has(batch.id) && batch.productionEmissionsClaimedByRemovalId).map((batch) => batch.id);
+  const [previous, automatic, storedComments, carryEntries, lineFiles, contenders, fileReservations] = await Promise.all([
     getTemplateObservationsByIds(ctx, previousIds),
     loadBatchesEmissionAutomaticFacts(ctx, readyIds),
     comments && readyIds.length ? listEmissionLineCommentsForBatches(ctx, readyIds) : [],
     loadBatchEmissionEntryCarry(ctx, readyIds),
     listEmissionLineFilesForBatches(ctx, readyIds),
+    // Only a claimed batch can reopen through its claiming Removal's correction window.
+    claimedReadyIds.length ? listEmissionEntryDraftContenders(ctx, claimedReadyIds, undefined, undefined, { savedOnly: true }) : [],
+    loadComponentFileReservations(ctx, batches.flatMap(batch => batch.productionEmissionsClaimReservedBySubmissionId ? [batch.productionEmissionsClaimReservedBySubmissionId] : [])),
   ]);
   for (const observation of previous) byId.set(observation.id, observation);
   const entriesByBatch = new Map<string, typeof storedEntries>();
@@ -70,7 +77,10 @@ export async function loadBatchesEmissionLines(
     if (!batch.removalTemplateId) return [batch.id, { status: "blocked", blocker: "unpinnedTemplate", storedEntries: stored }];
     if (!observation) return [batch.id, { status: "blocked", blocker: "templateNotFullyRead", storedEntries: stored }];
     const entries = mergeEntryCarryFacts(deriveEmissionEntryFacts(stored, observation, byId), carryEntries);
-    const lines = buildBatchEmissionLines(observation, entries, byId, { ...automatic[batch.id], recordsFileLocked: !!(batch.productionEmissionsClaimedByRemovalId || batch.productionEmissionsClaimReservedBySubmissionId) },
+    const lines = buildBatchEmissionLines(observation, entries, byId, { ...automatic[batch.id], recordsFileLocked: componentFileLocked({ claimedByRemovalId: batch.productionEmissionsClaimedByRemovalId,
+        reservation: batch.productionEmissionsClaimReservedBySubmissionId ? fileReservations.find(row => row.id === batch.productionEmissionsClaimReservedBySubmissionId) : null,
+        correctionOpen: contenders.some(contender => contender.contenderKind === "correction" && contender.removalId === batch.productionEmissionsClaimedByRemovalId && contender.creditBatchIds.includes(batch.id)),
+      }, Date.now()) },
       commentsByBatch.get(batch.id), groupEmissionLineFiles(lineFiles.filter(row => row.anchor.creditBatchId === batch.id)));
     return [batch.id, { status: "ready", lines, storedEntries: stored }];
   }));
