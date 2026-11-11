@@ -29,4 +29,8 @@ export const TOUCH_TARGET_ALLOWLIST: ReadonlyArray<{
     reason: "Entry file links wrap 2px apart; 44px hit areas would overlap and open the wrong file. 24px meets WCAG 2.5.8." },
   { file: "src/components/schema/schema-table-view.tsx", tag: "button", utility: "h-[32px]",
     reason: "Developer schema page: wrapped table tabs sit 6px apart, so 44px hit areas would overlap." },
+  { file: "src/components/storage-locations/sub-bin-card.tsx", tag: "Button", utility: "h-24",
+    reason: "Info glyph sits 8px from the label and Move up control; a 44px hit area would overlap both. 24px meets WCAG 2.5.8." },
+  { file: "src/components/storage-locations/sub-bin-card.tsx", tag: "Button", utility: "min-h-24",
+    reason: "Same info glyph as its h-24 entry." },
 ];

@@ -48,6 +48,15 @@ function attribute(node: Opening, name: string): ts.JsxAttribute | undefined {
     ts.isJsxAttribute(prop) && prop.name.getText() === name);
 }
 
+/** `aria-hidden` (bare, true or "true") plus `tabIndex={-1}`: reachable by neither assistive tech nor keyboard. */
+function isHiddenDuplicate(node: Opening): boolean {
+  const hidden = attribute(node, "aria-hidden");
+  const tabIndex = attribute(node, "tabIndex");
+  if (!hidden || !tabIndex) return false;
+  const hiddenText = hidden.initializer?.getText().replace(/[{}"'\s]/g, "") ?? "true";
+  return (hiddenText === "true" || hiddenText === "") && tabIndex.initializer?.getText().replace(/[{}\s]/g, "") === "-1";
+}
+
 function coveredBySlot(node: Opening): boolean {
   // ROW_ACTION_HIT_AREA targets descendant buttons; do not treat an unrelated
   // ancestor's CENTRED_HIT_AREA as covering all its children.
@@ -93,7 +102,7 @@ export function findTouchTargetViolations(
         || (tag === "input" && type && literals(type).some(value => value === "checkbox" || value === "radio"));
       const classes = attribute(node, "className");
       // A hidden duplicate (aria-hidden and tabIndex -1) is not a touch target.
-      const hidden = attribute(node, "aria-hidden") !== undefined && attribute(node, "tabIndex") !== undefined;
+      const hidden = isHiddenDuplicate(node);
       if (interactive && classes && !hidden) {
         const tokens = literals(classes).flatMap(value => value.split(/\s+/));
         if (!hasRecipe(node.attributes) && !coveredBySlot(node)

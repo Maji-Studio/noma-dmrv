@@ -3,8 +3,6 @@
  */
 "use client";
 
-import { cn } from "@/lib/utils";
-import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
 import { Button } from "@/components/ui/button";
 import { Tooltip as BaseTooltip } from "@base-ui/react/tooltip";
 import { InfoIcon } from "@phosphor-icons/react/dist/ssr";
@@ -155,7 +153,7 @@ export function SubBinInfo({ subBin, timeZone }: { subBin: OutputSubBin; timeZon
       <Button
         type="button" variant="noOutline" size="icon"
         aria-label={`${subBin.code} details`}
-        className={cn(CENTRED_HIT_AREA, "inline-flex h-24 w-24 min-w-24 min-h-24 shrink-0 items-center justify-center text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)] cursor-help focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]")}
+        className="inline-flex h-24 w-24 min-w-24 min-h-24 shrink-0 items-center justify-center text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)] cursor-help focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
       >
         <InfoIcon size={14} weight="bold" />
       </Button>
