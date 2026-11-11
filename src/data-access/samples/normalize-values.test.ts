@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { getTableColumns } from "drizzle-orm";
+import { PgReal } from "drizzle-orm/pg-core";
+import { samples } from "@/db/schema";
 import { deriveSampleRatios } from "@/lib/calculations/sample-ratios";
-import { normalizeSampleRealValues } from "./normalize-values";
+import { normalizeSampleRealValues, REAL_FIELDS } from "./normalize-values";
 
 const UNDERFLOW_CARBON = 2.225073858507203e-309;
 const UNDERFLOW_HYDROGEN = 1e-200;
@@ -8,6 +11,13 @@ const REPRESENTABLE_DENORMAL = 1e-40;
 const EXPECTED_VERSION = 1;
 
 describe("normalizeSampleRealValues", () => {
+  it("covers exactly the sample table's real columns", () => {
+    const realFields = Object.entries(getTableColumns(samples))
+      .filter(([, column]) => column instanceof PgReal)
+      .map(([key]) => key);
+    expect(new Set(REAL_FIELDS)).toEqual(new Set(realFields));
+  });
+
   it("makes ratio derivation see stored zeros without mutating the request", () => {
     const request = {
       expectedVersion: EXPECTED_VERSION,

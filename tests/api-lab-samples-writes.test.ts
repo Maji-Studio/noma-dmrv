@@ -34,7 +34,8 @@ afterEach(async () => { await removeApiLabFixture(a); await removeApiLabFixture(
 
 describe("lab sample create", { timeout: TIMEOUT_MS }, () => {
   it("stores float4 carbon underflow as zero in dry runs and saved samples", async () => {
-    const input = labSampleBody(a, UNDERFLOW_CARBON);
+    // Issue #1671 request: answered 500 with Postgres 22003 before the fix.
+    const input = labSampleBody(a, { ...UNDERFLOW_CARBON, totalHydrogenPercent: undefined });
     const expectedCarbon = { totalCarbonPercent: 0, organicCarbonPercent: 0 };
     const preview = await postLabSample(a, input, randomUUID(), "?dryRun=true");
     expect(preview.status).toBe(200);

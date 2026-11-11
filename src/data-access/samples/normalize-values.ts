@@ -1,7 +1,7 @@
 import { normalizeRealUnderflow } from "@/db/schema/real-column";
 import type { CreateSampleRequest, UpdateSampleRequest } from "./write-values";
 
-const REAL_FIELDS = [
+export const REAL_FIELDS = [
   "weightGrams", "volumeMl", "totalCarbonPercent", "inorganicCarbonPercent", "organicCarbonPercent",
   "totalHydrogenPercent", "totalNitrogenPercent", "totalOxygenPercent", "totalSulfurPercent",
   "ashContentPercent", "moistureContentPercent", "ph", "bulkDensityKgPerM3", "saltContentGPerKg",
