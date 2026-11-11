@@ -1,3 +1,7 @@
+import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
+import { deriveBatchEmissionLines } from "@/lib/certification/emission-lines";
+import { deriveRemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
+import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { makeContext, setDurabilityMeasurementSamplesEnabled } from "../../../tests/fixtures/submit-removal-orchestrator";
 import { make1000YearSequestrationTemplate, makeSequestrationTemplate } from "../../../tests/fixtures/submit-removal-templates";
@@ -61,6 +65,34 @@ function verdict(ctx: Context) {
 
 const agreement: Array<[string, Fixture, string[], string?]> = [
   ["ready", () => makeContext(), []],
+  ["zero-valued entry without a file", () => {
+    const ctx = entryContext();
+    const componentId = "zero-component";
+    const observation: EntryObservation = {
+      externalTemplateId: "template", definition: { groups: [{ id: "group", key: "pyrolysis", displayName: "Group", description: "", components: [{
+        id: componentId, displayName: "Electricity", description: null, blueprintKey: "grid_electricity_use",
+        inputs: [{ key: "electricity_use", type: "monitored", quantityKind: "energy" }],
+      }] }] },
+      lineSources: { [componentId]: { scope: "operating", origin: "reviewed", entryPolicy: "additive" } },
+      enrichment: { [componentId]: { electricity_use: { unit: "kWh" } } },
+    };
+    const stored = { id: "zero-entry", creditBatchId: ctx.memberBatches[0].id, componentId, observationId: "observation",
+      contentRevision: 1, kind: "value", lineRule: "additive", occurredOn: "2026-01-10", documentCount: 0,
+      deletedAt: null, sentByRemovalId: null, sendReservedBySubmissionId: null, confirmedForRemovalId: null,
+      evidenceDocumentIds: [], values: [{ inputKey: "electricity_use", magnitude: "0.000", unit: "kWh" }],
+    } as unknown as Parameters<typeof deriveEmissionEntryFacts>[0][number];
+    const entries = deriveEmissionEntryFacts([stored], observation, new Map([["observation", observation]]));
+    const window = { start: "2026-01-01", end: "2026-02-01" };
+    ctx.removalEntryContext!.contributions = deriveRemovalEntryContributions({
+      removalId: ctx.removalId!, memberBatchIds: [stored.creditBatchId], window,
+      contenders: [{ contenderKind: "draft", removalId: ctx.removalId!, creditBatchIds: [stored.creditBatchId], createdAt: window.start, window }],
+      entries, lineSources: observation.lineSources, monitoredInputs: [{ componentId, inputKey: "electricity_use", unit: "kWh" }],
+    });
+    ctx.emissionLines = deriveBatchEmissionLines({ ...observation, entries, problems: [], enrichmentComplete: true, automaticFigures: {}, entriesCanSubmit: true });
+    expect(ctx.emissionLines[0].state).toBe("filled");
+    expect(ctx.removalEntryContext!.contributions.selectedEntryIds).toEqual([stored.id]);
+    return ctx;
+  }, []],
   ["empty template", () => resolveTemplateFacts(makeContext(undefined, { removalTemplate: { ...make1000YearSequestrationTemplate(), groups: [] } })), ["legacy"], REMOVAL_PREPARATION_BLOCKERS.emptyTemplate],
   ["durability unavailable", () => {
     const ctx = durabilityContext();

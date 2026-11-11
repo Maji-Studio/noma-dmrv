@@ -37,7 +37,7 @@ const facts: BatchEmissionContext = { batch: {
     deletedAt: null, sentByRemovalId: null, replacesEntryId: null, heldForRemovalId: null, sendReservedBySubmissionId: null, confirmedForRemovalId: null,
     organizationId: ctx.organizationId, removalTemplateId: "template", observationId: "observation",
     inputShape: [], note: null, createdBy: null, version: 1, createdAt: timestamp, updatedAt: timestamp,
-    documentCount: 1, reason: null, hasEvidence: true, unitMismatch: false, total: { magnitude: "2", unit: "kWh" }, canConfirm: false,
+    documentCount: 1, reason: null, hasEvidence: true, isZero: false, unitMismatch: false, total: { magnitude: "2", unit: "kWh" }, canConfirm: false,
     evidenceDocumentIds: ["file"], values: [{ id: "value", organizationId: ctx.organizationId, entryId: "entry",
       massDistanceDetail: null, inputKey: "energy", magnitude: "2", unit: "kWh" }] }],
   previousObservations: new Map(), automaticFigures: {},

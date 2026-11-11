@@ -118,6 +118,25 @@ describe("EmissionLineList", () => {
     expect(link.getAttribute("href")).toBe("/production-runs?facility=fac&creditBatch=cb");
     expect(screen.getByRole("button", { name: "1 manual entry, file missing. Show manual entries" })).toBeTruthy();
   });
+  it.each([
+    ["an entry of 0", "entryFiles", { isZero: true }],
+    ["a component that needs no files", "none", {}],
+  ] as const)("does not ask for a file on %s", (_label, filePolicy, overrides) => {
+    const entries = [makeEntry({ hasEvidence: false, documentCount: 0, ...overrides })];
+    renderList([makeLine({ state: "filled", filePolicy, entries })]);
+    expect(screen.getByRole("button", { name: "1 manual entry. Show manual entries" })).toBeTruthy();
+    cleanup();
+    // The entry row agrees with the chip: the file stays optional, so no warning.
+    renderList([makeLine({ state: "filled", filePolicy, entries })], ["line-1"]);
+    const table = within(screen.getByRole("region", { name: /details/ })).getByRole("table", { name: "Sources of Metered electricity use emissions" });
+    expect(within(table).getByRole("button", { name: "Add file" })).toBeTruthy();
+    expect(within(table).queryByText("File missing")).toBeNull();
+  });
+  it("warns on an entry row that still needs a file", () => {
+    renderList([makeLine({ state: "missingEvidence", entries: [makeEntry({ hasEvidence: false, documentCount: 0 })] })], ["line-1"]);
+    const table = within(screen.getByRole("region", { name: /details/ })).getByRole("table", { name: "Sources of Metered electricity use emissions" });
+    expect(within(table).getByText("File missing")).toBeTruthy();
+  });
   it("leaves out a Total that does not add up, never Not recorded", () => {
     const entry = makeEntry({ values: [{ id: "v1", organizationId: "org", entryId: "entry-1", inputKey: "energy", magnitude: "3.2", unit: "MWh", massDistanceDetail: null }], total: null });
     renderList([makeLine({ state: "needsReview", entries: [entry] })]);

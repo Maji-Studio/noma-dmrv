@@ -1,3 +1,5 @@
+import { effectiveFilePolicy } from "@/lib/isometric/template-observations/file-policies";
+import { entryFileMissing, entryValuesAreZero } from "./emission-entry-evidence";
 import {
   isCarriedToRemoval,
   type EntryCarryDisposition,
@@ -164,7 +166,9 @@ export function deriveRemovalEntryContributions(args: {
       result.blockers.push({ code: "lineNeedsReview", message: entry.reason ?? "Enter the values again for the current component.", fixTarget: "emissions", creditBatchId: entry.creditBatchId, lineRef: { componentId: entry.componentId, displayName: entry.componentId } });
       continue;
     }
-    if (entry.kind === "value" && !entry.evidenceDocumentIds.length) result.blockers.push({ code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", fixTarget: "emissions", creditBatchId: entry.creditBatchId, lineRef: { componentId: entry.componentId, displayName: entry.componentId } });
+    if (entryFileMissing(effectiveFilePolicy(contract), {
+      kind: entry.kind, isZero: entryValuesAreZero(entry.values), hasEvidence: entry.evidenceDocumentIds.length > 0,
+    })) result.blockers.push({ code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", fixTarget: "emissions", creditBatchId: entry.creditBatchId, lineRef: { componentId: entry.componentId, displayName: entry.componentId } });
     selected.push(entry);
   }
   const components = [...new Set(selected.map((entry) => entry.componentId))].sort();

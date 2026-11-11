@@ -1,3 +1,4 @@
+import { ENTRY_FILE_CASES } from "./emission-entry-evidence-test-fixtures";
 import { deriveRemovalBatchEmissionLines } from "./removal-emission-lines";
 import { describe, expect, it } from "vitest";
 import { deriveRemovalEntryContributions, deriveRemovalEntryWindow, entriesWithoutRemoval, isLiveEntryReservation, removalEntryOwner, type EntryContender, type RemovalEntryFact } from "./removal-emission-contributions";
@@ -171,7 +172,6 @@ it("omits another Removal's held single and keeps its follow-up batch line fille
   expect(held.sentByRemovalId).toBeNull();
 });
 
-
 describe("sent entries after a Removal window shrinks", () => {
   it.each(["additive", "single"] as const)("blocks an out-of-window sent %s entry without transferring its claim", (lineRule) => {
     const sent = entry({ occurredOn: "2026-03-10", sentByRemovalId: "r1", lineRule });
@@ -231,4 +231,17 @@ describe("sent entries after a Removal window shrinks", () => {
       expect(result.selectedEntryIds).toEqual([]);
     }
   });
+});
+
+it.each(ENTRY_FILE_CASES)("applies the contribution file requirement to $label", ({ magnitudes, filePolicy, missing }) => {
+  const paired = magnitudes.length > 1;
+  const keys = paired ? ["initial_readout", "final_readout"] : ["energy"];
+  const values = magnitudes.map((magnitude, index) => ({ inputKey: keys[index], magnitude, unit: "kWh" }));
+  const result = derive([entry({ values, evidenceDocumentIds: [], lineRule: paired ? "single" : "additive" })], {
+    lineSources: { c1: { scope: "operating", origin: "reviewed", entryPolicy: paired ? "single" : "additive",
+      ...(!paired ? { automaticSource: "run-electricity" } : {}), ...(filePolicy ? { filePolicy } : {}) } },
+    monitoredInputs: keys.map((inputKey) => ({ componentId: "c1", inputKey, unit: "kWh" })),
+  });
+  expect(result.blockers.map((blocker) => blocker.code)).toEqual(missing ? ["entryMissingEvidence"] : []);
+  expect(result.selectedEntryIds).toEqual(["e1"]);
 });

@@ -1,3 +1,4 @@
+import { effectiveFilePolicy } from "@/lib/isometric/template-observations/file-policies";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import { compareIds } from "@/lib/isometric/template-observations/normalize";
 import type { RemovalTemplateSetupPlan, SetupOption } from "./removal-template-setup-plan";
@@ -8,7 +9,7 @@ export function setupPlanFingerprint(plan: RemovalTemplateSetupPlan): string {
     .map(({ id, assignments }) => ({ id, assignments }));
   return payloadHash({
     decided: plan.decided.map(({ component, contract }) => ({ id: component.id, contract: contract && {
-      scope: contract.scope, automaticSource: contract.automaticSource, entryPolicy: contract.entryPolicy,
+      scope: contract.scope, automaticSource: contract.automaticSource, entryPolicy: contract.entryPolicy, filePolicy: effectiveFilePolicy(contract),
     } })).sort((a, b) => compareIds(a.id, b.id)),
     defaults: plan.defaults.map(({ component, proposal, options: values }) => ({
       id: component.id, proposal: proposal.id, options: options(values),

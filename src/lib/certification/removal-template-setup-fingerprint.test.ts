@@ -1,3 +1,4 @@
+import { effectiveFilePolicy } from "@/lib/isometric/template-observations/file-policies";
 import { expect, it } from "vitest";
 import sandbox from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { normalizeTemplateDefinition, resolveLineSources, validateLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
@@ -51,5 +52,15 @@ it.each<[string, (plan: RemovalTemplateSetupPlan) => void]>([
   const plan = fixturePlan();
   const fingerprint = setupPlanFingerprint(plan);
   change(plan);
+  expect(setupPlanFingerprint(plan)).not.toBe(fingerprint);
+});
+
+it("hashes effective proof settings on decided contracts", () => {
+  const plan = fixturePlan();
+  const fingerprint = setupPlanFingerprint(plan);
+  for (const { contract } of plan.decided) contract!.filePolicy = effectiveFilePolicy(contract!);
+  expect(setupPlanFingerprint(plan)).toBe(fingerprint);
+  const contract = plan.decided.find(({ contract }) => contract?.automaticSource === "run-electricity")!.contract!;
+  contract.filePolicy = "entryFiles";
   expect(setupPlanFingerprint(plan)).not.toBe(fingerprint);
 });

@@ -284,3 +284,11 @@ it("refuses an existing additive mass/distance contract and a second single pair
   input.activeValueCount = 0;
   expect(validateEmissionEntry(input).lineRule).toBe("single");
 });
+
+it("keeps entries counting when only the component proof setting changes", () => {
+  const previous = observation();
+  const current = observation();
+  previous.lineSources.line.filePolicy = "entryFiles";
+  current.lineSources.line.filePolicy = "none";
+  expect(emissionEntryCounts(previous, current, "line")).toMatchObject({ counts: true });
+});

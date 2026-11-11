@@ -1,3 +1,4 @@
+import { FILE_POLICIES } from "../src/lib/isometric/template-observations/file-policies";
 import { z } from "zod";
 import { lookupBindingTriple } from "../src/lib/isometric/semantic-binding-projections";
 import { INPUT_MAPPING, lookupPeriodInputTuple } from "../src/lib/isometric/datapoint-mapping";
@@ -20,6 +21,7 @@ const reviewedLineSourceSchema = z.strictObject({
   scope: z.enum(["operating", "forbidden", "unassigned"]),
   automaticSource: z.enum(AUTOMATIC_SOURCE_IDS).optional(),
   entryPolicy: z.enum(["none", "single", "additive"]),
+  filePolicy: z.enum(FILE_POLICIES).optional(),
 });
 
 // Fail fixture typos before making registry requests.

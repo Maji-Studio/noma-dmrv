@@ -79,6 +79,16 @@ memory. See `src/fn/certification/sources-transfer.ts`.
 Post-submit verification follows component attributions and
 Datapoints; propagation delay and a true mismatch are different outcomes.
 
+Each component has a proof setting (`src/lib/isometric/template-observations/file-policies.ts`):
+`lineFile` is for genset diesel, startup diesel and electricity from production
+runs, whose From records amount will be covered by one file per credit batch
+(that file is not stored or required yet); `entryFiles` requires a file per
+manual entry; `generated` means noma produces the evidence; `none` requires no
+files. Manual entries still need their own files under `lineFile` and `generated`.
+An amount of zero needs no file: every monitored value must canonicalize to
+exactly zero, including both values of a paired entry. Recorded zero entries
+also need no file.
+
 Each Removal-lineage Delivery needs uploaded proof before submission, regardless of template
 transport categories. The accepted classifications are owned by
 `src/lib/certification/delivery-evidence.ts`. Application evidence health is
