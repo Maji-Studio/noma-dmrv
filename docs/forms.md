@@ -60,7 +60,7 @@ rows come back, and the published schema is unchanged. Keep
 `z.string().min(1, …).uuid(…)`: piping a chained check through `uuidSchema`
 drops `format: uuid` from the OpenAPI document.
 
-`z.iso.datetime()` accepts UTC `Z` only by default — exactly what `Date.prototype.toISOString()` emits. Pass `{ offset: true }` for numeric offsets, `{ local: true }` for none. Validate timestamp **format** at parse time rather than guarding `Number.isNaN(new Date(x).getTime())` downstream.
+`z.iso.datetime()` requires seconds and accepts UTC `Z` only by default, exactly what `Date.prototype.toISOString()` emits. Pass `{ offset: true }` for numeric offsets, `{ local: true }` for none. Validate timestamp **format** at parse time rather than guarding `Number.isNaN(new Date(x).getTime())` downstream.
 
 `z.ZodIssueCode.custom` is still the in-repo idiom for `ctx.addIssue` under Zod 4 (see `src/schemas/helpers.ts`, `src/schemas/samples.ts`, `src/config/env.ts`) — do not churn those call sites.
 

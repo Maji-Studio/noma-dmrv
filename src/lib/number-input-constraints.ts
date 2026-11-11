@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { numberBoundsOf } from "@/schemas/published-json-schema";
 
 const INTEGER_STEP = 1;
 const DECIMAL_RADIX = 10;
@@ -68,20 +69,18 @@ function exclusiveBound(value: number, step: NumberInputConstraints["step"], dir
   return multiple * scaledStep / scale;
 }
 
-function inputBound(value: number | undefined): value is number {
-  return value !== undefined && Number.isFinite(value) && Math.abs(value) < Number.MAX_SAFE_INTEGER;
+function inputBound(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && Math.abs(value) < Number.MAX_SAFE_INTEGER;
 }
 
 function constraintsForNumber(number: z.ZodNumber): NumberInputConstraints {
-  const bag = number._zod.bag;
-  const step = typeof bag.multipleOf === "number"
-    ? bag.multipleOf
-    : number.isInt ? INTEGER_STEP : "any";
+  const bounds = numberBoundsOf(number);
+  const step = bounds.multipleOf ?? (number.isInt ? INTEGER_STEP : "any");
   const constraints: NumberInputConstraints = { step };
-  const minima = [bag.minimum];
-  const maxima = [bag.maximum];
-  if (inputBound(bag.exclusiveMinimum)) minima.push(exclusiveBound(bag.exclusiveMinimum, step, "min"));
-  if (inputBound(bag.exclusiveMaximum)) maxima.push(exclusiveBound(bag.exclusiveMaximum, step, "max"));
+  const minima = [bounds.minimum];
+  const maxima = [bounds.maximum];
+  if (inputBound(bounds.exclusiveMinimum)) minima.push(exclusiveBound(bounds.exclusiveMinimum, step, "min"));
+  if (inputBound(bounds.exclusiveMaximum)) maxima.push(exclusiveBound(bounds.exclusiveMaximum, step, "max"));
   const usableMinima = minima.filter(inputBound);
   const usableMaxima = maxima.filter(inputBound);
   if (usableMinima.length) constraints.min = Math.max(...usableMinima);
