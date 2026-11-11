@@ -1,5 +1,6 @@
+import { realColumn } from './real-column';
 import { relations, sql } from 'drizzle-orm';
-import { check, real, integer, foreignKey, pgTable, text, timestamp, uuid, unique } from 'drizzle-orm/pg-core';
+import { check, integer, foreignKey, pgTable, text, timestamp, uuid, unique } from 'drizzle-orm/pg-core';
 import { distanceSource, FEEDSTOCK_CATEGORIES, feedstockStatus, feedstockTypeUsage } from './common';
 import { massKg, percent } from './numeric-families';
 import { facilities, storageLocations } from './facilities';
@@ -77,7 +78,7 @@ export const feedstocks = pgTable(
 
     // --- Override ---
     overrideJustification: text('override_justification'),
-    distanceKmOverride: real('distance_km_override'),
+    distanceKmOverride: realColumn('distance_km_override'),
     distanceSource: distanceSource('distance_source'),
     distanceNote: text('distance_note'),
 

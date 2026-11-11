@@ -1,5 +1,6 @@
+import { realColumn } from "./real-column";
 import { sql } from "drizzle-orm";
-import { check, foreignKey, index, integer, pgTable, real, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { check, foreignKey, index, integer, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { organizations } from "./auth";
 import { distanceSource } from "./common";
 import { facilities } from "./facilities";
@@ -10,7 +11,7 @@ export const customerLocationFacilityDistances = pgTable("customer_location_faci
   organizationId: text("organization_id").notNull().references(() => organizations.id),
   locationId: uuid("location_id").notNull(),
   facilityId: uuid("facility_id").notNull(),
-  distanceKm: real("distance_km").notNull(),
+  distanceKm: realColumn("distance_km").notNull(),
   distanceSource: distanceSource("distance_source").notNull(),
   version: integer("version").notNull().default(1),
   createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -17,6 +17,11 @@ import { uppercaseUuids } from "./helpers/uppercase-uuids";
 const TIMEOUT_MS = 60_000;
 const AUGUST_SAMPLED_AT = "2026-08-10T08:00:00.000Z";
 const BEFORE_WINDOW_AT = "2026-08-20T08:00:00.000Z";
+const UNDERFLOW_CARBON = {
+  totalCarbonPercent: 4.0781595846974355e-194,
+  organicCarbonPercent: 2.225073858507203e-309,
+  totalHydrogenPercent: undefined,
+};
 const H_TO_C_NOTICE = `H/C_org calculated from hydrogen and organic carbon: ${EXPECTED_H_TO_C.toFixed(4)}`;
 const PRIVATE_FIELDS = ["organizationId", "facilityId", "durabilityOption", "productionRunId", "sampleCode", "hToCOrg", "cursorCreatedAt"];
 let a: ApiLabFixture;
@@ -28,6 +33,23 @@ beforeEach(async () => {
 afterEach(async () => { await removeApiLabFixture(a); await removeApiLabFixture(b); }, TIMEOUT_MS);
 
 describe("lab sample create", { timeout: TIMEOUT_MS }, () => {
+  it("stores float4 carbon underflow as zero in dry runs and saved samples", async () => {
+    const input = labSampleBody(a, UNDERFLOW_CARBON);
+    const expectedCarbon = { totalCarbonPercent: 0, organicCarbonPercent: 0 };
+    const preview = await postLabSample(a, input, randomUUID(), "?dryRun=true");
+    expect(preview.status).toBe(200);
+    expect(preview.headers.get("dry-run")).toBe("true");
+    expect((await preview.json()).data).toMatchObject(expectedCarbon);
+    await expectNoLabSampleWrite(a);
+
+    const saved = await postLabSample(a, input);
+    expect(saved.status).toBe(201);
+    const { data } = await saved.json();
+    expect(data).toMatchObject(expectedCarbon);
+    expect((await readRestLabSample(a, data.id)).row).toMatchObject(expectedCarbon);
+    expect(await labSampleRows(a)).toMatchObject([{ id: data.id, ...expectedCarbon }]);
+  });
+
   it("creates a sample with Location, a strong ETag, the calculated ratio, one audit row and no values in the audit", async () => {
     const response = await postLabSample(a, labSampleBody(a, { totalOxygenPercent: 8 }));
     expect(response.status).toBe(201);
