@@ -1,6 +1,6 @@
 # Design decisions
 
-This is the per-surface log of what we tried, what replaced it, and why. Read it before proposing a layout or pattern on a surface; never re-propose something listed under "Rejected". Add an entry when a pick or a reversal lands (date, what was tried, what replaced it, the issue or PR). The rules themselves live in `docs/design-system.md`, `docs/forms.md` and `docs/ux-writing.md`; this file holds the history.
+This is the per-surface log of what we tried, what replaced it, and why. Read it before proposing a layout or pattern on a surface; never re-propose something listed under "Rejected". Add an entry when a pick or a reversal lands (date, what was tried, what replaced it, the issue or PR, and who decided: Kenji's pick or the agent's call). The rules themselves live in `docs/design-system.md`, `docs/forms.md` and `docs/ux-writing.md`; this file holds the history.
 
 ## Cross-cutting
 

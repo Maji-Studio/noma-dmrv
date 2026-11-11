@@ -1098,6 +1098,11 @@ Fifteen list components share one shape. Copy it rather than re-deriving:
   Base UI Select. `<DataTable.Toolbar>` / `<DataTable.Pagination>` go in as
   children; server-paginated lists use `manualPagination` + `pageCount` +
   `pageIndex`.
+- **Cells stay quiet.** Show the name the operator knows (the bin name, with
+  the code as the fallback), with no decorative icon in a value cell and no
+  grey second line that only repeats a code or a category. A second line is
+  for a second fact: the dry mass of a `MassPair`, the location under a
+  customer, the reporting window under a Removal code.
 - Call `useOpenCreateIntent(openCreate)` on any list with a create sheet — it
   powers `?create=true` deep links from the sidebar's "New X" actions.
 
