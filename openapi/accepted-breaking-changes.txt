@@ -166,4 +166,73 @@ GET /storage-locations/{idOrCode}/stock added the new `draw` enum value to the `
 #   `anyOf: [T, null]`, and a tuple gains `items: false`, `minItems` and
 #   `maxItems`. Same meaning in OpenAPI 3.1. Client impact: a generator that
 #   only reads a single `type` string must handle the list form.
-# No ERR suppression is needed. Remove once this contract reaches the base branch.
+# The 65 ERR findings below are oasdiff v1.32.1 reading the `anyOf: [T, null]` to
+# `type: [T, "null"]` rewrite as a change. null is still accepted on every one
+# of these request properties, and the boundary geometry is unchanged apart from
+# the tuple keywords.
+GET /applications/{idOrCode}/boundary added `subschema #1, subschema #2` to the `data/collection/features/items/geometry` response property `anyOf` list for the response status `200`
+POST /biochar-products request property `biocharMoisturePercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /biochar-products request property `densityKgM3` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /biochar-products/{idOrCode} request property `densityKgM3` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `ashContentPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `bulkDensityKgPerM3` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `calciumPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `inorganicCarbonPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `ironPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `magnesiumPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `moistureContentPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `oToCOrgRatio` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `ph` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `phosphorusPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `potassiumPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `randomReflectanceR0Percent` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `reactiveCarbonPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `residualCarbonPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `sReflectanceFraction` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `saltContentGPerKg` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `totalHydrogenPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `totalNitrogenPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `totalOxygenPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `totalSulfurPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `volumeMl` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /lab-samples request property `weightGrams` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `ashContentPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `bulkDensityKgPerM3` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `calciumPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `inorganicCarbonPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `ironPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `magnesiumPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `moistureContentPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `oToCOrgRatio` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `ph` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `phosphorusPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `potassiumPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `randomReflectanceR0Percent` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `reactiveCarbonPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `residualCarbonPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `sReflectanceFraction` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `saltContentGPerKg` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `totalHydrogenPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `totalNitrogenPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `totalOxygenPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `totalSulfurPercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `volumeMl` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /lab-samples/{idOrCode} request property `weightGrams` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /production-runs request property `biocharMoisturePercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /production-runs request property `biocharOutputKg` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /production-runs request property `dieselGensetLiters` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /production-runs request property `dieselOperationLiters` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /production-runs request property `electricityKwh` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /production-runs request property `feedingRateKgHr` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /production-runs request property `feedstockMoisturePercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /production-runs request property `preprocessingFuelLiters` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /production-runs/{idOrCode} request property `biocharMoisturePercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /production-runs/{idOrCode} request property `biocharOutputKg` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /production-runs/{idOrCode} request property `dieselGensetLiters` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /production-runs/{idOrCode} request property `dieselOperationLiters` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /production-runs/{idOrCode} request property `electricityKwh` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /production-runs/{idOrCode} request property `feedingRateKgHr` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /production-runs/{idOrCode} request property `feedstockMoisturePercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+PATCH /production-runs/{idOrCode} request property `preprocessingFuelLiters` list-of-types was narrowed by removing types `null` from media type `application/json`
+POST /storage-locations/{idOrCode}/stock-movements request property `moisturePercent` list-of-types was narrowed by removing types `null` from media type `application/json`
+# Remove once this contract reaches the base branch.

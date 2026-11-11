@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { numberBoundsOf } from "@/schemas/published-json-schema";
 
 const INTEGER_STEP = 1;
 const DECIMAL_RADIX = 10;
@@ -73,10 +74,8 @@ function inputBound(value: unknown): value is number {
 }
 
 function constraintsForNumber(number: z.ZodNumber): NumberInputConstraints {
-  const bounds = z.toJSONSchema(number, { unrepresentable: "any" });
-  const step = typeof bounds.multipleOf === "number"
-    ? bounds.multipleOf
-    : bounds.type === "integer" ? INTEGER_STEP : "any";
+  const bounds = numberBoundsOf(number);
+  const step = bounds.multipleOf ?? (number.isInt ? INTEGER_STEP : "any");
   const constraints: NumberInputConstraints = { step };
   const minima = [bounds.minimum];
   const maxima = [bounds.maximum];
