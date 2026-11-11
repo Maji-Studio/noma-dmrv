@@ -1,4 +1,4 @@
-import { entryValuesAreZero } from "./emission-entry-evidence";
+import { entryAmountIsZero } from "./emission-entry-evidence";
 import type { EntryCarryDisposition, EntryCarryDestination } from "./emission-entry-carry";
 import type { listEmissionEntries } from "@/data-access/emission-entries";
 import { emissionEntryCounts, type EntryObservation } from "./emission-entry-rules";
@@ -37,7 +37,7 @@ export function deriveEmissionEntryFacts(
       ...status,
       unitMismatch,
       hasEvidence: entry.documentCount > 0,
-      isZero: entryValuesAreZero(entry.values),
+      isZero: entryAmountIsZero(entry.values),
       total: value ? { magnitude: value.magnitude, unit: value.unit } : null,
     };
   });

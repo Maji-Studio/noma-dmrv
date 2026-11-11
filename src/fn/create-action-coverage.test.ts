@@ -58,6 +58,7 @@ const EXCEPTION: Record<string, string> = {
   "organizations#inviteMemberAction": "Owner-approved retry replaces the pending invitation through Better Auth.",
   "organizations#resendInvitationAction": "Replaces one pending invitation in a transaction; a retry replaces it again and the newest link wins.",
   "documents#requestUpload": "Duplicates leave pending uploads reclaimed by the upload sweep; evidence create is single-flight.",
+  "emission-line-files#attachEmissionLineFileFn": "An anchor holds several files; a retry adds another pending upload that the upload sweep reclaims if it is never confirmed.",
   "production-run-reading-imports#importProductionRunReadingsFromDocumentFn": "Seed-only unmounted importer deduplicates timestamps.",
   "bin-movements#recordStockTakeFn": "Legacy unmounted action; useRecordStockTake has no caller.",
   "certification/ghg-statement-reports#prepareGhgStatementReport": "Reuses preparationKey under certification artifact and facility locks.",
@@ -68,6 +69,7 @@ const EXCEPTION: Record<string, string> = {
 };
 
 const NOT_CREATE: Record<string, string> = {
+  "emission-line-files#replaceEmissionLineFilesFn": "Retires an existing versioned file set; the next attach creates its successor.",
   "invitation-bootstrap#resendInvitationSetPasswordAction": "Sends a cooldown-limited setup email for an existing pending user.",
   "profile#changeEmailFn": "Requests confirmation to change the caller’s existing account email.",
   "organizations#renameOrganizationAction": "Renames an existing organization.",

@@ -1,3 +1,5 @@
+import { lineFileEvidenceFacts } from "../../../tests/helpers/line-file-evidence-facts";
+import { deriveBatchEmissionLines } from "@/lib/certification/emission-lines";
 import { buildTransportCoverage } from "@/lib/certification/certify-transport-coverage";
 import { removalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
 import { buildSelectableBatchesData } from "@/lib/certification/selectable-batches";
@@ -177,6 +179,27 @@ it.each([
     expect(mocks.createRemovalWithCreditBatches).toHaveBeenCalledWith(ORG_CONTEXT, FACILITY_ID, [CREDIT_BATCH_ID]);
   } else {
     expect(result).toEqual({ success: false, error: "CB-1 isn't ready to certify (1 unresolved issue)." });
+    expect(mocks.createRemovalWithCreditBatches).not.toHaveBeenCalled();
+  }
+});
+
+it.each([false, true])("checks remaining-mass readiness with claimed production proof locked=%s", async recordsFileLocked => {
+  vi.clearAllMocks();
+  mocks.requireOrgContext.mockResolvedValue(ORG_CONTEXT);
+  mocks.loadFacilityCertifierFacts.mockResolvedValue(CONNECTED);
+  const { observation, batch } = lineFileEvidenceFacts();
+  const emissionLines = deriveBatchEmissionLines({ ...observation, ...batch, lineFiles: [],
+    recordsFileLocked, problems: [], enrichmentComplete: true });
+  const context = { ...batchContext(), emissionLines,
+    emissionLinesByBatchId: { [CREDIT_BATCH_ID]: emissionLines } };
+  mocks.buildCreditBatchContexts.mockResolvedValue(contexts(context));
+  mocks.createRemovalWithCreditBatches.mockResolvedValue("later-removal");
+  const result = await createRemovalWithBatchesAction({ facilityId: FACILITY_ID, creditBatchIds: [CREDIT_BATCH_ID] });
+  if (recordsFileLocked) {
+    expect(result).toEqual({ success: true, data: { removalId: "later-removal" } });
+    expect(mocks.createRemovalWithCreditBatches).toHaveBeenCalledOnce();
+  } else {
+    expect(result.success).toBe(false);
     expect(mocks.createRemovalWithCreditBatches).not.toHaveBeenCalled();
   }
 });

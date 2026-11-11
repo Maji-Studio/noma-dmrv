@@ -1,10 +1,13 @@
+import { EMISSION_LINE_FILE_CHANGED } from "@/lib/certification/emission-entry-messages";
 import { includesProductionInputs } from "./production-claim-policy";
 import { EMISSION_ENTRY_FILE_UNAVAILABLE, formatEmissionEntryMessageLabel } from "@/lib/certification/emission-entry-messages";
 import { withEmissionEntryEvidenceDiagnostics } from "./emission-entry-evidence-diagnostics";
 import { logger } from "@/lib/log";
 import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
 import { emissionEntrySourceCandidates } from "@/lib/certification/emission-entry-source-bindings";
-import { loadEntrySourceContributions } from "./emission-entry-source-context";
+import { listEmissionLineFilesForBatches } from "@/data-access/emission-line-files";
+import { lineFileSourceCandidates, type LineFileEvidence } from "./emission-line-file-evidence";
+import { loadRemovalSourceContext } from "./emission-entry-source-context";
 import type { OrgContext } from "@/lib/auth/server";
 import type { DbTransaction } from "@/db";
 import {
@@ -40,7 +43,8 @@ export type CandidateLineageEntityType =
   | "feedstock"
   | "credit_batch"
   | "sample"
-  | "emission_entry";
+  | "emission_entry"
+  | "emission_line";
 
 export interface CandidateLineageEntity {
   entityType: CandidateLineageEntityType;
@@ -180,10 +184,14 @@ export async function loadCandidateDocumentsForRemovalForUser(
     }
   }
 
-  const entryCandidates = await collectEntrySourceDocuments(orgCtx, await loadEntrySourceContributions(orgCtx, removalId), removalId);
-  const entryBindingByDocumentId = new Map(entryCandidates.map(({ document, binding }) => [document.id, binding]));
-  for (const { document, binding } of entryCandidates) {
-    seenDocuments.set(document.id, { document, entity: { ...binding.lineage, entityType: "emission_entry" } });
+  const evidence = await loadRemovalSourceContext(orgCtx, removalId);
+  const explicitCandidates = [
+    ...await collectEntrySourceDocuments(orgCtx, evidence?.contributions, removalId),
+    ...await collectLineFileSourceDocuments(orgCtx, evidence?.lineFileEvidence ?? []),
+  ];
+  const explicitBindingByDocumentId = new Map(explicitCandidates.map(({ document, binding }) => [document.id, binding]));
+  for (const { document, binding } of explicitCandidates) {
+    seenDocuments.set(document.id, { document, entity: { ...binding.lineage, entityType: binding.nomaRole === "emission_line_file" ? "emission_line" : "emission_entry" } });
   }
 
   const mirrorRows = await listDocumentUploadsForDocuments(
@@ -196,8 +204,8 @@ export async function loadCandidateDocumentsForRemovalForUser(
   );
   const candidates = Array.from(seenDocuments.values()).flatMap(
     ({ document, entity }): CandidateDocument[] => {
-      const entryBinding = entryBindingByDocumentId.get(document.id);
-      const eligibility = entryBinding ? { binding: entryBinding, biocharApplicationId: null } : sourceCandidateEligibility({
+      const explicitBinding = explicitBindingByDocumentId.get(document.id);
+      const eligibility = explicitBinding ? { binding: explicitBinding, biocharApplicationId: null } : sourceCandidateEligibility({
         document,
         lineage: entity,
         removalId,
@@ -312,7 +320,9 @@ export async function collectCandidateDocumentIdsForRemoval(
     memberBatches: Array<{ id: string; code?: string | null }>;
   },
 ): Promise<string[]> {
+  const evidence = await loadRemovalSourceContext(orgCtx, args.removalId);
   const candidates = await collectCandidateSourceDocumentsForRemoval(orgCtx, {
+    entryContributions: evidence?.contributions, lineFileEvidence: evidence?.lineFileEvidence,
     removalId: args.removalId,
     lineages: args.lineages,
     memberBatches: args.memberBatches,
@@ -331,6 +341,7 @@ export async function collectCandidateSourceDocumentsForRemoval(
     memberBatches?: Array<{ id: string; code?: string | null }>;
     memberSamples?: Array<{ id: string; code?: string | null }>;
     entryContributions?: RemovalEntryContributions;
+    lineFileEvidence?: readonly LineFileEvidence[];
     /** The production-claim-aware transport scope, including unapplied owner runs. */
     transportFeedstockIds?: string[];
     feedstockCodes?: Readonly<Record<string, string>>;
@@ -410,6 +421,10 @@ export async function collectCandidateSourceDocumentsForRemoval(
   for (const { document, binding } of await collectEntrySourceDocuments(orgCtx, args.entryContributions, args.removalId)) {
     candidates.set(document.id, { documentId: document.id, binding });
   }
+  const files = args.lineFileEvidence ?? [];
+  for (const { document, binding } of await collectLineFileSourceDocuments(orgCtx, files)) {
+    candidates.set(document.id, { documentId: document.id, binding });
+  }
   return Array.from(candidates.values()).sort((left, right) =>
     left.documentId.localeCompare(right.documentId),
   );
@@ -480,5 +495,19 @@ async function collectEntrySourceDocuments(orgCtx: OrgContext, contributions?: R
       throw new SafeError(EMISSION_ENTRY_FILE_UNAVAILABLE(messageLabel));
     }
     return { document, binding };
+  });
+}
+
+/** Uploaded component files are loaded through the organization-scoped batch reader. */
+export async function collectLineFileSourceDocuments(ctx: OrgContext, evidence: readonly LineFileEvidence[]) {
+  if (!evidence.length) return [];
+  const rows = await listEmissionLineFilesForBatches(ctx, [...new Set(evidence.map(file => file.creditBatchId))]);
+  return lineFileSourceCandidates(evidence).map(candidate => {
+    const row = rows.find(row => row.anchor.id === candidate.binding.lineage.entityId &&
+      row.anchor.version === candidate.binding.lineFile?.anchorVersion &&
+      row.anchor.creditBatchId === candidate.binding.lineFile?.creditBatchId && row.document?.id === candidate.documentId &&
+      row.document.entityType === "emission_line" && row.document.entityId === row.anchor.id && row.document.uploadStatus === "uploaded");
+    if (!row?.document) throw new SafeError(EMISSION_LINE_FILE_CHANGED);
+    return { document: row.document, binding: candidate.binding };
   });
 }

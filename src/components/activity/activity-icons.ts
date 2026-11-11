@@ -40,6 +40,8 @@ export const ACTIVITY_RECORD_TYPE_ICONS: Record<ActivityEntityType, Icon> = {
   removal: StackIcon,
   ghg_statement: FileTextIcon,
   emission_entry: LightningIcon,
+  emission_line: FileIcon,
+  removal_template_observation: ListChecksIcon,
   emission_line_comment: ChatTextIcon,
   formulation: ListChecksIcon,
   supplier: HandshakeIcon,

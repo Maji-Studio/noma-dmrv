@@ -1,3 +1,4 @@
+import { EMISSION_LINE_STATE_LABELS } from "./emission-lines";
 import { templateLineFixTarget, templateCoverageFixTarget, type TemplateFixTarget } from "./template-fix-targets";
 import type { RemovalBlocker, RemovalBlockerCode } from "./removal-blockers";
 import { EMPTY_REMOVAL_TEMPLATE_MESSAGE, DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE } from "./removal-submission-conditions";
@@ -618,7 +619,7 @@ function templateRequirementChecks(facts: RemovalReadinessFacts): RemovalRequire
     ...(linesToDecide > 0 ? ["templateLineReview" as const] : []),
   ])];
   const linesUnmet = lineMessages.length > 0 || linesToDecide > 0;
-  const entriesNeedFiles = entryBlockers.every((blocker) => blocker.code === "entryMissingEvidence");
+  const entriesNeedFiles = entryBlockers.every((blocker) => ["entryMissingEvidence", "lineMissingEvidence"].includes(blocker.code));
   return [
     {
       key: "templateSet",
@@ -647,7 +648,9 @@ function templateRequirementChecks(facts: RemovalReadinessFacts): RemovalRequire
       label: CERT_REQUIREMENT_META.emissions.requirementLabel,
       status: "unmet" as const,
       detail: [...new Set(entryBlockers.map((blocker) => blocker.message))].join(" "),
-      ...(entriesNeedFiles ? {} : { unmetLabel: EMISSION_ENTRIES_TO_CHECK_LABEL }),
+      ...(entriesNeedFiles
+        ? entryBlockers.some(blocker => blocker.code === "lineMissingEvidence") ? { unmetLabel: EMISSION_LINE_STATE_LABELS.missingEvidence } : {}
+        : { unmetLabel: EMISSION_ENTRIES_TO_CHECK_LABEL }),
     }] : []),
   ];
 }

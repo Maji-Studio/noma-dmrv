@@ -1,3 +1,4 @@
+import { lineFileEvidenceFacts } from "../../../tests/helpers/line-file-evidence-facts";
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
 import { deriveBatchEmissionLines } from "@/lib/certification/emission-lines";
 import { deriveRemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
@@ -40,7 +41,7 @@ function resolveTemplateFacts(ctx: Context, batchFacts: BatchEmissionContext = {
 
 function entryContext(): Context {
   const ctx = makeContext();
-  ctx.removalEntryContext = { observationId: "observation", semanticFingerprint: "fingerprint", contributions: {
+  ctx.removalEntryContext = { lineFileEvidence: [], observationId: "observation", semanticFingerprint: "fingerprint", contributions: {
     manifest: [], inputs: [], entrySet: [], selectedEntryIds: [], sentSingleComponentIds: [], blockers: [],
   } };
   return ctx;
@@ -121,6 +122,14 @@ const agreement: Array<[string, Fixture, string[], string?]> = [
     ctx.emissionLines = [{ componentId: "line", blocker: { code: "lineHasNoSource", message: "Record a value.", fixTarget: "emissions" } }] as Context["emissionLines"];
     return ctx;
   }, ["lineHasNoSource"]],
+  ["From records file missing", () => {
+    const ctx = entryContext();
+    const { observation, batch } = lineFileEvidenceFacts();
+    batch.lineFiles = [];
+    ctx.emissionLines = deriveBatchEmissionLines({ ...observation, ...batch, problems: [], enrichmentComplete: true });
+    ctx.emissionLinesByBatchId = { [ctx.memberBatches[0].id]: ctx.emissionLines! };
+    return ctx;
+  }, ["lineMissingEvidence"]],
   ["entry contribution", () => {
     const ctx = entryContext();
     const componentId = "meter-readings";

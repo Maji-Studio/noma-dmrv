@@ -1,14 +1,13 @@
 "use server";
 
+import { presignRequestedUpload, type RequestUploadResult } from "@/lib/documents/presign-requested-upload";
 
-import { MILLISECONDS_PER_SECOND } from "@/config/api-keys";
-import { UPLOAD_NOT_PENDING_MESSAGE, DOCUMENT_CONFIRM_DEADLINE_MS, DOCUMENT_CONFIRM_DB_RESERVE_MS } from "@/config/documents";
+
+import { DOCUMENT_CONFIRM_DEADLINE_MS, DOCUMENT_CONFIRM_DB_RESERVE_MS } from "@/config/documents";
 import { listDocumentsForEntity, type DocumentRow } from "@/data-access/documents";
 import { getStorageProvider } from "@/lib/storage";
-import { DomainError } from "@/lib/domain-errors";
 import { documentFromConfirmOutcome } from "@/lib/documents/confirm-outcome";
 import { prepareDocumentUpload } from "@/lib/documents/upload-preparation";
-import { metadataRecord } from "@/lib/documents/metadata";
 import { confirmUploadSchema, requestUploadSchema } from "@/schemas/documents";
 import { confirmDocumentUploadApp, deleteDocumentApp, reclassifyApplicationEvidenceApp, requestDocumentUploadApp, setDocumentVisibilityApp } from "@/lib/operations/documents";
 import { runOperationInProcess } from "@/lib/operations/runner";
@@ -17,23 +16,14 @@ import { hasOrgRole } from "@/lib/auth/server";
 import { withAction } from "./with-action";
 
 
-export interface RequestUploadResult {
-  documentId: string;
-  uploadUrl: string;
-  headers: Record<string, string>;
-  expiresAt: string;
-  storageKey: string;
-  metadata: Record<string, unknown>;
-}
+export type { RequestUploadResult } from "@/lib/documents/presign-requested-upload";
+
 export async function requestUpload(input: unknown): Promise<ActionResult<RequestUploadResult>> {
   return withAction(async (ctx) => {
     const data = requestUploadSchema.parse(input);
     const provider = getStorageProvider();
     const row = await runOperationInProcess(requestDocumentUploadApp, ctx, { ...data, storageProvider: provider.name, storageBucket: provider.bucket });
-    const expiresInSeconds = Math.floor((row.uploadExpiresAt!.getTime() - Date.now()) / MILLISECONDS_PER_SECOND);
-    if (expiresInSeconds <= 0) throw new DomainError("conflict", UPLOAD_NOT_PENDING_MESSAGE, { retryable: true });
-    const presign = await provider.createUploadUrl({ key: row.uploadStorageKey!, contentType: data.contentType, maxBytes: data.sizeBytes, expiresInSeconds });
-    return { documentId: row.id, uploadUrl: presign.url, headers: presign.headers, expiresAt: row.uploadExpiresAt!.toISOString(), storageKey: row.uploadStorageKey!, metadata: metadataRecord(row.metadata) };
+    return presignRequestedUpload(provider, row, data);
   });
 }
 export async function confirmUpload(input: unknown): Promise<ActionResult<DocumentRow>> {

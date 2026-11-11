@@ -166,3 +166,19 @@ it("keeps payload and review hashes stable when carried-entry and evidence disco
   expect(reviewPayloadHash(forward)).toBe(reviewPayloadHash(reversed));
   expect(carryEntries[0].evidenceDocumentIds).toEqual(["carry-a-doc-b", "carry-a-doc-a"]);
 });
+
+it("requires proof on the claiming Removal even when batch-level proof is locked", async () => {
+  const loaded = facts();
+  loaded.b2.recordsFileLocked = true;
+  loaded.b2.entries = [];
+  const ownScope = structuredClone(scope);
+  ownScope.memberBatches[1].productionEmissionsClaimedByRemovalId = ownScope.removalId!;
+  const ownFacility = structuredClone(facility);
+  const observation = ownFacility.templatesById.t1!.observation!;
+  observation.lineSources.electricity.filePolicy = "lineFile";
+  const result = await loadRemovalEntryContext(makeTestOrgContext(), ownScope, { batchFacts: loaded }, ownFacility);
+  expect(result!.batchFacts.b2.recordsFileLocked).toBe(false);
+  expect(loaded.b2.recordsFileLocked).toBe(true);
+  // With the lock cleared and the figure kept, the line requires the file (emission-line-file-evidence.test.ts).
+  expect(result!.batchFacts.b2.automaticFigures["run-electricity"]).toEqual({ magnitude: "10", unit: "kWh" });
+});

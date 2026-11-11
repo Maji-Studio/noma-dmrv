@@ -1,3 +1,8 @@
+import { listEmissionEntryDraftContenders } from "@/data-access/emission-entry-contenders";
+vi.mock("@/data-access/emission-entry-contenders", () => ({ listEmissionEntryDraftContenders: vi.fn() }));
+import { loadComponentFileReservations } from "@/data-access/component-file-reservations";
+vi.mock("@/data-access/component-file-reservations", () => ({ loadComponentFileReservations: vi.fn() }));
+import { listEmissionLineFilesForBatches } from "@/data-access/emission-line-files";
 import { loadBatchEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 vi.mock("@/data-access/emission-entry-carry", () => ({ loadBatchEmissionEntryCarry: vi.fn() }));
 import { assert, beforeEach, describe, expect, it, vi } from "vitest";
@@ -33,6 +38,9 @@ const stored = { id: "stored", creditBatchId: "unread", observationId: "previous
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(loadComponentFileReservations).mockResolvedValue([]);
+  vi.mocked(listEmissionEntryDraftContenders).mockResolvedValue([]);
+  vi.mocked(listEmissionLineFilesForBatches).mockResolvedValue([]);
   vi.mocked(loadBatchEmissionEntryCarry).mockResolvedValue([]);
   vi.mocked(getLatestTemplateObservations).mockResolvedValue([observation] as never);
   vi.mocked(getTemplateObservationsByIds).mockResolvedValue([]);
@@ -168,4 +176,69 @@ describe("time-based lines", () => {
   it("leaves other lines unflagged", () => {
     expect(lineOf(observation).timeEmission).toBeNull();
   });
+});
+
+vi.mock("@/data-access/emission-line-files", () => ({ listEmissionLineFilesForBatches: vi.fn() }));
+
+it.each(["claimed", "reserved"])("keeps locked %s records visible without a file blocker", async kind => {
+  const proofObservation = structuredClone(observation);
+  proofObservation.lineSources.electricity = { ...proofObservation.lineSources.electricity,
+    automaticSource: "run-electricity", filePolicy: "lineFile" };
+  vi.mocked(getLatestTemplateObservations).mockResolvedValue([proofObservation] as never);
+  vi.mocked(loadBatchesEmissionAutomaticFacts).mockResolvedValue({ ready: { automaticFigures: {
+    "run-electricity": { magnitude: "5", unit: "kWh" },
+  } } });
+  const result = (await loadBatchesEmissionLines(ctx, [{ ...batches[0],
+    productionEmissionsClaimedByRemovalId: kind === "claimed" ? "sent" : null,
+    productionEmissionsClaimReservedBySubmissionId: kind === "reserved" ? "submission" : null,
+  }])).get("ready")!;
+  assert(result.status === "ready");
+  expect(result.lines[0].blocker).toBeUndefined();
+  expect(result.lines[0]).toMatchObject({ records: { figure: { magnitude: "5", unit: "kWh" } },
+    lineFile: { documents: [], needsFile: false } });
+});
+
+it("groups all uploaded documents under their one anchor in the read model", async () => {
+  const proofObservation = structuredClone(observation);
+  proofObservation.lineSources.electricity = { ...proofObservation.lineSources.electricity,
+    automaticSource: "run-electricity", filePolicy: "lineFile" };
+  vi.mocked(getLatestTemplateObservations).mockResolvedValue([proofObservation] as never);
+  vi.mocked(loadBatchesEmissionAutomaticFacts).mockResolvedValue({ ready: { automaticFigures: {
+    "run-electricity": { magnitude: "5", unit: "kWh" },
+  } } });
+  const documents = ["first", "second"].map(id => ({ id, fileName: id + ".pdf", version: 1 }));
+  vi.mocked(listEmissionLineFilesForBatches).mockResolvedValue(documents.map(document => ({
+    anchor: { id: "anchor", componentId: "electricity", creditBatchId: "ready", version: 3 }, document,
+  })) as never);
+  const result = (await loadBatchesEmissionLines(ctx, [batches[0]])).get("ready")!;
+  assert(result.status === "ready");
+  expect(result.lines[0].lineFile).toEqual({ anchorId: "anchor", documents, needsFile: true, policy: "lineFile" });
+  expect(result.lines[0].blocker).toBeUndefined();
+});
+
+it.each(["stale", "rejected", "correction", "closed", "other-removal", "other-batch", "reserved-correction"])("uses the component-file lock rule for %s", async state => {
+  const reserved = ["stale", "rejected", "reserved-correction"].includes(state);
+  const claimed = !["stale", "rejected"].includes(state);
+  const locked = ["closed", "other-removal", "other-batch", "reserved-correction"].includes(state);
+  vi.mocked(loadComponentFileReservations).mockResolvedValue(reserved ? [{
+    id: "submission", provider: "isometric", submissionType: "removal", localEntityType: "removal", localEntityId: "sent",
+    status: state === "rejected" ? "rejected" : "draft", lockedAt: state === "reserved-correction" ? new Date() : new Date(0), metadata: {},
+  }] as never : []);
+  vi.mocked(listEmissionEntryDraftContenders).mockResolvedValue(state === "closed" ? [] : [{
+    contenderKind: "correction", removalId: state === "other-removal" ? "another" : "sent", createdAt: "2026-01-01",
+    creditBatchIds: [state === "other-batch" ? "another-batch" : "ready"], window: { start: "2026-01-01", end: "2026-02-01" },
+  }]);
+  const proof = structuredClone(observation);
+  Object.assign(proof.lineSources.electricity, { automaticSource: "run-electricity", filePolicy: "lineFile" });
+  vi.mocked(getLatestTemplateObservations).mockResolvedValue([proof] as never);
+  vi.mocked(loadBatchesEmissionAutomaticFacts).mockResolvedValue({ ready: { automaticFigures: { "run-electricity": { magnitude: "5", unit: "kWh" } } } });
+  const result = (await loadBatchesEmissionLines(ctx, [{ ...batches[0],
+    productionEmissionsClaimedByRemovalId: claimed ? "sent" : null,
+    productionEmissionsClaimReservedBySubmissionId: reserved ? "submission" : null,
+  }])).get("ready")!;
+  assert(result.status === "ready");
+  expect(result.lines[0].lineFile?.needsFile).toBe(!locked);
+  expect(result.lines[0].blocker?.code).toBe(locked ? undefined : "lineMissingEvidence");
+  if (claimed) expect(listEmissionEntryDraftContenders).toHaveBeenCalledWith(ctx, ["ready"], undefined, undefined, { savedOnly: true });
+  else expect(listEmissionEntryDraftContenders).not.toHaveBeenCalled();
 });

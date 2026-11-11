@@ -112,7 +112,7 @@ export async function buildRemovalContext(
     contender => contender.removalId === scope.removalId && contender.contenderKind === "correction"));
   const frozenEntrySet = frozenEntriesForAttempt(latestSubmission, emissionContext);
   const loadedRemovalEntries = await loadRemovalEntryContext(orgCtx, scope, emissionContext, facilityFacts, frozenEntrySet);
-  const removalEntryContext = loadedRemovalEntries && { contributions: loadedRemovalEntries.contributions,
+  const removalEntryContext = loadedRemovalEntries && { contributions: loadedRemovalEntries.contributions, lineFileEvidence: loadedRemovalEntries.lineFileEvidence,
     observationId: loadedRemovalEntries.observationId, semanticFingerprint: loadedRemovalEntries.semanticFingerprint };
   const templateFacts = resolveRemovalTemplate(scope.memberBatches, facilityFacts, loadedRemovalEntries?.batchFacts ?? batchEmissionFacts, removalEntryContext?.contributions);
   const isProduction = env.ISOMETRIC_ENVIRONMENT === "production";
@@ -152,6 +152,7 @@ export async function buildRemovalContext(
     scope,
     latestSubmission,
     correctionWindowOpen,
+    removalEntryContext?.lineFileEvidence,
   );
 
   // Walk every member batch's production-run applications into one deduped run union.
