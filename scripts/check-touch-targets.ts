@@ -10,13 +10,13 @@ const ROOT = process.cwd();
 const INTERACTIVE_TAGS = new Set(["button", "a", "Link", "Button", "select"]);
 const INTERACTIVE_ROLES = new Set(["button", "link", "tab"]);
 const HIT_RECIPES = new Set([
-  "CENTRED_HIT_AREA", "INLINE_HIT_AREA", "ROW_ACTION_HIT_AREA", "ICON_BUTTON_TOUCH_PROPS", "PHONE_TOUCH_TARGET",
+  "CENTRED_HIT_AREA", "INLINE_HIT_AREA", "ICON_BUTTON_TOUCH_PROPS", "PHONE_TOUCH_TARGET",
 ]);
 const SMALL_HEIGHT = /^(?:h|size|min-h)-(\d+(?:\.\d+)?|\[\d+(?:\.\d+)?px\])$/;
 // Unprefixed only: a breakpoint-gated pseudo area does not exist on a phone.
 const PSEUDO_HIT_AREA = new RegExp(`^(?:before|after):(?:h|min-h)-(?:${TOUCH_TARGET_PX}|\\[${TOUCH_TARGET_PX}px\\])!?$`);
 /** `max-sm:` and friends apply below a breakpoint, so they are phone-level. */
-const MAX_VARIANT = /^max-(?:sm|md|lg|xl|2xl):/;
+const MAX_VARIANT = /^max-(?:(?:sm|md|lg|xl|2xl)|\[[^\]]+\]):/;
 const TEST_FILE = /\.(?:test|spec)\.tsx?$/;
 
 type Opening = ts.JsxOpeningElement | ts.JsxSelfClosingElement;
@@ -92,8 +92,8 @@ export function findTouchTargetViolations(
         || (role && literals(role).some(value => INTERACTIVE_ROLES.has(value)))
         || (tag === "input" && type && literals(type).some(value => value === "checkbox" || value === "radio"));
       const classes = attribute(node, "className");
-      // A hidden duplicate (aria-hidden, tabIndex -1) is not a touch target.
-      const hidden = attribute(node, "aria-hidden") !== undefined;
+      // A hidden duplicate (aria-hidden and tabIndex -1) is not a touch target.
+      const hidden = attribute(node, "aria-hidden") !== undefined && attribute(node, "tabIndex") !== undefined;
       if (interactive && classes && !hidden) {
         const tokens = literals(classes).flatMap(value => value.split(/\s+/));
         if (!hasRecipe(node.attributes) && !coveredBySlot(node)

@@ -376,7 +376,7 @@ Parallel sessions each work in their own worktree, one writer per worktree.
 
 ```bash
 scripts/worktree.sh new <name> <type/branch>   # .claude/worktrees/<name>, cut from origin/staging
-scripts/worktree.sh status                      # owners, ports, servers, PR state, unmanaged leftovers
+scripts/worktree.sh status                      # owners, ports, servers, PR state, issue, unmanaged leftovers
 scripts/worktree.sh migrate <name>              # migrate both recorded dev and test databases
 scripts/worktree.sh teardown <name> [--force] [--dry-run] # only what `new` recorded for <name>
 ```

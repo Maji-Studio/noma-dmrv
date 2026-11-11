@@ -321,7 +321,7 @@ export function SchemaTableView({ tables, relationships }: SchemaTableViewProps)
                     role="tab"
                     aria-selected={isActive}
                     onClick={() => updateParams({ area: resolvedArea, table: t.name })}
-                    className={cn(CENTRED_HIT_AREA, "h-[32px] px-[10px] body-caption-fit-bold border transition-colors cursor-pointer")}
+                    className="h-[32px] px-[10px] body-caption-fit-bold border transition-colors cursor-pointer"
                     style={{
                       borderColor: isActive ? accent : "var(--color-border-tertiary)",
                       color: isActive ? accent : "var(--color-text-secondary)",

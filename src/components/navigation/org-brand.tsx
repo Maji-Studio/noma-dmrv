@@ -247,7 +247,7 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
                     aria-busy={isOpening || undefined}
                     onClick={() => handleSelect(org.id, org.name)}
                     disabled={isSwitching}
-                    className={`w-full h-44 px-16 flex items-center justify-between gap-8 body-caption text-left transition-colors duration-150 disabled:cursor-default ${isOpening ? "" : "disabled:opacity-40"} ${
+                    className={`w-full h-44 md:h-40 px-16 flex items-center justify-between gap-8 body-caption text-left transition-colors duration-150 disabled:cursor-default ${isOpening ? "" : "disabled:opacity-40"} ${
                       isSelected
                         ? "text-white bg-[var(--color-white-100)]/[0.08]"
                         : isOpening

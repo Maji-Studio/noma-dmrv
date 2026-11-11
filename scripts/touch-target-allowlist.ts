@@ -23,4 +23,10 @@ export const TOUCH_TARGET_ALLOWLIST: ReadonlyArray<{
     reason: "File links stack 2px apart; a 44px hit area on each would overlap its neighbour and open the wrong file. 24px meets WCAG 2.5.8." },
   { file: "src/components/chain-of-custody/run-picker.tsx", tag: "button", utility: "h-40",
     reason: "Clear button sits inside the picker trigger; a 44px area would cover the trigger it sits on and clear the filter on a missed tap." },
+  { file: "src/components/emissions/emission-line-body-parts.tsx", tag: "Link", utility: "min-h-24",
+    reason: "Inline source link in a wrapping row; a 44px hit area would overlap the rows around it. 24px meets WCAG 2.5.8." },
+  { file: "src/components/emissions/emission-line-body-parts.tsx", tag: "a", utility: "min-h-24",
+    reason: "Entry file links wrap 2px apart; 44px hit areas would overlap and open the wrong file. 24px meets WCAG 2.5.8." },
+  { file: "src/components/schema/schema-table-view.tsx", tag: "button", utility: "h-[32px]",
+    reason: "Developer schema page: wrapped table tabs sit 6px apart, so 44px hit areas would overlap." },
 ];

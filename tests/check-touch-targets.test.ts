@@ -32,13 +32,15 @@ describe("touch-target scanner", () => {
     expect(scan('<button className="h-44 max-sm:h-32" />')).toHaveLength(1);
     expect(scan('<a className="h-32 sm:after:h-44" />')).toHaveLength(1);
     expect(scan('<a className={cn("h-32", INLINE_HIT_AREA_FROM_SM)} />')).toHaveLength(1);
-    expect(scan('<Link aria-hidden tabIndex={-1} className="h-18" />')).toEqual([]);
+    expect(scan('<Link aria-hidden tabIndex={-1} className="h-32" />')).toEqual([]);
+    expect(scan('<Link aria-hidden className="h-32" />')).toHaveLength(1);
+    expect(scan('<button className="h-44 max-[1024px]:h-32" />')).toHaveLength(1);
+    expect(scan('<button className={cn("h-32", ROW_ACTION_HIT_AREA)} />')).toHaveLength(1);
   });
 
   it.each([
     "sm", "md", "lg", "xl", "2xl",
     "min-sm", "min-md", "min-lg", "min-xl", "min-2xl", "min-[640px]",
-    "max-[1024px]",
     "hover", "disabled", "focus-visible", "sm:hover", "md:max-lg", "[&>button]",
   ])("ignores %s variants while preserving unprefixed hits", variant => {
     expect(scan(`<button className="h-44 ${variant}:h-32 ${variant}:size-[16px] ${variant}:!min-h-0!" />`)).toEqual([]);
@@ -63,7 +65,7 @@ describe("touch-target scanner", () => {
     ].join(";\n"))).toEqual([]);
   });
 
-  it.each(["CENTRED_HIT_AREA", "INLINE_HIT_AREA", "PHONE_TOUCH_TARGET", "ROW_ACTION_HIT_AREA"])("accepts %s on the element", recipe => {
+  it.each(["CENTRED_HIT_AREA", "INLINE_HIT_AREA", "PHONE_TOUCH_TARGET"])("accepts %s on the element", recipe => {
     expect(scan(`<button className={cn("h-32", ${recipe})} />`)).toEqual([]);
   });
 
