@@ -64,13 +64,13 @@ describe("OAuth MCP admission and writes", { timeout: TIMEOUT_MS }, () => {
     expect(names.some((name: string) => name.startsWith("delete_"))).toBe(false);
   });
   it.each([
-    { name: "log_feedstock_delivery", args: {}, scope: "feedstocks:write" },
-    { name: "find_documents", args: { ownerType: "delivery" }, scope: "deliveries:read" },
-    { name: "confirm_document_upload", args: { ownerType: "application" }, scope: "applications:write" },
-  ])("steps up $name over HTTP before dispatch", async ({ name, args, scope }) => {
+    { name: "log_feedstock_delivery", args: {}, offered: "feedstocks:read feedstocks:write" },
+    { name: "find_documents", args: { ownerType: "delivery" }, offered: "feedstocks:read deliveries:read" },
+    { name: "confirm_document_upload", args: { ownerType: "application" }, offered: "feedstocks:read applications:read applications:write" },
+  ])("steps up $name over HTTP before dispatch", async ({ name, args, offered }) => {
     const response = await MCP(oauthRpc(await access(), "tools/call", { name, arguments: args }));
     expect(response.status).toBe(403);
-    expect(response.headers.get("www-authenticate")).toContain(`error="insufficient_scope", scope="feedstocks:read ${scope}"`);
+    expect(response.headers.get("www-authenticate")).toContain(`error="insufficient_scope", scope="${offered}"`);
     expect(response.headers.get("www-authenticate")).toContain('resource_metadata="http://localhost:3100/.well-known/oauth-protected-resource/api/mcp"');
     expect(await response.json()).toMatchObject({ code: "missing_scope" });
     expect(await audits()).toHaveLength(0);
