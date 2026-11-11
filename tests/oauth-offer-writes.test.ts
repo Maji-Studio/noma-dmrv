@@ -1,6 +1,7 @@
 import { and, eq, inArray, like } from "drizzle-orm";
 import { afterEach, beforeAll, expect, it, vi } from "vitest";
 import { createOAuthFlowFixture, type OAuthFlowFixture } from "./helpers/oauth-flow";
+import { rpcBody } from "./helpers/mcp";
 import { buildConsentAreas, preselectStepUp } from "@/components/oauth/consent-areas";
 import type { ApiScope } from "@/lib/auth/api-scopes";
 import { OAUTH_STEP_UP_TTL_MS } from "@/config/oauth";
@@ -88,7 +89,7 @@ it.each(["mcp", "rest"] as const)("replays the %s challenge to grant an orders w
   async function callOrdersWrite(credential: typeof token) {
     if (audience === "mcp") {
       const { POST } = await import("@/app/api/mcp/route");
-      return POST(credential.request(resource, { method: "POST", headers: { "content-type": "application/json" },
+      return POST(credential.request(resource, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
         body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "record_order", arguments: {} } }) }));
     }
     const { POST } = await import("@/app/api/v1/orders/route");
@@ -121,7 +122,20 @@ it.each(["mcp", "rest"] as const)("replays the %s challenge to grant an orders w
   const upgraded = await (await stepUp.consent(submitted.join(" "))).exchange();
   expect(upgraded.status).toBe(200);
   expect(upgraded.scope?.split(" ")).toEqual(expect.arrayContaining(["orders:read", "orders:write"]));
-  expect((await callOrdersWrite(upgraded)).status).not.toBe(403);
+  expect(await upgraded.resolve()).toMatchObject({ ok: true, ctx: {
+    scopes: expect.arrayContaining(["feedstocks:read", "orders:read", "orders:write"]),
+  } });
+  const admitted = await callOrdersWrite(upgraded);
+  // Both empty writes reach the required request key check after scope admission.
+  if (audience === "mcp") {
+    expect(admitted.status).toBe(200);
+    expect((await rpcBody(admitted)).result).toMatchObject({
+      isError: true, structuredContent: { code: "idempotency_key_required" },
+    });
+  } else {
+    expect(admitted.status).toBe(400);
+    expect(await admitted.json()).toMatchObject({ code: "idempotency_key_required" });
+  }
 });
 
 it("replaces one pending tuple and isolates other users, clients and organizations through expiry", async () => {
