@@ -91,6 +91,18 @@ and need no follow-up.
   (a `form-audit` folder under `scripts/`) with a README and a `meta.json` that
   records the rebuild date (M).
 
+### minimatch override (`tooling/minimatch-override`, opened 2026-11-11)
+
+- `pnpm-workspace.yaml` overrides every minimatch from 7.0.0 up to 11.0.0 to
+  `^11.0.1`, because all of them carry the denial-of-service advisory
+  [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249) and
+  `@typescript-eslint/typescript-estree` still asks for 9.x or 10.x. This puts
+  typescript-eslint on a minimatch major outside its declared range. It is a
+  lint-time dependency only.
+- **Resolve via:** remove the override once the installed typescript-eslint
+  accepts minimatch `^11`, then confirm `pnpm why minimatch` lists no version
+  from 7.0.0 up to 11.0.0 (S).
+
 ### Toolchain decisions requiring source review
 
 Lint tooling (Biome 2 / oxlint vs ESLint 9), OpenAPI contract testing for the

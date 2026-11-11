@@ -17,6 +17,7 @@ patchedDependencies:
   '@better-auth/oauth-provider@1.7.10': patches/@better-auth__oauth-provider@1.7.10.patch
 
 # minimatch 7 to 11.0.0 has a ReDoS advisory (GHSA-g3hv-75wg-m249) and
-# typescript-eslint still asks for 9.x or 10.x. Drop once it accepts 11.
+# typescript-eslint still asks for 9.x or 10.x. Removal is tracked as
+# tooling/minimatch-override in docs/open-questions-toolchain.md.
 overrides:
   'minimatch@>=7.0.0 <11.0.1': ^11.0.1
