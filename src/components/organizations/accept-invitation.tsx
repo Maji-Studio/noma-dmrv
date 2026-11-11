@@ -7,6 +7,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
 import { acceptInvitationAction } from "@/fn/organizations";
 import { useResetAfterOrgSwitch } from "@/hooks/use-organizations";
@@ -60,6 +61,7 @@ export function AcceptInvitation({
         type="button"
         variant="primary"
         width="full"
+        className={PHONE_TOUCH_TARGET}
         onClick={accept}
         busy={!!busy.held}
       >

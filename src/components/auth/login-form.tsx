@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth/client";
 import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
 import Link from "next/link";
 import { Button } from "@/components/ui";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { loginSchema, type LoginFormData } from "@/schemas/auth";
 import { FormField, FormInput, ServerError } from "@/components/forms";
 import { Notice } from "@/components/ui/notice";
@@ -155,6 +156,7 @@ export function LoginForm() {
         type="submit"
         variant="primary"
         width="full"
+        className={PHONE_TOUCH_TARGET}
         busy={busy}
       >
         Sign in
