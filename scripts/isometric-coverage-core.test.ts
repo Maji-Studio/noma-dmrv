@@ -169,7 +169,6 @@ describe("coverage health check", () => {
   });
 });
 
-
 it("accepts an optional stored proof setting in reviewed contracts", () => {
   const componentId = timeComponentIds[0];
   const fixture = { facilities: [{ ...coverageFixture.facilities[0], reviewedLineSources: {

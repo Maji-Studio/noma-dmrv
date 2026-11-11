@@ -230,7 +230,7 @@ describe("buildCreditBatchOpenItems", () => {
   ])("routes emission review to %s", fixTarget => {
     const result = buildCreditBatchOpenItems({ ...batchContext, emissionLines: [{
       componentId: "diesel", displayName: "Diesel", state: "needsReview", groupKey: "production", groupName: "Production", groupPosition: 0, position: 0,
-      description: null, entryPolicy: "additive", records: null,
+      description: null, entryPolicy: "additive", filePolicy: "entryFiles" as const, records: null,
       blueprintKey: "production", contract: undefined, automaticFigure: null, entries: [], total: null,
       blocker: { code: "lineNeedsReview", message: "Review this line", fixTarget },
     }] });
@@ -244,7 +244,7 @@ describe("buildCreditBatchOpenItems", () => {
       status: "unmet" as const, fixTarget: "templateLineReview" as const, linesToDecide: 5, detail: "Answer them in Settings, Removal templates." };
     const line = {
       componentId: "diesel", displayName: "Diesel", state: "needsReview" as const, groupKey: "production", groupName: "Production", groupPosition: 0, position: 0,
-      description: null, entryPolicy: "additive" as const, records: null,
+      description: null, entryPolicy: "additive" as const, filePolicy: "entryFiles" as const, records: null,
       blueprintKey: "production", contract: undefined, automaticFigure: null, entries: [], total: null,
       blocker: { code: "lineNeedsReview" as const, message: "Decide it in Removal templates.", fixTarget: "templateLineReview" as const },
     };
@@ -267,7 +267,7 @@ describe("buildCreditBatchOpenItems", () => {
       status: "unmet" as const, fixTarget: "templateLines" as const, detail: "Some inputs could not be read from Isometric." };
     const line = {
       componentId: "diesel", displayName: "Diesel", state: "needsReview" as const, groupKey: "production", groupName: "Production", groupPosition: 0, position: 0,
-      description: null, entryPolicy: "additive" as const, records: null,
+      description: null, entryPolicy: "additive" as const, filePolicy: "entryFiles" as const, records: null,
       blueprintKey: "production", contract: undefined, automaticFigure: null, entries: [], total: null,
       blocker: { code: "lineNeedsReview" as const, message: "Some inputs could not be read from Isometric.", fixTarget: "templateLines" as const },
     };
@@ -296,7 +296,7 @@ describe("buildCreditBatchOpenItems", () => {
         groupPosition: 0,
         position: 0,
         description: null,
-        entryPolicy: "additive" as const,
+        entryPolicy: "additive" as const, filePolicy: "entryFiles" as const,
         records: null,
         blueprintKey: "production",
         contract: undefined,

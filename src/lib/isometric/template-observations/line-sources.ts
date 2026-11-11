@@ -3,7 +3,6 @@ import { BOOTSTRAP_LINE_SOURCES } from "./bootstrap";
 import { automaticSourceAvailable, catalogCandidates, hasCatalogDisambiguation, type AutomaticSourceId } from "./catalog-sources";
 import { allowedEntryPolicies, isLegacyAutomaticPair } from "./entry-policies";
 import type { EntryPolicy, TemplateDefinition } from "./types";
-
 import type { FilePolicy } from "./file-policies";
 
 export interface LineContract {

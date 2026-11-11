@@ -223,7 +223,6 @@ describe("org-scoped template observations", () => {
   });
 });
 
-
 it("refuses to review another component beside an undecided legacy pair", async () => {
   const { observation } = legacyTransportObservation();
   const value = template();
@@ -239,7 +238,6 @@ it("refuses to review another component beside an undecided legacy pair", async 
     assignments: { [pendingId]: { scope: "operating", entryPolicy: "additive" } } });
   await expect(review).rejects.toThrow("Choose valid, distinct sources");
 });
-
 
 it("reads an existing stored component contract with its default proof setting", async () => {
   const value = template();

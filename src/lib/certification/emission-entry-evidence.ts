@@ -9,3 +9,10 @@ export function entryValuesAreZero(values: readonly { magnitude: string }[]): bo
 export function entryNeedsFile(policy: FilePolicy, entry: { kind: "value" | "zero"; isZero?: boolean }): boolean {
   return entry.kind === "value" && entriesNeedFiles(policy) && !entry.isZero;
 }
+
+/** The check behind the "File missing" state, shared with surfaces that list entries. */
+export function entryFileMissing(
+  policy: FilePolicy, entry: { kind: "value" | "zero"; isZero?: boolean; hasEvidence: boolean },
+): boolean {
+  return entryNeedsFile(policy, entry) && !entry.hasEvidence;
+}

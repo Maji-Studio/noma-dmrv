@@ -349,7 +349,6 @@ it("keeps separate mass and distance inputs single and flags stored additive con
   })).toContainEqual({ code: "disallowed-entry-policy", componentId: pair.id });
 });
 
-
 it.each([1, 2])("normalizes stored automatic transport pairs for fixture %s, preserving reviewed decisions", (index) => {
   const definition = definitions[index];
   const id = index === 1 ? "rtc_1M2QJGQS21S0XCMB" : "rtc_1KWKNGJZY1S0D548";
@@ -365,7 +364,6 @@ it.each([1, 2])("normalizes stored automatic transport pairs for fixture %s, pre
     expect(resolveLineSources({ definition, previous: { definition, lineSources: resolved } })[id].entryPolicy).toBe(resolved[id].entryPolicy);
   }
 });
-
 
 it.each([undefined, "none", "entryFiles", "generated", "lineFile"] as const)("preserves stored proof setting %s across observations", (filePolicy) => {
   const lineSources = resolveLineSources({ definition });

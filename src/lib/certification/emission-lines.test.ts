@@ -232,7 +232,6 @@ it("discards stale sample automatic facts while retaining additive entries", () 
   expect(deriveBatchEmissionLines(f)[0].state).toBe("empty");
 });
 
-
 it("records a biomass transport zero with no records when every linked trip is owned elsewhere", () => {
   const definition = normalizeTemplateDefinition(fixture as GhgEntryTemplate);
   const automaticFigures = batchAutomaticFigures([], {
@@ -251,7 +250,6 @@ it("records a biomass transport zero with no records when every linked trip is o
   expect(line.total).toEqual({ magnitude: "0", unit: "km * tonne" });
 });
 
-
 it("separates missing-file instructions without changing the blocker message", () => {
   const f = facts();
   f.entries = [entry(f, { hasEvidence: false })];
@@ -268,7 +266,6 @@ it("separates missing-file instructions without changing the blocker message", (
   expect(readOnly.instruction).toBeUndefined();
 });
 
-
 it("leaves a supplied stale-entry reason unsplit", () => {
   const f = facts();
   const instruction = "Confirm this entry for the changed template component.";
@@ -283,7 +280,6 @@ it("leaves a supplied stale-entry reason unsplit", () => {
   expect(readOnly.title).toBe(`${line.displayName}: ${EMISSION_LINE_STATE_LABELS.needsReview}`);
 });
 
-
 it("splits the stale-entry fallback instruction when no reason is supplied", () => {
   const f = facts();
   f.entries = [entry(f, { counts: false })];
@@ -291,7 +287,6 @@ it("splits the stale-entry fallback instruction when no reason is supplied", () 
   expect(line.blocker?.message).toBe("Enter the values again for the current template component.");
   expect(line.blocker?.copy).toEqual({ instruction: line.blocker?.message });
 });
-
 
 it.each(ENTRY_FILE_CASES)("applies the entry file requirement to $label", ({ magnitudes, filePolicy, missing }) => {
   const f = facts();
@@ -308,7 +303,7 @@ it.each(ENTRY_FILE_CASES)("applies the entry file requirement to $label", ({ mag
     enrichment: { [component.id]: Object.fromEntries(component.inputs.map((input) => [input.key, { unit: "kWh" }])) } };
   const stored = { ...entry(f, { hasEvidence: false }), observationId: "observation", documentCount: 0,
     values: magnitudes.map((magnitude, index) => ({ inputKey: component.inputs[index].key, magnitude, unit: "kWh" })),
-  } as Parameters<typeof deriveEmissionEntryFacts>[0][number];
+  } as unknown as Parameters<typeof deriveEmissionEntryFacts>[0][number];
   f.entries = deriveEmissionEntryFacts([stored], observation, new Map([["observation", observation]]));
   f.entriesCanSubmit = true;
   const [componentResult] = deriveBatchEmissionLines(f);

@@ -80,12 +80,12 @@ const agreement: Array<[string, Fixture, string[], string?]> = [
       contentRevision: 1, kind: "value", lineRule: "additive", occurredOn: "2026-01-10", documentCount: 0,
       deletedAt: null, sentByRemovalId: null, sendReservedBySubmissionId: null, confirmedForRemovalId: null,
       evidenceDocumentIds: [], values: [{ inputKey: "electricity_use", magnitude: "0.000", unit: "kWh" }],
-    } as Parameters<typeof deriveEmissionEntryFacts>[0][number];
+    } as unknown as Parameters<typeof deriveEmissionEntryFacts>[0][number];
     const entries = deriveEmissionEntryFacts([stored], observation, new Map([["observation", observation]]));
     const window = { start: "2026-01-01", end: "2026-02-01" };
     ctx.removalEntryContext!.contributions = deriveRemovalEntryContributions({
-      removalId: ctx.removalId, memberBatchIds: [stored.creditBatchId], window,
-      contenders: [{ contenderKind: "draft", removalId: ctx.removalId, creditBatchIds: [stored.creditBatchId], createdAt: window.start, window }],
+      removalId: ctx.removalId!, memberBatchIds: [stored.creditBatchId], window,
+      contenders: [{ contenderKind: "draft", removalId: ctx.removalId!, creditBatchIds: [stored.creditBatchId], createdAt: window.start, window }],
       entries, lineSources: observation.lineSources, monitoredInputs: [{ componentId, inputKey: "electricity_use", unit: "kWh" }],
     });
     ctx.emissionLines = deriveBatchEmissionLines({ ...observation, entries, problems: [], enrichmentComplete: true, automaticFigures: {}, entriesCanSubmit: true });

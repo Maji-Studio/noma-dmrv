@@ -55,7 +55,6 @@ it.each<[string, (plan: RemovalTemplateSetupPlan) => void]>([
   expect(setupPlanFingerprint(plan)).not.toBe(fingerprint);
 });
 
-
 it("hashes effective proof settings on decided contracts", () => {
   const plan = fixturePlan();
   const fingerprint = setupPlanFingerprint(plan);

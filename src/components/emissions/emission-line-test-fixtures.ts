@@ -37,6 +37,7 @@ export function makeLine(overrides: Partial<EmissionLine> = {}): EmissionLine {
     description: null,
     contract: { scope: "operating", entryPolicy: "additive" },
     entryPolicy: "additive",
+    filePolicy: "entryFiles",
     state: "empty",
     automaticFigure: null,
     records: null,

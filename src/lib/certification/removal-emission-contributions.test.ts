@@ -172,7 +172,6 @@ it("omits another Removal's held single and keeps its follow-up batch line fille
   expect(held.sentByRemovalId).toBeNull();
 });
 
-
 describe("sent entries after a Removal window shrinks", () => {
   it.each(["additive", "single"] as const)("blocks an out-of-window sent %s entry without transferring its claim", (lineRule) => {
     const sent = entry({ occurredOn: "2026-03-10", sentByRemovalId: "r1", lineRule });
@@ -233,7 +232,6 @@ describe("sent entries after a Removal window shrinks", () => {
     }
   });
 });
-
 
 it.each(ENTRY_FILE_CASES)("applies the contribution file requirement to $label", ({ magnitudes, filePolicy, missing }) => {
   const paired = magnitudes.length > 1;
