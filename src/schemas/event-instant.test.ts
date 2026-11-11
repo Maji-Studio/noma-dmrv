@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { toOperationJsonSchema } from "@/lib/operations/json-schema";
 import { validationFailed } from "@/lib/operations/errors";
-import { eventInstantSchema } from "./event-instant";
+import { eventInstantSchema, offsetInstantSchema } from "./event-instant";
 
 const path = ["occurredAt"];
 
@@ -32,6 +32,13 @@ describe("event instant schema", () => {
     ["a bare date", "2026-01-01"],
   ])("refuses %s", (_label, value) => {
     expect(eventInstantSchema.safeParse(value).success).toBe(false);
+  });
+
+  it.each(["2026-01-01T10:00Z", "2026-01-01T10:00+02:00"])("asks only for the seconds when %s stops at the minute", (value) => {
+    const seconds = ["Include seconds, as in 2026-10-12T09:30:00Z."];
+    expect(eventInstantSchema.safeParse(value).error?.issues.map((issue) => issue.message)).toEqual(seconds);
+    expect(offsetInstantSchema("Custom guidance").safeParse(value).error?.issues.map((issue) => issue.message)).toEqual(seconds);
+    expect(offsetInstantSchema("Custom guidance").safeParse("2026-01-01T10:00").error?.issues.map((issue) => issue.message)).toEqual(["Custom guidance"]);
   });
 
   it("publishes exactly the two wire shapes, never a native Date", () => {

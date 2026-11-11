@@ -125,10 +125,13 @@ it("rejects unknown nested fields against the published contract and keeps numbe
     .toThrow(expect.objectContaining({ issues: [expect.objectContaining({ path: ["samplingTime", "zone"] })] }));
   expect(() => rejectUnknownFields({ ...create, weightGrams: "12.5" }, contract)).not.toThrow();
   const published = contract.properties as Record<string, unknown>;
-  for (const field of [...optionalNumbers, "totalCarbonPercent", "organicCarbonPercent", "r0MeasurementCount"]) {
-    expect(JSON.stringify(published[field]), field).toMatch(/"type":"(number|integer)"/);
-    expect(JSON.stringify(published[field]), field).not.toContain('"type":"string"');
+  for (const field of optionalNumbers) {
+    expect(published[field], field).toMatchObject({ type: ["number", "null"] });
   }
+  for (const field of ["totalCarbonPercent", "organicCarbonPercent"]) {
+    expect(published[field], field).toMatchObject({ type: "number" });
+  }
+  expect(published.r0MeasurementCount).toMatchObject({ anyOf: [{ type: "integer" }, { type: "null" }] });
 });
 
 describe("physical input maximums", () => {
