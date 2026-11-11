@@ -62,8 +62,8 @@
     "storage:cors": "NODE_ENV=test tsx scripts/storage-cors.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1049.0",
-    "@aws-sdk/s3-request-presigner": "^3.1049.0",
+    "@aws-sdk/client-s3": "^3.1164.0",
+    "@aws-sdk/s3-request-presigner": "^3.1164.0",
     "@base-ui/react": "^1.1.0",
     "@better-auth/api-key": "1.7.10",
     "@better-auth/cimd": "1.7.10",
@@ -79,7 +79,7 @@
     "@turf/bbox": "7.3.5",
     "@turf/rewind": "7.3.5",
     "@turf/truncate": "7.3.5",
-    "@vercel/functions": "^3.9.7",
+    "@vercel/functions": "^3.11.0",
     "@vvo/tzdb": "^6.198.0",
     "@xyflow/react": "^12.10.1",
     "better-auth": "1.7.10",
@@ -115,7 +115,7 @@
     "@types/react": "^19.2.13",
     "@types/react-dom": "^19.2.3",
     "@types/react-test-renderer": "^19.1.0",
-    "@vitest/ui": "^4.1.11",
+    "@vitest/ui": "^4.1.12",
     "babel-plugin-react-compiler": "^1.0.0",
     "dotenv": "^17.2.4",
     "drizzle-kit": "^0.31.11",
@@ -129,6 +129,6 @@
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   }
 }
