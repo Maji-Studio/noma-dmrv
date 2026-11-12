@@ -9,3 +9,13 @@ export const firstAdminSchema = z.object({
 });
 
 export type FirstAdminInput = z.infer<typeof firstAdminSchema>;
+
+/** The setup form asks for the password twice; the action itself takes only the base fields. */
+export const firstAdminFormSchema = firstAdminSchema
+  .extend({ confirmPassword: z.string() })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
+export type FirstAdminFormData = z.infer<typeof firstAdminFormSchema>;
