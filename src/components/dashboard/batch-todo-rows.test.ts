@@ -47,7 +47,7 @@ describe("batchTodoRows", () => {
   it("adds a failed-check row after the loaded rows, so a failed read never reads as all clear", () => {
     const rows = batchTodoRows(batches, summaries, "b2", { facilityId: "f1" });
     expect(rows.map((row) => row.title)).toEqual(["1 open to-do", BATCH_TODOS_FAILED_TITLE]);
-    expect(rows[1]).toMatchObject({ meta: "", href: "/credit-batches?facility=f1" });
+    expect(rows[1]).toMatchObject({ meta: "Credit batches", href: "/credit-batches?facility=f1" });
     expect(batchTodoRows([], {}, null, { facilityId: "f1" })).toHaveLength(1);
   });
 });
