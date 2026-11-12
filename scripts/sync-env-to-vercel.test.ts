@@ -21,7 +21,8 @@ const WORKFLOW_ONLY_FIELDS = [
 afterEach(() => vi.restoreAllMocks());
 
 describe("Vercel sync drift warnings", () => {
-  it.each(["staging", "prod", "production"])("reports %s workflow-only fields as information", (env) => {
+  it("reports staging workflow-only fields as information", () => {
+    const env = "staging";
     vi.mocked(fetchItemFieldNames).mockReturnValue(new Set([
       "DATABASE_URL", ...WORKFLOW_ONLY_FIELDS,
     ]));
@@ -39,6 +40,20 @@ describe("Vercel sync drift warnings", () => {
       expect(log).toHaveBeenCalledWith(`        ${name}`);
     }
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("warns about production fields the plain setup no longer reads", () => {
+    vi.mocked(fetchItemFieldNames).mockReturnValue(new Set([
+      "DATABASE_URL", ...WORKFLOW_ONLY_FIELDS,
+    ]));
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    warnUntrackedOnePasswordVars("production", templateOpFieldNames());
+
+    for (const name of WORKFLOW_ONLY_FIELDS) {
+      expect(warn).toHaveBeenCalledWith(`        ${name}`);
+    }
   });
 
   it("still warns about fields absent from both the template and that item's workflows", () => {

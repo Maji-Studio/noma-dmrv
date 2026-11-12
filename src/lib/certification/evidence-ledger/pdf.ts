@@ -106,7 +106,7 @@ function masthead(model: LedgerModel): ReactElement {
   const left = v({}, {},
     v(styles.wordmarkRow, {},
       t(styles.wordmark, "noma"),
-      t(styles.wordmarkSub, "dMRV · DARK EARTH CARBON"),
+      t(styles.wordmarkSub, `dMRV · ${model.organizationName.toUpperCase()}`),
     ),
     t(styles.eyebrow, "TRANSPORTATION MODULE V1.1 · DISTANCE BASED · EQUATION 3"),
     h(Text, { style: styles.title }, "Transport Emissions\nEvidence Ledger"),

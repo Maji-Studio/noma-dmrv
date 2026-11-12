@@ -394,6 +394,18 @@ These scripts share the rule, with explicit overrides for remote targets:
 - The module-scope pool is registered with Vercel's [`attachDatabasePool`](https://vercel.com/docs/functions/functions-api-reference/vercel-functions-package#database-connection-pool-management), which keeps a Fluid Compute instance alive until `pg` releases its idle clients. The idle default is 5 seconds. `DB_POOL_MAX` defaults to 1, and each environment sets its own value from measurement (see [Pool sizing and compute placement](#pool-sizing-and-compute-placement)); a Vercel deployment fails closed above `MAX_VERCEL_DB_POOL_MAX` because per-instance pools multiply.
 - Pooled statements wait at most 1 second for a conflicting database lock by default, configurable with the positive `DB_POOL_LOCK_TIMEOUT_MS`. Keep it below the pool connection-acquisition timeout. PostgreSQL reports `55P03` on a lock timeout; the waiting transaction rolls back and can be retried after the conflicting operation finishes. This prevents a waiting writer from occupying the only pooled connection during registry cleanup. Dedicated certification lock connections do not inherit this setting: an active registry DELETE retains its fence until the protected callback finishes. This is a lock-acquisition timeout, not a statement or remote-request deadline.
 
+### Plain first run
+
+`pnpm db:reset:plain` drops the database schemas and replays tracked migrations
+without admin bootstrap or demo data. A fresh migration chain creates no default
+organization. The first visitor chooses the Platform Admin at `/setup`, then
+creates organizations from `/platform/organizations`.
+
+`pnpm db:reset` retains env-based admin bootstrap and the default development
+organization for local development, CI and seeded staging. `ADMIN_EMAIL` and
+`ADMIN_PASSWORD` serve only those paths; `db:ensure-admin` refuses production.
+The manually confirmed empty-staging and production resets use `db:reset:plain`.
+
 ### Mafinga demo seed
 
 `pnpm db:seed` creates the September 2026 Mafinga demo through the same server
@@ -548,7 +560,7 @@ Document destructive changes and their reset requirement in the related feature 
 
 The development gate applies the merge candidate's complete migration chain to an empty, disposable database, bootstraps its admin and organization, seeds current development data, and verifies the schema. It tests the supported reset-and-seed development path without requiring upgrades of obsolete demo rows.
 
-The independent `fresh-database-gate` also runs on every PR, merge-queue group and manual run. It applies the full chain to another empty database, runs production-mode bootstrap twice to prove idempotence, and verifies the schema. Neither job substitutes schema push for migrations; promotion labels do not bypass either job.
+The independent `fresh-database-gate` also runs on every PR, merge-queue group and manual run. It applies the full chain to another empty database, runs development-mode bootstrap twice to verify stable identities, and verifies the schema. Neither job substitutes schema push for migrations; promotion labels do not bypass either job.
 
 ## Certification Tables
 

@@ -63,11 +63,12 @@ describe("bootstrap environment classification", () => {
     })).toBe("development");
   });
 
-  it("uses production protections when NODE_ENV is production", () => {
-    expect(resolveBootstrapMode({
+  it("refuses CLI bootstrap when NODE_ENV is production", () => {
+    expect(() => resolveBootstrapMode({
       NODE_ENV: "production",
       DATABASE_URL: REMOTE_DATABASE_URL,
-    })).toBe("production");
+      ALLOW_DEV_BOOTSTRAP: "1",
+    })).toThrow("Open /setup");
   });
 
   it("refuses development semantics for a non-local target by default", () => {
@@ -104,29 +105,23 @@ describe("bootstrap environment classification", () => {
   });
 });
 
-describe("production organization foundation", () => {
-  it.each([false, true])("retains only the last Admin in production (another Admin: %s)", async anotherAdmin => {
+describe("organization foundation bootstrap policy", () => {
+  it.each([false, true])("refuses production foundation changes (another Admin: %s)", async anotherAdmin => {
     await withEmptyFoundation(async tx => {
       const adminUserId = crypto.randomUUID();
       const otherUserId = crypto.randomUUID();
       await tx.insert(users).values([adminUserId, otherUserId].map(id => ({
         id, email: `${id}@example.test`, name: "Bootstrap fixture", role: "admin",
       })));
-      await ensureOrgFoundation(tx, adminUserId, TEST_PASSWORD_HASH, "production");
+      await tx.insert(organizations).values({ id: DEC_ORG_ID, name: "Existing operator", slug: "existing-operator" });
       await tx.insert(members).values({ id: crypto.randomUUID(), organizationId: DEC_ORG_ID, userId: adminUserId, role: "admin" });
       if (anotherAdmin) await tx.insert(members).values({
         id: crypto.randomUUID(), organizationId: DEC_ORG_ID, userId: otherUserId, role: "admin",
       });
-      const log = vi.spyOn(console, "log").mockImplementation(() => {});
-      await ensureOrgFoundation(tx, adminUserId, TEST_PASSWORD_HASH, "production");
-      const remaining = await tx.select().from(members).where(eq(members.organizationId, DEC_ORG_ID));
-      expect(remaining.map(row => row.userId)).toEqual([anotherAdmin ? otherUserId : adminUserId]);
-      if (!anotherAdmin) expect(log).toHaveBeenCalledWith(
-        `Retained last Admin membership organizationId=${DEC_ORG_ID} userId=${adminUserId}`,
-      );
-      const teammates = await tx.select().from(members).innerJoin(users, eq(users.id, members.userId))
-        .where(and(eq(members.organizationId, DEC_ORG_ID), eq(users.email, TEAMMATE_EMAIL)));
-      expect(teammates).toEqual([]);
+      const before = await tx.select().from(members).where(eq(members.organizationId, DEC_ORG_ID));
+      vi.stubEnv("NODE_ENV", "production");
+      await expect(ensureOrgFoundation(tx, adminUserId, TEST_PASSWORD_HASH)).rejects.toThrow("Open /setup");
+      expect(await tx.select().from(members).where(eq(members.organizationId, DEC_ORG_ID))).toEqual(before);
     });
   });
 
@@ -134,9 +129,9 @@ describe("production organization foundation", () => {
     await withEmptyFoundation(async tx => {
       const adminUserId = crypto.randomUUID();
       await tx.insert(users).values({ id: adminUserId, email: `${adminUserId}@example.test`, name: "Bootstrap fixture", role: "admin" });
-      await ensureOrgFoundation(tx, adminUserId, TEST_PASSWORD_HASH, "production");
+      await tx.insert(organizations).values({ id: DEC_ORG_ID, name: "Existing operator", slug: "existing-operator" });
       await tx.insert(members).values({ id: crypto.randomUUID(), organizationId: DEC_ORG_ID, userId: adminUserId, role: "admin" });
-      await ensureOrgFoundation(tx, adminUserId, TEST_PASSWORD_HASH, "development");
+      await ensureOrgFoundation(tx, adminUserId, TEST_PASSWORD_HASH);
       const remaining = await tx.select({ userId: members.userId, role: members.role, email: users.email })
         .from(members).innerJoin(users, eq(users.id, members.userId))
         .where(eq(members.organizationId, DEC_ORG_ID));
@@ -147,14 +142,14 @@ describe("production organization foundation", () => {
 });
 
 describe("production registry credentials", () => {
-  it("fails loudly with every missing or blank environment-variable name", async () => {
+  it("refuses production before inspecting registry credentials", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("ISOMETRIC_ACCESS_TOKEN", undefined);
     vi.stubEnv("ISOMETRIC_CLIENT_SECRET", "   ");
     vi.stubEnv("CREDENTIALS_ENCRYPTION_KEY", "");
 
     await expect(ensureIsometricCredentials(db)).rejects.toThrow(
-      "ISOMETRIC_ACCESS_TOKEN, ISOMETRIC_CLIENT_SECRET, CREDENTIALS_ENCRYPTION_KEY",
+      "Open /setup",
     );
   });
 
@@ -169,16 +164,17 @@ describe("production registry credentials", () => {
 });
 
 describe("admin credential password preservation", () => {
-  it("does not overwrite an existing credential password in production", async () => {
+  it("refuses production without overwriting an existing credential password", async () => {
     const tag = crypto.randomUUID();
     const email = `production-admin-${tag}@example.test`;
-    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NODE_ENV", "test");
     let userId: string | null = null;
 
     try {
       userId = await ensureAdminUser(db, email, `first-${tag}`);
       const firstHash = await credentialPassword(userId);
-      await ensureAdminUser(db, email, `second-${tag}`);
+      vi.stubEnv("NODE_ENV", "production");
+      await expect(ensureAdminUser(db, email, `second-${tag}`)).rejects.toThrow("Open /setup");
 
       expect(firstHash).not.toBeNull();
       expect(await credentialPassword(userId)).toBe(firstHash);

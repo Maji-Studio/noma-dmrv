@@ -42,6 +42,9 @@ vi.mock("@/lib/certification/certify-context-core", () => ({
 vi.mock("@/lib/certification/evidence-ledger/pdf", () => ({
   renderEvidenceLedgerPdf: vi.fn(async () => Buffer.from("%PDF-fake")),
 }));
+vi.mock("@/data-access/organizations", () => ({
+  getActiveOrganization: vi.fn(async () => ({ id: TEST_ORG_ID, name: "Example Carbon" })),
+}));
 vi.mock("@/data-access/facilities", () => ({
   getFacilityById: vi.fn(async () => ({ id: FACILITY, name: "Dark Earth Hub" })),
 }));
@@ -93,6 +96,7 @@ import {
   getDocumentUploadByDocument,
   deleteDocumentUploadByDocument,
 } from "@/data-access/certifier-document-uploads";
+import { getActiveOrganization } from "@/data-access/organizations";
 import { renderEvidenceLedgerPdf } from "@/lib/certification/evidence-ledger/pdf";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { mirrorDocumentToSourceForUser } from "@/fn/certification/sources-mirror-core";
@@ -176,6 +180,8 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
     );
 
     expect(renderEvidenceLedgerPdf).toHaveBeenCalledOnce();
+    expect(getActiveOrganization).toHaveBeenCalledWith(makeTestOrgContext(USER));
+    expect(renderEvidenceLedgerPdf).toHaveBeenCalledWith(expect.objectContaining({ organizationName: "Example Carbon" }));
     expect(putObject).toHaveBeenCalledOnce();
     const [key, body, contentType] = putObject.mock.calls[0];
     expect(key).toMatch(

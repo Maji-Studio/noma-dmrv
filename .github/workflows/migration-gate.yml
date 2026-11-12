@@ -153,17 +153,16 @@ jobs:
       - name: Apply full migration chain to an empty database
         run: pnpm db:migrate
 
-      # Exercises the real production bootstrap guards (existing-credential
-      # skip, mandatory registry secrets, no dev teammate).
-      - name: Exercise production bootstrap
+      # Exercise the supported CI bootstrap, including the default organization.
+      - name: Exercise development bootstrap
         env:
-          NODE_ENV: production
+          NODE_ENV: development
         run: pnpm db:ensure-admin
 
-      # Re-running must be a no-op, not an overwrite or a crash.
+      # Re-running must preserve user and organization identities.
       - name: Re-run bootstrap to prove it is idempotent
         env:
-          NODE_ENV: production
+          NODE_ENV: development
         run: pnpm db:ensure-admin
 
       - name: Verify schema

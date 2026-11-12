@@ -31,6 +31,7 @@ import type {
 export interface BuildLedgerModelArgs {
   legsByCategory: TransportLegsByCategory;
   rowOrder?: LedgerRowOrder;
+  organizationName: string;
   memberBatchCodes: string | null;
   facilityName: string | null;
   externalProjectId: string | null;
@@ -150,6 +151,7 @@ export function buildLedgerModel(args: BuildLedgerModelArgs): LedgerModel {
   );
   const totalLegs = categories.reduce((sum, c) => sum + c.legs.length, 0);
   return {
+    organizationName: args.organizationName,
     memberBatchCodes: args.memberBatchCodes,
     facilityName: args.facilityName,
     externalProjectId: args.externalProjectId,

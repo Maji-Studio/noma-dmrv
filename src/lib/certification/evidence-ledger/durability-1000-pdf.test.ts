@@ -6,6 +6,7 @@ import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/stora
 describe("renderThousandYearDurabilityLedgerPdf", () => {
   it("renders the submitted replicate values and product mass into a readable PDF", async () => {
     const bytes = await renderThousandYearDurabilityLedgerPdf({
+      organizationName: "Example Carbon",
       memberBatchCodes: "CB-26-001",
       facilityName: "Dark Earth Hub",
       externalProjectId: "prj_TEST",
@@ -80,6 +81,8 @@ describe("renderThousandYearDurabilityLedgerPdf", () => {
         .flatMap((item) => ("str" in item ? [item.str] : []))
         .join(" ")
         .replace(/\s+/g, " ");
+      expect(text.replace(/\s+/g, "")).toContain("dMRV·EXAMPLECARBON");
+      expect(text.replace(/\s+/g, "")).not.toContain("DARKEARTHCARBON");
       expect(text).toContain("Durability Evidence Ledger");
       expect(text).toContain("CB-26-001");
       expect(text).toContain("400 kg product mass");

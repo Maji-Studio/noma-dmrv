@@ -22,6 +22,7 @@ export interface BuildThousandYearDurabilityLedgerModelArgs {
   })[];
   attributionByRunId: Map<string, number>;
   rowOrder?: LedgerRowOrder;
+  organizationName: string;
   memberBatchCodes: string | null;
   facilityName: string | null;
   externalProjectId: string | null;
@@ -170,6 +171,7 @@ export function buildThousandYearDurabilityLedgerModel(
     .filter((batch) => batch !== null);
 
   return {
+    organizationName: args.organizationName,
     memberBatchCodes: args.memberBatchCodes,
     facilityName: args.facilityName,
     externalProjectId: args.externalProjectId,

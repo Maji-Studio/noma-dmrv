@@ -116,8 +116,9 @@ pnpm env:run --1p-env=staging -- pnpm -s feedstock:recalculate --dry-run
 
 `env:run` passes only names in `.env.tpl`, so for staging/prod it does not
 provide `ADMIN_EMAIL`, `ISOMETRIC_ACCESS_TOKEN` or `ISOMETRIC_CLIENT_SECRET`.
-Admin bootstrap and Isometric credential setup for staging/prod run through the
-`migrate.yml` workflow, which loads them from the matching item.
+Only `reset-seed-staging` loads admin and registry credentials for bootstrap.
+Plain deployments choose their first Platform Admin at `/setup`; organization
+Admins configure registry credentials in the app.
 
 Non-obvious semantics only:
 
@@ -258,8 +259,8 @@ Read directly from `process.env`, **not** validated by `env.ts`:
   `src/lib/cli/org-context.ts` it permits the CLI org-context seam (the seed
   calling real server actions without a session) to run under
   `NODE_ENV=production`. Both refuse without it; the shared literals live in
-  `src/config/bootstrap.ts`. Only the manually confirmed staging reset jobs set
-  it.
+  `src/config/bootstrap.ts`. Only the manually confirmed `reset-seed-staging` job sets
+  it. The admin CLI always refuses `NODE_ENV=production`, including with this override.
 - `DB_RESET_ALLOW_REMOTE`: consumed only by the database-reset CLI. Only the
   literal string `"true"` overrides the [local database target rule](./database.md#local-database-targets);
   the manually confirmed staging and production reset jobs load it from their
@@ -281,7 +282,7 @@ Read directly from `process.env`, **not** validated by `env.ts`:
 
 Both `ADMIN_PASSWORD` and `ISOMETRIC_DEMO_PROJECT_ID` **are** pulled locally via
 `.env.local.tpl`; they are absent from the deployment-facing `.env.tpl` only and
-must be set directly on the staging/production items.
+belong only in local/CI or seeded-staging configuration.
 
 ### Hermetic-CI exception on the production fail-closed gates
 
@@ -389,27 +390,34 @@ values are present, and `isometric-health.yml` uses its dedicated pair through
 Pushes to `main` run `migrate-production`, which loads `DATABASE_URL` and
 `DATABASE_CA_CERT` from the production 1Password item. The CA PEM is required
 for verified TLS to managed Postgres and must exist in that item before the
-production migration, bootstrap, or reset jobs run. Everything destructive is
+production migration or reset jobs run. Everything destructive is
 a manual `workflow_dispatch` with a typed confirmation phrase:
 
 | action | confirmation |
 | --- | --- |
 | `reset-seed-staging` | `RESET AND SEED STAGING` |
 | `reset-empty-staging` | `RESET STAGING (EMPTY)` |
-| `bootstrap-production` | `BOOTSTRAP PRODUCTION` |
 | `reset-production` | `RESET PRODUCTION` + `authorized` checkbox |
 
 `reset-production` wipes production and is the most dangerous operation in the
 repo — it requires the explicit `authorized` approval checkbox in addition to the
 phrase.
 
-`bootstrap-production` runs `db:ensure-admin` with `NODE_ENV=production`, creating
-the Platform Admin, the default organization and encrypted registry credentials,
-skipping the shared local/test teammate. It is idempotent and never clobbers live
-state (existing admin password untouched; credentials inserted only when none
-exist) and fails loudly rather than exiting 0 without a credential row. The
-Platform Admin must use the organization invitation flow to add the first real
-Admin.
+### First Platform Admin
+
+A plain database has no users or organizations. The first visitor opens `/setup`,
+chooses an email and password, and signs in as a verified Platform Admin at
+`/platform/organizations`. `createFirstPlatformAdmin` holds a transaction-scoped
+Postgres advisory lock and rechecks that no user exists before inserting the user
+and credential together. Once any user exists, further setup attempts are refused.
+Public signup stays disabled. This one-time pre-organization seam deliberately
+has no session or organization guard.
+
+`ADMIN_EMAIL` and `ADMIN_PASSWORD` bootstrap only local development, CI and seeded
+staging. `db:ensure-admin` refuses production and points to `/setup`.
+`reset-empty-staging` and `reset-production` run `db:reset:plain`, then verify the
+schema, leaving first-run setup to the next visitor. They load no admin or registry
+secrets. The production reset retains its confirmation phrase and approval checkbox.
 
 The manually confirmed `reset-seed-staging` job loads the Isometric trio from
 the staging item. The Mafinga seed stores the organization credentials and, when
@@ -417,8 +425,7 @@ the repository variable `ISOMETRIC_DEMO_FACILITY_ID` holds the Certify `fcl_`
 ID, maps its facility to the visible project through the same server actions
 the Settings UI uses. Without that variable the mapping is finished by hand in
 Certification Settings. The seed only reads registry catalogues and templates;
-it creates no registry business records. `reset-empty-staging` continues to
-omit registry credentials.
+it creates no registry business records. `reset-empty-staging` leaves no users, organizations or registry credentials.
 
 After a `reset-seed-staging` run, check by hand that the registry connection
 works, because the scheduled live checks use their own credentials and seed

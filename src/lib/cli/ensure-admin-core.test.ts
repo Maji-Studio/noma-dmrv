@@ -45,11 +45,12 @@ describe("bootstrap database locality", () => {
     })).toThrow("DATABASE_URL environment variable is not a valid URL");
   });
 
-  it.each([undefined, "not-a-url"])("keeps production mode independent of URL validity for %s", (databaseUrl) => {
-    expect(resolveBootstrapMode({
+  it.each([undefined, "not-a-url"])("refuses production before checking URL validity for %s", (databaseUrl) => {
+    expect(() => resolveBootstrapMode({
       NODE_ENV: "production",
       DATABASE_URL: databaseUrl,
-    })).toBe("production");
+      ALLOW_DEV_BOOTSTRAP: "1",
+    })).toThrow("Open /setup");
   });
 });
 
@@ -80,7 +81,7 @@ describe("bootstrap credential identity", () => {
 
   it("uses the generated admin user ID as the credential account ID", async () => {
     const { db, writes } = mockDatabase();
-    const userId = await ensureAdminUser(db, "admin@example.invalid", TEST_PASSWORD, "development");
+    const userId = await ensureAdminUser(db, "admin@example.invalid", TEST_PASSWORD);
     expect(writes.find((write) => write.table === users)?.data.id).toBe(userId);
     expect(writes.find((write) => write.table === accounts)?.data).toMatchObject({
       accountId: userId, userId, providerId: "credential",
@@ -89,7 +90,7 @@ describe("bootstrap credential identity", () => {
 
   it("uses an existing user's ID when creating their missing credential", async () => {
     const { db, writes } = mockDatabase([[{ id: EXISTING_USER_ID }], []]);
-    await ensureAdminUser(db, "admin@example.invalid", TEST_PASSWORD, "development");
+    await ensureAdminUser(db, "admin@example.invalid", TEST_PASSWORD);
     expect(writes.find((write) => write.table === accounts)?.data).toMatchObject({
       accountId: EXISTING_USER_ID, userId: EXISTING_USER_ID,
     });
@@ -97,7 +98,7 @@ describe("bootstrap credential identity", () => {
 
   it("updates the existing development credential password", async () => {
     const { db, writes } = mockDatabase([[{ id: EXISTING_USER_ID }], [{ id: "account-id" }]]);
-    await ensureAdminUser(db, "admin@example.invalid", TEST_PASSWORD, "development");
+    await ensureAdminUser(db, "admin@example.invalid", TEST_PASSWORD);
     expect(writes.find((write) => write.table === accounts)?.data).toEqual({
       password: TEST_HASH,
     });
@@ -105,7 +106,7 @@ describe("bootstrap credential identity", () => {
 
   it("uses the generated teammate user ID for credentials", async () => {
     const { db, writes } = mockDatabase();
-    await ensureOrgFoundation(db, EXISTING_USER_ID, TEST_HASH, "development");
+    await ensureOrgFoundation(db, EXISTING_USER_ID, TEST_HASH);
     const userId = writes.find((write) => write.table === users)?.data.id;
     expect(userId).toEqual(expect.any(String));
     expect(writes.find((write) => write.table === accounts)?.data).toMatchObject({
@@ -118,7 +119,7 @@ describe("bootstrap credential identity", () => {
     vi.mocked(hashPassword).mockClear();
 
     await expect(ensureAdminUser(
-      db, "admin@example.invalid", "x".repeat(AUTH_PASSWORD_MAX_LENGTH + 1), "development",
+      db, "admin@example.invalid", "x".repeat(AUTH_PASSWORD_MAX_LENGTH + 1),
     )).rejects.toThrow(
       `ADMIN_PASSWORD must be between ${AUTH_PASSWORD_MIN_LENGTH} and ${AUTH_PASSWORD_MAX_LENGTH} characters`,
     );
