@@ -67,7 +67,7 @@ describe("createFirstAdminAction", () => {
   it("sends a committed admin to sign-in if session creation fails", async () => {
     mocks.signIn.mockRejectedValue(new SafeError("Sign-in unavailable"));
     expect(await createFirstAdminAction({ email: "admin@example.test", password: PASSWORD }))
-      .toEqual({ success: true, data: { redirectTo: "/login" }, warning: "Your Platform Admin account is ready. Sign in to continue." });
+      .toEqual({ success: true, data: { redirectTo: "/login" }, warning: "We couldn't sign you in automatically. Sign in with admin@example.test." });
     expect(mocks.create).toHaveBeenCalledTimes(1);
   });
 });

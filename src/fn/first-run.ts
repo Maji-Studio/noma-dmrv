@@ -5,7 +5,7 @@ import { createFirstPlatformAdmin } from "@/data-access/first-run";
 import { logActionError, toActionFailure } from "@/fn/action-errors";
 import { auth } from "@/lib/auth/better-auth";
 import { PLATFORM_HOME_HREF } from "@/lib/auth/home-path";
-import { firstAdminSchema } from "@/schemas/first-run";
+import { FIRST_ADMIN_SETUP_FALLBACK, firstAdminSchema } from "@/schemas/first-run";
 import type { ActionResult } from "@/types/actions";
 
 /** No session or active organization exists until this one-time bootstrap succeeds. */
@@ -30,13 +30,13 @@ export async function createFirstAdminAction(
       return {
         success: true,
         data: { redirectTo: "/login" },
-        warning: "Your Platform Admin account is ready. Sign in to continue.",
+        warning: `We couldn't sign you in automatically. Sign in with ${admin.email}.`,
       };
     }
     return { success: true, data: { redirectTo: PLATFORM_HOME_HREF } };
   } catch (error) {
     return toActionFailure(error, {
-      fallbackMessage: "Your Platform Admin account could not be created. Try again.",
+      fallbackMessage: FIRST_ADMIN_SETUP_FALLBACK,
       log: { message: "first admin setup failed" },
     });
   }

@@ -37,9 +37,9 @@ interface AdminCredentialResult {
 }
 
 /** Refuse production and require an explicit override for remote development. */
-export function resolveBootstrapMode(
+export function assertDevelopmentBootstrapAllowed(
   environment: BootstrapEnvironment = process.env,
-): 'development' {
+): void {
   if (environment.NODE_ENV === PRODUCTION_NODE_ENV) {
     throw new Error('Admin CLI bootstrap is for local development, CI, and seeded staging only. Open /setup to choose the first Platform Admin in production.');
   }
@@ -56,9 +56,9 @@ export function resolveBootstrapMode(
     throw new Error('DATABASE_URL environment variable is not a valid URL');
   }
 
-  if (isLocal) return 'development';
+  if (isLocal) return;
   if (environment.ALLOW_DEV_BOOTSTRAP === DEV_BOOTSTRAP_OVERRIDE) {
-    return 'development';
+    return;
   }
 
   throw new Error(
@@ -75,17 +75,7 @@ export async function ensureOrgFoundation(
   adminUserId: string,
   passwordHash: string,
 ): Promise<void> {
-  resolveBootstrapMode();
-  // A savepoint keeps a last-Admin refusal from aborting a caller's transaction.
-  async function removePlatformAdminMembership() {
-    await db.transaction(async (tx) => {
-      await tx.delete(schema.members).where(and(
-        eq(schema.members.organizationId, DEC_ORG_ID),
-        eq(schema.members.userId, adminUserId),
-      ));
-    });
-  }
-
+  assertDevelopmentBootstrapAllowed();
   await db
     .insert(schema.organizations)
     .values({ id: DEC_ORG_ID, name: DEC_ORG_NAME, slug: DEC_ORG_SLUG })
@@ -143,7 +133,10 @@ export async function ensureOrgFoundation(
       .where(eq(schema.members.id, teammateMembership.id));
   }
 
-  await removePlatformAdminMembership();
+  await db.delete(schema.members).where(and(
+    eq(schema.members.organizationId, DEC_ORG_ID),
+    eq(schema.members.userId, adminUserId),
+  ));
 
   console.log(
     `Ensured organization organizationId=${DEC_ORG_ID} with teammate admin`,
@@ -153,7 +146,7 @@ export async function ensureOrgFoundation(
 export async function ensureIsometricCredentials(
   db: EnsureAdminDb,
 ): Promise<void> {
-  resolveBootstrapMode();
+  assertDevelopmentBootstrapAllowed();
   const requiredValues = {
     ISOMETRIC_ACCESS_TOKEN: process.env.ISOMETRIC_ACCESS_TOKEN,
     ISOMETRIC_CLIENT_SECRET: process.env.ISOMETRIC_CLIENT_SECRET,
@@ -279,7 +272,7 @@ export async function ensureAdminUser(
   adminEmail: string,
   adminPassword: string,
 ): Promise<string> {
-  resolveBootstrapMode();
+  assertDevelopmentBootstrapAllowed();
   const result = await ensureAdminCredential(
     db,
     adminEmail,
@@ -298,7 +291,7 @@ function requireEnvironmentVariable(name: string): string {
 
 /** Validate the CLI environment, connect, and run the complete bootstrap. */
 export async function runEnsureAdmin(): Promise<void> {
-  resolveBootstrapMode();
+  assertDevelopmentBootstrapAllowed();
   const adminEmail = requireEnvironmentVariable('ADMIN_EMAIL');
   const adminPassword = requireEnvironmentVariable('ADMIN_PASSWORD');
   validatePassword('ADMIN_PASSWORD', adminPassword);

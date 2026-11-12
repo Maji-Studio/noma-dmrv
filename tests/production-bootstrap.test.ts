@@ -7,7 +7,7 @@ import {
   ensureAdminUser,
   ensureIsometricCredentials,
   ensureOrgFoundation,
-  resolveBootstrapMode,
+  assertDevelopmentBootstrapAllowed,
   type EnsureAdminDb,
 } from "@/lib/cli/ensure-admin-core";
 
@@ -57,14 +57,14 @@ describe("bootstrap environment classification", () => {
     IPV4_LOCAL_DATABASE_URL,
     IPV6_LOCAL_DATABASE_URL,
   ])("allows development bootstrap for local database target %s", (databaseUrl) => {
-    expect(resolveBootstrapMode({
+    expect(assertDevelopmentBootstrapAllowed({
       NODE_ENV: "test",
       DATABASE_URL: databaseUrl,
-    })).toBe("development");
+    })).toBeUndefined();
   });
 
   it("refuses CLI bootstrap when NODE_ENV is production", () => {
-    expect(() => resolveBootstrapMode({
+    expect(() => assertDevelopmentBootstrapAllowed({
       NODE_ENV: "production",
       DATABASE_URL: REMOTE_DATABASE_URL,
       ALLOW_DEV_BOOTSTRAP: "1",
@@ -72,18 +72,18 @@ describe("bootstrap environment classification", () => {
   });
 
   it("refuses development semantics for a non-local target by default", () => {
-    expect(() => resolveBootstrapMode({
+    expect(() => assertDevelopmentBootstrapAllowed({
       NODE_ENV: "development",
       DATABASE_URL: REMOTE_DATABASE_URL,
     })).toThrow("Refusing development bootstrap against a non-local database");
   });
 
   it("allows an explicit non-local development override", () => {
-    expect(resolveBootstrapMode({
+    expect(assertDevelopmentBootstrapAllowed({
       NODE_ENV: "development",
       DATABASE_URL: REMOTE_DATABASE_URL,
       ALLOW_DEV_BOOTSTRAP: "1",
-    })).toBe("development");
+    })).toBeUndefined();
   });
 
   it("refuses before creating an admin credential on a non-local target", async () => {

@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { AUTH_PASSWORD_MAX_LENGTH, AUTH_PASSWORD_MIN_LENGTH } from "@/config/auth";
 
+export const FIRST_ADMIN_SETUP_FALLBACK = "Your Platform Admin account could not be created. Try again.";
+
 export const firstAdminSchema = z.object({
   email: z.string().trim().toLowerCase().pipe(z.email("Enter a valid email address.")),
   password: z.string()

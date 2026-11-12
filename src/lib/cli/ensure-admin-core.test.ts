@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { accounts, users } from "@/db/schema";
 import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH } from "@/config/auth";
 import { hashPassword } from "better-auth/crypto";
-import { ensureAdminUser, ensureOrgFoundation, resolveBootstrapMode, type EnsureAdminDb } from "./ensure-admin-core";
+import { ensureAdminUser, ensureOrgFoundation, assertDevelopmentBootstrapAllowed, type EnsureAdminDb } from "./ensure-admin-core";
 
 vi.mock("better-auth/crypto", () => ({ hashPassword: vi.fn(async () => "test-hash") }));
 vi.mock("@/db", () => ({ db: {} }));
@@ -13,40 +13,40 @@ const TEST_HASH = "test-hash";
 
 describe("bootstrap database locality", () => {
   it("refuses a remote host override on a localhost URL", () => {
-    expect(() => resolveBootstrapMode({
+    expect(() => assertDevelopmentBootstrapAllowed({
       DATABASE_URL: "postgresql://localhost/app?host=db.example.com",
     })).toThrow("Refusing development bootstrap against a non-local database");
   });
 
   it("allows an explicit development override for a remote host override", () => {
-    expect(resolveBootstrapMode({
+    expect(assertDevelopmentBootstrapAllowed({
       DATABASE_URL: "postgresql://localhost/app?host=db.example.com",
       ALLOW_DEV_BOOTSTRAP: "1",
-    })).toBe("development");
+    })).toBeUndefined();
   });
 
   it("allows IPv6 loopback development bootstrap", () => {
-    expect(resolveBootstrapMode({
+    expect(assertDevelopmentBootstrapAllowed({
       DATABASE_URL: "postgresql://postgres@[::1]/app",
-    })).toBe("development");
+    })).toBeUndefined();
   });
 
   it.each([undefined, "", "   "])("preserves the missing or blank URL error for %s", (databaseUrl) => {
-    expect(() => resolveBootstrapMode({
+    expect(() => assertDevelopmentBootstrapAllowed({
       DATABASE_URL: databaseUrl,
       ALLOW_DEV_BOOTSTRAP: "1",
     })).toThrow("DATABASE_URL environment variable is not set or is blank");
   });
 
   it("preserves the invalid URL error even with a development override", () => {
-    expect(() => resolveBootstrapMode({
+    expect(() => assertDevelopmentBootstrapAllowed({
       DATABASE_URL: "not-a-url",
       ALLOW_DEV_BOOTSTRAP: "1",
     })).toThrow("DATABASE_URL environment variable is not a valid URL");
   });
 
   it.each([undefined, "not-a-url"])("refuses production before checking URL validity for %s", (databaseUrl) => {
-    expect(() => resolveBootstrapMode({
+    expect(() => assertDevelopmentBootstrapAllowed({
       NODE_ENV: "production",
       DATABASE_URL: databaseUrl,
       ALLOW_DEV_BOOTSTRAP: "1",

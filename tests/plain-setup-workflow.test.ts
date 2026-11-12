@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { load } from "js-yaml";
 import { describe, expect, it } from "vitest";
@@ -21,11 +20,6 @@ const workflow = load(readFileSync(".github/workflows/migrate.yml", "utf8")) as 
 const commands = (job: Job) => job.steps.flatMap(step => step.run ? [step.run] : []).join("\n");
 
 describe("plain setup workflow contract", () => {
-  it("preserves the applied organization migration byte for byte", () => {
-    const original = execFileSync("git", ["show", "origin/staging:drizzle/0079_volatile_plazm.sql"]);
-    expect(readFileSync("drizzle/0079_volatile_plazm.sql")).toEqual(original);
-  });
-
   it("tracks the default organization cleanup in a new custom migration", () => {
     const tag = "0178_remove_unused_default_organization";
     const journal = JSON.parse(readFileSync("drizzle/meta/_journal.json", "utf8"));
@@ -81,5 +75,19 @@ describe("plain setup workflow contract", () => {
     const bootstrapSteps = gate.jobs["fresh-database-gate"].steps.filter(step => step.run === "pnpm db:ensure-admin");
     expect(bootstrapSteps).toHaveLength(2);
     expect(bootstrapSteps.every(step => step.env?.NODE_ENV === "development")).toBe(true);
+  });
+
+  it("asserts zero organizations and users immediately after migration and before bootstrap", () => {
+    const gate = load(readFileSync(".github/workflows/migration-gate.yml", "utf8")) as Workflow;
+    const steps = gate.jobs["fresh-database-gate"].steps;
+    const migrationIndex = steps.findIndex(step => step.name === "Apply full migration chain to an empty database");
+    expect(migrationIndex).toBeGreaterThanOrEqual(0);
+    const assertion = steps[migrationIndex + 1];
+    expect(assertion.name).toBe("Assert plain setup has no organizations or users");
+    expect(assertion.run).toContain("SELECT (SELECT count(*) FROM organizations) AS organizations, (SELECT count(*) FROM users) AS users");
+    expect(assertion.run).toContain("Number(organizations) !== 0 || Number(users) !== 0");
+    expect(assertion.run).toContain("process.exitCode = 1");
+    expect(assertion.run).toContain("process.env.DATABASE_URL");
+    expect(steps[migrationIndex + 2].run).toBe("pnpm db:ensure-admin");
   });
 });

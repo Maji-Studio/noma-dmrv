@@ -54,11 +54,11 @@ describe("SetupForm", () => {
     mocks.action.mockResolvedValue({
       success: true,
       data: { redirectTo: "/login" },
-      warning: "Your Platform Admin account is ready. Sign in to continue.",
+      warning: "We couldn't sign you in automatically. Sign in with admin@example.com.",
     });
     render(<SetupForm />);
     fill();
-    await waitFor(() => expect(document.body.textContent).toContain("Your Platform Admin account is ready."));
+    await waitFor(() => expect(document.body.textContent).toContain("We couldn't sign you in automatically. Sign in with admin@example.com."));
     expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe("/login");
     expect(screen.getByText("Account ready")).toBeTruthy();
     expect(screen.queryByText("Set up noma dMRV")).toBeNull();

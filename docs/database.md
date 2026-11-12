@@ -381,7 +381,8 @@ These scripts share the rule, with explicit overrides for remote targets:
 | `pnpm db:studio` | Open Drizzle Studio. | Safe |
 | `pnpm db:verify-schema` | Diff the live database against the Drizzle schema. | Safe |
 | `pnpm db:push` | Push schema directly. Schema experimentation only — never after a migration has been generated. | Local only |
-| `pnpm db:reset` | `reset-db.ts` → `db:migrate` → `db:ensure-admin`. Applies the **full migration chain** (not `push`), so it is the local rehearsal of the CI/production path — a broken migration surfaces here. | Destructive |
+| `pnpm db:reset:plain` | `reset-db.ts` → `db:migrate`. Plain local setup and empty-staging/production resets. | Destructive |
+| `pnpm db:reset` | `reset-db.ts` → `db:migrate` → `db:ensure-admin`. Local, CI and seeded-staging path with admin bootstrap. | Destructive |
 
 - **Fresh clone: run `pnpm dev:docker:init`.** Plain `pnpm dev` starts Docker,
   waits for Postgres, confirms `DATABASE_URL` is local (`pnpm db:assert-local`),
