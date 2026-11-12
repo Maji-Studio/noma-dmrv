@@ -1,5 +1,7 @@
 # noma-dmrv
 
+Use Isometric's term for a concept before inventing one; add our own word only where the registry has none.
+
 A biochar carbon-credit MRV (Monitoring, Reporting, Verification) system.
 It traces biomass through pyrolysis to biochar application, aggregates the
 result, and submits it to the Isometric carbon registry for verification.

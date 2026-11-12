@@ -1,5 +1,6 @@
 "use client";
 
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import {
@@ -73,7 +74,7 @@ function ListPagination({
             <select
               value={pageSize}
               onChange={(event) => onPageSizeChange(Number(event.target.value))}
-              className="h-32 px-8 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer"
+              className={cn(PHONE_TOUCH_TARGET, "h-32 px-8 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer")}
               aria-label="Rows per page"
             >
               {rowsPerPageOptions.map((size) => (

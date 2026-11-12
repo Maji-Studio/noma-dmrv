@@ -8,6 +8,7 @@
 import { MagnifyingGlassIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, DataTable } from "@/components/ui";
 import { TEMPORAL_INPUT_CLASSES } from "@/components/ui/input";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { formatCount } from "@/lib/copy-utils";
 import {
   BATCH_SORTS,
@@ -56,7 +57,7 @@ export function EmissionsOverviewToolbar({ query, setQuery, hasFilters, onClear,
             onChange={(event) => void setQuery({ q: event.target.value || null })}
             placeholder="Search by batch code"
             aria-label="Search credit batches by code"
-            className={`h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] pl-36 pr-12 body-small placeholder:text-[var(--color-text-tertiary)] ${FOCUS_RING}`}
+            className={`${PHONE_TOUCH_TARGET} h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] pl-36 pr-12 body-small placeholder:text-[var(--color-text-tertiary)] ${FOCUS_RING}`}
           />
         </div>
         <div className="grid grid-cols-2 gap-8 sm:flex sm:flex-wrap sm:items-center">

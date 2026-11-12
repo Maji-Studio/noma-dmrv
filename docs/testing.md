@@ -60,6 +60,18 @@ enforces the list and rejects stale entries.
   facility) and the output are documented at the top of
   `tests/visual/form-capture.spec.ts`.
 
+## Static checks
+
+`pnpm verify:static` includes `pnpm check:ux-copy` (banned dashes and retired
+GLOSSARY phrases) and `pnpm check:touch-targets`, which flags only unprefixed
+(phone-level) JSX control height/size classes below 44px without a shared hit-area
+recipe or reasoned exception, ignoring min-width breakpoint (including `min-`)
+and state variants; `max-*` variants count as phone-level.
+Scanner regression tests live in `tests/check-ux-copy.test.ts` and
+`tests/check-touch-targets.test.ts`. The height check reads literal className
+fragments, templates and cn/clsx arguments; it does not compute rendered CSS
+or follow arbitrary variables and component implementations.
+
 ## Static check caches
 
 Static checks cache locally: `pnpm lint` uses content-based `.cache/eslint`,
@@ -364,7 +376,7 @@ Parallel sessions each work in their own worktree, one writer per worktree.
 
 ```bash
 scripts/worktree.sh new <name> <type/branch>   # .claude/worktrees/<name>, cut from origin/staging
-scripts/worktree.sh status                      # owners, ports, servers, PR state, unmanaged leftovers
+scripts/worktree.sh status                      # owners, ports, servers, PR state, issue, unmanaged leftovers
 scripts/worktree.sh migrate <name>              # migrate both recorded dev and test databases
 scripts/worktree.sh teardown <name> [--force] [--dry-run] # only what `new` recorded for <name>
 ```

@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { fingerprint } from "@/lib/crypto/fingerprint";
 import { z } from "zod";
 import { API_CURSOR_MAX_LENGTH, API_CURSOR_VERSION } from "@/config/api-rest";
 import { ApiHttpError } from "./http-error";
@@ -12,15 +12,15 @@ const cursorSchema = z.strictObject({
 export type CursorPosition = z.infer<typeof positionSchema>;
 export type CursorBinding = { organizationId: string; resource: string; filters: Record<string, string | boolean | undefined> };
 
-function fingerprint(binding: CursorBinding): string {
-  return createHash("sha256").update(JSON.stringify({
+function bindingFingerprint(binding: CursorBinding): string {
+  return fingerprint(JSON.stringify({
     organizationId: binding.organizationId, resource: binding.resource,
     filters: Object.entries(binding.filters).filter(([, value]) => value !== undefined).sort(([a], [b]) => a.localeCompare(b)),
-  })).digest("hex");
+  }));
 }
 
 export function encodeCursor(position: CursorPosition, binding: CursorBinding): string {
-  return Buffer.from(JSON.stringify({ v: API_CURSOR_VERSION, binding: fingerprint(binding), position })).toString("base64url");
+  return Buffer.from(JSON.stringify({ v: API_CURSOR_VERSION, binding: bindingFingerprint(binding), position })).toString("base64url");
 }
 
 export function decodeCursor(value: string, binding: CursorBinding): CursorPosition {
@@ -29,7 +29,7 @@ export function decodeCursor(value: string, binding: CursorBinding): CursorPosit
     const decoded = Buffer.from(value, "base64url");
     if (decoded.toString("base64url") !== value) throw new Error();
     const cursor = cursorSchema.parse(JSON.parse(decoded.toString("utf8")));
-    if (cursor.binding !== fingerprint(binding)) throw new Error();
+    if (cursor.binding !== bindingFingerprint(binding)) throw new Error();
     return cursor.position;
   } catch {
     throw new ApiHttpError(400, "invalid_cursor", "Use a cursor from this organization and filter set.");
