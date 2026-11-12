@@ -19,7 +19,7 @@ interface TodoBatch {
 type TodoCounts = Pick<CreditBatchHealthSummary, "issueCount" | "checkCount">;
 
 /** The row a failed read adds, so an unchecked panel never reads as all clear. */
-export const BATCH_TODOS_FAILED_TITLE = "Couldn't check credit batch to-dos.";
+export const BATCH_TODOS_FAILED_TITLE = "Couldn't check credit batch to-dos";
 
 export function batchTodoRows(
   batches: readonly TodoBatch[],
