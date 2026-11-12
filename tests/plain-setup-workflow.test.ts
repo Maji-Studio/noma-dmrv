@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { load } from "js-yaml";
 import { describe, expect, it } from "vitest";
@@ -20,10 +21,20 @@ const workflow = load(readFileSync(".github/workflows/migrate.yml", "utf8")) as 
 const commands = (job: Job) => job.steps.flatMap(step => step.run ? [step.run] : []).join("\n");
 
 describe("plain setup workflow contract", () => {
-  it("leaves migrations free of the default organization insert", () => {
-    const migration = readFileSync("drizzle/0079_volatile_plazm.sql", "utf8");
-    expect(migration).not.toMatch(/INSERT INTO.*organizations/i);
-    expect(migration).toContain("UPDATE");
+  it("preserves the applied organization migration byte for byte", () => {
+    const original = execFileSync("git", ["show", "origin/staging:drizzle/0079_volatile_plazm.sql"]);
+    expect(readFileSync("drizzle/0079_volatile_plazm.sql")).toEqual(original);
+  });
+
+  it("tracks the default organization cleanup in a new custom migration", () => {
+    const tag = "0178_remove_unused_default_organization";
+    const journal = JSON.parse(readFileSync("drizzle/meta/_journal.json", "utf8"));
+    expect(journal.entries).toContainEqual(expect.objectContaining({ tag }));
+    expect(JSON.parse(readFileSync("drizzle/meta/0178_snapshot.json", "utf8"))).toHaveProperty("tables");
+    const migration = readFileSync(`drizzle/${tag}.sql`, "utf8");
+    expect(migration).toContain("DO $$");
+    expect(migration).toContain("'public.organizations'::regclass");
+    expect(migration).toContain("fk.contype = 'f'");
   });
 
   it("keeps a plain reset separate from dev bootstrap", () => {

@@ -21,7 +21,7 @@ export async function createFirstPlatformAdmin({ email, password }: FirstAdminIn
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${FIRST_RUN_LOCK_KEY}, ${FIRST_RUN_LOCK_HASH_SEED}))`);
     const [existing] = await tx.select({ id: users.id }).from(users).limit(1);
     if (existing) {
-      throw new SafeError("This dMRV is already set up. Sign in instead.");
+      throw new SafeError("noma dMRV is already set up. Sign in instead.");
     }
 
     const passwordHash = await hashPassword(password);

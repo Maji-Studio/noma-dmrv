@@ -397,9 +397,10 @@ These scripts share the rule, with explicit overrides for remote targets:
 ### Plain first run
 
 `pnpm db:reset:plain` drops the database schemas and replays tracked migrations
-without admin bootstrap or demo data. A fresh migration chain creates no default
-organization. The first visitor chooses the Platform Admin at `/setup`, then
-creates organizations from `/platform/organizations`.
+without admin bootstrap or demo data. The cleanup migration removes the unused
+default organization from a fresh chain and leaves it where it holds data. The
+first visitor chooses the Platform Admin at `/setup`, then creates organizations
+from `/platform/organizations`.
 
 `pnpm db:reset` retains env-based admin bootstrap and the default development
 organization for local development, CI and seeded staging. `ADMIN_EMAIL` and

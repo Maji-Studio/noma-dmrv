@@ -68,7 +68,7 @@ describe("first-run bootstrap (real database)", () => {
 
   it.each(["user", "admin"])("refuses once any %s exists, without creating a credential", async (role) => {
     await db.insert(users).values({ id: "existing", email: "existing@example.test", role });
-    await expect(createFirstPlatformAdmin(INPUT)).rejects.toThrow("This dMRV is already set up. Sign in instead.");
+    await expect(createFirstPlatformAdmin(INPUT)).rejects.toThrow("noma dMRV is already set up. Sign in instead.");
     expect(await db.select({ id: users.id, role: users.role }).from(users)).toEqual([{ id: "existing", role }]);
     expect(await db.select().from(accounts)).toEqual([]);
   });
@@ -81,7 +81,7 @@ describe("first-run bootstrap (real database)", () => {
     expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
     const rejected = results.find(result => result.status === "rejected");
     expect(rejected?.reason).toBeInstanceOf(SafeError);
-    expect(rejected?.reason.message).toBe("This dMRV is already set up. Sign in instead.");
+    expect(rejected?.reason.message).toBe("noma dMRV is already set up. Sign in instead.");
     expect(await db.select().from(users)).toHaveLength(1);
     expect(await db.select().from(accounts)).toHaveLength(1);
   });

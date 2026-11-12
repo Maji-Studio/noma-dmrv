@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { createFirstPlatformAdmin } from "@/data-access/first-run";
 import { logActionError, toActionFailure } from "@/fn/action-errors";
 import { auth } from "@/lib/auth/better-auth";
+import { PLATFORM_HOME_HREF } from "@/lib/auth/home-path";
 import { firstAdminSchema } from "@/schemas/first-run";
 import type { ActionResult } from "@/types/actions";
 
@@ -29,13 +30,13 @@ export async function createFirstAdminAction(
       return {
         success: true,
         data: { redirectTo: "/login" },
-        warning: "Your admin account is ready. Sign in to continue.",
+        warning: "Your Platform Admin account is ready. Sign in to continue.",
       };
     }
-    return { success: true, data: { redirectTo: "/platform/organizations" } };
+    return { success: true, data: { redirectTo: PLATFORM_HOME_HREF } };
   } catch (error) {
     return toActionFailure(error, {
-      fallbackMessage: "Your admin account could not be created. Try again.",
+      fallbackMessage: "Your Platform Admin account could not be created. Try again.",
       log: { message: "first admin setup failed" },
     });
   }

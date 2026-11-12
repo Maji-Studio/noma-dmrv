@@ -43,7 +43,7 @@ describe("SetupForm", () => {
   });
 
   it("shows a refusal from the action", async () => {
-    mocks.action.mockResolvedValue({ success: false, error: "This dMRV is already set up. Sign in instead." });
+    mocks.action.mockResolvedValue({ success: false, error: "noma dMRV is already set up. Sign in instead." });
     render(<SetupForm />);
     fill();
     await waitFor(() => expect(document.body.textContent).toContain("already set up"));
@@ -54,11 +54,11 @@ describe("SetupForm", () => {
     mocks.action.mockResolvedValue({
       success: true,
       data: { redirectTo: "/login" },
-      warning: "Your admin account is ready. Sign in to continue.",
+      warning: "Your Platform Admin account is ready. Sign in to continue.",
     });
     render(<SetupForm />);
     fill();
-    await waitFor(() => expect(document.body.textContent).toContain("Your admin account is ready."));
+    await waitFor(() => expect(document.body.textContent).toContain("Your Platform Admin account is ready."));
     expect(screen.getByRole("link", { name: "Go to sign in" }).getAttribute("href")).toBe("/login");
     expect(mocks.push).not.toHaveBeenCalled();
   });

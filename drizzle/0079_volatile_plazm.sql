@@ -1,3 +1,4 @@
+INSERT INTO organizations (id, name, slug) VALUES ('org_dark_earth_carbon', 'Dark Earth Carbon', 'dark-earth-carbon') ON CONFLICT (id) DO NOTHING;--> statement-breakpoint
 ALTER TABLE "applications" ADD COLUMN "organization_id" text;--> statement-breakpoint
 UPDATE "applications" SET "organization_id" = 'org_dark_earth_carbon' WHERE "organization_id" IS NULL;--> statement-breakpoint
 ALTER TABLE "applications" ALTER COLUMN "organization_id" SET NOT NULL;--> statement-breakpoint

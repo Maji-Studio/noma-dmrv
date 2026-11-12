@@ -51,16 +51,23 @@ describe("createFirstAdminAction", () => {
   });
 
   it("surfaces the closed-setup refusal without signing in", async () => {
-    mocks.create.mockRejectedValue(new SafeError("This dMRV is already set up. Sign in instead."));
+    mocks.create.mockRejectedValue(new SafeError("noma dMRV is already set up. Sign in instead."));
     expect(await createFirstAdminAction({ email: "admin@example.test", password: PASSWORD }))
-      .toEqual({ success: false, error: "This dMRV is already set up. Sign in instead." });
+      .toEqual({ success: false, error: "noma dMRV is already set up. Sign in instead." });
+    expect(mocks.signIn).not.toHaveBeenCalled();
+  });
+
+  it("uses the Platform Admin fallback for an unexpected creation failure", async () => {
+    mocks.create.mockRejectedValue(new Error("Creation unavailable"));
+    expect(await createFirstAdminAction({ email: "admin@example.test", password: PASSWORD }))
+      .toEqual({ success: false, error: "Your Platform Admin account could not be created. Try again." });
     expect(mocks.signIn).not.toHaveBeenCalled();
   });
 
   it("sends a committed admin to sign-in if session creation fails", async () => {
     mocks.signIn.mockRejectedValue(new SafeError("Sign-in unavailable"));
     expect(await createFirstAdminAction({ email: "admin@example.test", password: PASSWORD }))
-      .toEqual({ success: true, data: { redirectTo: "/login" }, warning: "Your admin account is ready. Sign in to continue." });
+      .toEqual({ success: true, data: { redirectTo: "/login" }, warning: "Your Platform Admin account is ready. Sign in to continue." });
     expect(mocks.create).toHaveBeenCalledTimes(1);
   });
 });
