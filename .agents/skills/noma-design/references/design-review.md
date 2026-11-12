@@ -16,7 +16,7 @@ For every item, check the changed code and the 1440 and 390 screenshots.
 - Dialog actions sit bottom left, primary first: `docs/design-system.md` § Modal (also `.greptile/config.json` rule `ui-action-order`).
 - A surface with nothing in it uses `EmptyState`, not bare text: `docs/design-system.md` § Other primitives (and § Missing values for what `EmptyState` is not for); copy in `docs/ux-writing.md` § Empty states.
 - A text action is `TextAction`, and a button stays busy until its result shows: `docs/design-system.md` § Button.
-- A list cell is quiet: a name before a code, no decorative icon, no grey line that only repeats a code or category: `docs/design-system.md` § List-page idiom.
+- A list cell is quiet: a name before a code, no decorative icon, no grey line that only repeats a code or category; a Sent record shows the lock icon right before its code, not a lock column: `docs/design-system.md` § List-page idiom.
 - A sheet's view footer has its actions first and Close last: `docs/design-system.md` § Canonical Page Shell. A form's actions stay pinned to the bottom of the sheet: `docs/forms.md` § FormActions.
 - Wet mass comes first, with moisture and dry mass derived after it: `docs/design-system.md` § Wet mass, moisture, dry mass; `docs/forms.md` § Stock blocks lead with wet mass.
 
