@@ -1115,7 +1115,10 @@ Fifteen list components share one shape. Copy it rather than re-deriving:
   the code as the fallback), with no decorative icon in a value cell and no
   grey second line that only repeats a code or a category. A second line is
   for a second fact: the dry mass of a `MassPair`, the location under a
-  customer, the reporting window under a Removal code.
+  customer, the reporting window under a Removal code. A Sent record shows
+  the lock icon right before its code (`recordLockTitleMark` on
+  `meta.recordLinkBefore`), with no lock column and no slot kept for unsent
+  rows; Open and In use show nothing in a list.
 - Call `useOpenCreateIntent(openCreate)` on any list with a create sheet — it
   powers `?create=true` deep links from the sidebar's "New X" actions.
 
