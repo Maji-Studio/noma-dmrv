@@ -192,6 +192,31 @@ function AddFilePanel({ entry, scope, actions }: { entry: EmissionEntry; scope: 
   );
 }
 
+/** The warning a slot shows when proof is required and no file is there. */
+export function FileMissingLabel() {
+  return (
+    <span className="inline-flex min-h-24 items-center gap-4 text-[var(--st-wait)]">
+      <WarningIcon size={ICON} weight="bold" aria-hidden="true" />
+      File missing
+    </span>
+  );
+}
+
+/** One file name that opens the file. */
+export function FileLink({ file }: { file: { fileName: string; href: string } }) {
+  return (
+    <a
+      href={file.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex min-h-24 max-w-full min-w-0 items-center gap-4 underline-offset-4 hover:text-[var(--color-text-primary)] hover:underline"
+    >
+      <FileIcon size={ICON} aria-hidden="true" className="shrink-0" />
+      <span className="truncate">{file.fileName}</span>
+    </a>
+  );
+}
+
 /**
  * An entry's files (or File missing with Add file) and its note as one
  * caption line that wraps, then the upload panel. Until the file names load
@@ -219,23 +244,9 @@ export function EntryEvidence({ entry, filePolicy, scope, actions, className, re
           </span>
         )}
         {missing ? (
-          <span className="inline-flex min-h-24 items-center gap-4 text-[var(--st-wait)]">
-            <WarningIcon size={ICON} weight="bold" aria-hidden="true" />
-            File missing
-          </span>
+          <FileMissingLabel />
         ) : noFiles ? null : files ? (
-          files.map((file) => (
-            <a
-              key={file.id}
-              href={file.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-h-24 max-w-full min-w-0 items-center gap-4 underline-offset-4 hover:text-[var(--color-text-primary)] hover:underline"
-            >
-              <FileIcon size={ICON} aria-hidden="true" className="shrink-0" />
-              <span className="truncate">{file.fileName}</span>
-            </a>
-          ))
+          files.map((file) => <FileLink key={file.id} file={file} />)
         ) : (
           <span className="inline-flex min-h-24 items-center gap-4 text-[var(--color-text-tertiary)]">
             <FileIcon size={ICON} aria-hidden="true" className="shrink-0" />

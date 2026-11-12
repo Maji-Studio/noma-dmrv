@@ -77,7 +77,10 @@ export async function loadBatchesEmissionLines(
     if (!batch.removalTemplateId) return [batch.id, { status: "blocked", blocker: "unpinnedTemplate", storedEntries: stored }];
     if (!observation) return [batch.id, { status: "blocked", blocker: "templateNotFullyRead", storedEntries: stored }];
     const entries = mergeEntryCarryFacts(deriveEmissionEntryFacts(stored, observation, byId), carryEntries);
-    const lines = buildBatchEmissionLines(observation, entries, byId, { ...automatic[batch.id], recordsFileLocked: batchComponentFileLocked(batch, fileReservations, contenders) },
+    const recordsFileLocked = batchComponentFileLocked(batch, fileReservations, contenders);
+    // A claimed batch that is not locked is open through its Removal's correction window.
+    const recordsFileReplaceable = !!batch.productionEmissionsClaimedByRemovalId && !recordsFileLocked;
+    const lines = buildBatchEmissionLines(observation, entries, byId, { ...automatic[batch.id], recordsFileLocked, recordsFileReplaceable },
       commentsByBatch.get(batch.id), groupEmissionLineFiles(lineFiles.filter(row => row.anchor.creditBatchId === batch.id)));
     return [batch.id, { status: "ready", lines, storedEntries: stored }];
   }));
@@ -88,7 +91,7 @@ export function buildBatchEmissionLines(
   observation: EntryObservation,
   entries: readonly (ReturnType<typeof deriveEmissionEntryFacts>[number] & LateEntryFacts)[],
   previousObservations: ReadonlyMap<string, EntryObservation | null>,
-  automaticFacts: Pick<BatchEmissionLineFacts, "automaticFigures" | "automaticRecordCounts" | "feedstockTransportCountedOn" | "recordsFileLocked">,
+  automaticFacts: Pick<BatchEmissionLineFacts, "automaticFigures" | "automaticRecordCounts" | "feedstockTransportCountedOn" | "recordsFileLocked" | "recordsFileReplaceable">,
   comments: Awaited<ReturnType<typeof listEmissionLineCommentsForBatches>> = [],
   lineFiles: NonNullable<BatchEmissionLineFacts["lineFiles"]> = [],
 ) {
@@ -131,7 +134,12 @@ export function buildBatchEmissionLines(
     return {
       ...line,
       lineFile: line.filePolicy === "lineFile" ? { anchorId: file?.anchor.id ?? null,
+        version: file?.anchor.version ?? null,
         documents: file?.documents ?? [],
+        /** No add or remove: claimed or reserved without an open correction window. */
+        locked: !!automaticFacts.recordsFileLocked,
+        /** The correction window is open, so the current set can be replaced. */
+        canReplace: !!automaticFacts.recordsFileReplaceable && (file?.documents.length ?? 0) > 0,
         needsFile: !automaticFacts.recordsFileLocked && recordsNeedFile(line.filePolicy, line.records?.figure?.magnitude ?? "0"), policy: line.filePolicy } : null,
       label: line.displayName,
       description: component.description,

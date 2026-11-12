@@ -195,7 +195,7 @@ it.each(["claimed", "reserved"])("keeps locked %s records visible without a file
   assert(result.status === "ready");
   expect(result.lines[0].blocker).toBeUndefined();
   expect(result.lines[0]).toMatchObject({ records: { figure: { magnitude: "5", unit: "kWh" } },
-    lineFile: { documents: [], needsFile: false } });
+    lineFile: { documents: [], needsFile: false, locked: true, canReplace: false } });
 });
 
 it("groups all uploaded documents under their one anchor in the read model", async () => {
@@ -212,7 +212,7 @@ it("groups all uploaded documents under their one anchor in the read model", asy
   })) as never);
   const result = (await loadBatchesEmissionLines(ctx, [batches[0]])).get("ready")!;
   assert(result.status === "ready");
-  expect(result.lines[0].lineFile).toEqual({ anchorId: "anchor", documents, needsFile: true, policy: "lineFile" });
+  expect(result.lines[0].lineFile).toEqual({ anchorId: "anchor", version: 3, documents, locked: false, canReplace: false, needsFile: true, policy: "lineFile" });
   expect(result.lines[0].blocker).toBeUndefined();
 });
 
@@ -238,6 +238,9 @@ it.each(["stale", "rejected", "correction", "closed", "other-removal", "other-ba
   }])).get("ready")!;
   assert(result.status === "ready");
   expect(result.lines[0].lineFile?.needsFile).toBe(!locked);
+  expect(result.lines[0].lineFile?.locked).toBe(locked);
+  // Only a claimed batch with an open correction window can replace its set; this fixture holds no files.
+  expect(result.lines[0].lineFile?.canReplace).toBe(false);
   expect(result.lines[0].blocker?.code).toBe(locked ? undefined : "lineMissingEvidence");
   if (claimed) expect(listEmissionEntryDraftContenders).toHaveBeenCalledWith(ctx, ["ready"], undefined, undefined, { savedOnly: true });
   else expect(listEmissionEntryDraftContenders).not.toHaveBeenCalled();

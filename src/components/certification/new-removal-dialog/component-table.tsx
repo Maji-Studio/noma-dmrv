@@ -67,6 +67,9 @@ function FilesText({ row }: { row: ComponentRow }) {
       <PaperclipIcon size={ICON_SIZE} aria-hidden />
       {row.fileCount} {pluralize(row.fileCount, "file", "files")}
       <InfoHint label={`File names for ${row.name}`}>
+        {(row.lineFileNames ?? []).map((fileName, index) => (
+          <span key={`${fileName}:${index}`} className="block">{fileName}</span>
+        ))}
         {row.fileEntryIds.map((id) => (
           <EntryFileNames key={id} entryId={id} />
         ))}
