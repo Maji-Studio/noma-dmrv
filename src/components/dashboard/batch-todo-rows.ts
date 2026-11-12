@@ -4,7 +4,7 @@
  * count. Batches with blocking items come first, then by code.
  */
 import type { CreditBatchHealthSummary } from "@/fn/certification";
-import { creditBatchNameWithCode } from "@/lib/credit-batch-label";
+import { facilityListHref } from "@/lib/dashboard-links";
 import { todosLabel } from "@/lib/credit-batches/batch-page";
 import { recordHref } from "@/lib/record-links";
 import type { DashRowData } from "./shared";
@@ -22,8 +22,10 @@ export function batchTodoRows(
   batches: readonly TodoBatch[],
   summaries: Readonly<Record<string, TodoCounts | undefined>>,
   selectedBatchId: string | null,
+  /** A read failed: keep the rows that loaded and say the check is incomplete. */
+  failure: { facilityId: string } | null = null,
 ): DashRowData[] {
-  return batches
+  const rows = batches
     .filter((batch) => selectedBatchId == null || batch.id === selectedBatchId)
     .flatMap((batch) => {
       const summary = summaries[batch.id];
@@ -34,8 +36,11 @@ export function batchTodoRows(
     .sort((a, b) => Number(b.blocking > 0) - Number(a.blocking > 0) || a.batch.code.localeCompare(b.batch.code))
     .map(({ batch, blocking, total }) => ({
       id: `batch-todos-${batch.id}`,
-      title: `${creditBatchNameWithCode(batch)}: ${todosLabel(total)}`,
-      meta: blocking > 0 ? `${blocking} blocking` : "",
+      title: todosLabel(total).replace(/^./, (first) => first.toUpperCase()),
+      meta: [batch.code, blocking > 0 ? `${blocking} blocking` : null].filter(Boolean).join(" · "),
       href: recordHref("creditBatch", batch.id, { facilityId: batch.facilityId }),
     }));
+  return failure
+    ? [...rows, { id: "batch-todos-failed", title: "Couldn't check credit batch to-dos", meta: "", href: facilityListHref("/credit-batches", failure.facilityId) }]
+    : rows;
 }

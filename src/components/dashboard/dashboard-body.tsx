@@ -55,7 +55,7 @@ export function DashboardBody({ data: overview, isLoading: overviewLoading, erro
   const actions = useFlowActions(status, facilityId, overview);
   const allBatchesHref = useAllBatchesHref();
   // Each active batch's open to-dos: the same read the Credit batches list uses.
-  const { data: batches, isPending: batchesPending } = useCreditBatches(facilityId);
+  const { data: batches, isPending: batchesPending, isError: batchesFailed } = useCreditBatches(facilityId);
   const healthIds = (batches ?? []).filter((batch) => batchId == null || batch.id === batchId).map((batch) => batch.id);
   const health = useCreditBatchHealthSummaries(facilityId, healthIds);
 
@@ -76,7 +76,7 @@ export function DashboardBody({ data: overview, isLoading: overviewLoading, erro
   const todos = data
     ? [
         ...todoRows(data.attention, data.structuralGaps),
-        ...batchTodoRows(batches ?? [], health.data, batchId ?? null),
+        ...batchTodoRows(batches ?? [], health.data, batchId ?? null, batchesFailed || health.error ? { facilityId } : null),
       ]
     : [];
   const activity = data ? activityRows(data.activity, timeZone) : [];
