@@ -30,7 +30,7 @@ export async function seedLineFileComponent(seededData: SeededChainData, tag: st
     const [observation] = await db.insert(schema.removalTemplateObservations).values({
       organizationId: DEC_ORG_ID, provider: "isometric", externalProjectId: "prj_e2e_line_file", externalTemplateId: `e2e-line-file-template-${tag}`,
       semanticFingerprint: `e2e-line-file-${tag}`, fullFingerprint: `e2e-line-file-${tag}`,
-      definition: { groups: [{ id: `rtg_e2e_line_file_${tag}`, key: "direct-emissions", displayName: "Direct emissions", description: "", components: [{
+      definition: { groups: [{ id: `rtg_e2e_line_file_${tag}`, key: "pyrolysis", displayName: "Pyrolysis", description: "", components: [{
         id: componentId, displayName: LINE_FILE_COMPONENT_NAME, description: null, blueprintKey: "grid_electricity_use",
         inputs: [{ key: "electricity_use", type: "monitored" as const, quantityKind: "energy" as const }],
       }] }] },

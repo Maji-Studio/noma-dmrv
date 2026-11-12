@@ -23,7 +23,8 @@ vi.mock("@/hooks/use-emission-line-files", () => ({
 const SCOPE = { facilityId: "fac", creditBatchId: "cb" };
 const NAME = "Metered electricity use emissions";
 const RECORDS = { source: "productionRuns", count: 3, figure: { magnitude: "72", unit: "kWh" } } as const;
-const DOCUMENT = { id: "doc-1", fileName: "meter-readings.pdf", version: 2 };
+const DOCUMENT = { id: "doc-1", fileName: "meter-readings.pdf", version: 2, sent: false };
+const SENT = { id: "doc-0", fileName: "meter-log-sent.pdf", version: 1, sent: true };
 
 function lineWith(lineFile: Partial<NonNullable<EmissionLine["lineFile"]>>): EmissionLine {
   return makeLine({
@@ -96,9 +97,11 @@ describe("component file on the From records row", () => {
 
   it("replaces the set in the correction window after a confirm that says what stays", async () => {
     mocks.replace.mockResolvedValue({ id: "anchor" });
-    const table = renderBody(lineWith({ anchorId: "anchor", version: 4, documents: [DOCUMENT], canReplace: true }));
+    const table = renderBody(lineWith({ anchorId: "anchor", version: 4, documents: [SENT, DOCUMENT], canReplace: true }));
     fireEvent.click(table.getByRole("button", { name: `Actions for the records, ${NAME}` }));
-    expect(screen.queryByRole("menuitem", { name: /^Remove/ })).toBeNull();
+    // The sent file can only be replaced with the set; the unsent one stays removable.
+    expect(screen.queryByRole("menuitem", { name: `Remove ${SENT.fileName}` })).toBeNull();
+    expect(await screen.findByRole("menuitem", { name: `Remove ${DOCUMENT.fileName}` })).toBeTruthy();
     fireEvent.click(await screen.findByRole("menuitem", { name: "Replace files" }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("The files already sent to Isometric stay in history and are no longer sent. You add the new files next.")).toBeTruthy();

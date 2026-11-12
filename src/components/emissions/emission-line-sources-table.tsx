@@ -10,6 +10,7 @@
 "use client";
 
 import { PencilSimpleIcon } from "@phosphor-icons/react/dist/ssr";
+import type { ReactNode } from "react";
 import { ServerError } from "@/components/forms/server-error";
 import { Button } from "@/components/ui";
 import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
@@ -103,6 +104,11 @@ export function SourcesTable({ line, scope, model, readOnly = false, onForm, onD
 function RecordsRow({ line, records, scope, readOnly }: { line: EmissionLine; records: LineRecords; scope: EmissionBatchScope; readOnly: boolean }) {
   // Counted elsewhere: the file belongs to the batch that counts the records.
   const lineFile = isCountedElsewhere(records) ? null : line.lineFile;
+  const amount = (
+    <span role="cell" className={cn(AMOUNT_CELL, isRecordsGap(records) && "text-[var(--color-text-tertiary)]", isCalculatedByRegistry(records) && QUIET_REASON)}>
+      {recordsFigureText(records)}
+    </span>
+  );
   return (
     <div role="row" className={cn(TABLE_ROW, DIVIDER)}>
       <span role="cell" className={SOURCE_CELL}>
@@ -110,21 +116,20 @@ function RecordsRow({ line, records, scope, readOnly }: { line: EmissionLine; re
         <span className="body-small text-[var(--color-text-secondary)] md:hidden">{RECORDS_DATE}</span>
       </span>
       <span role="cell" className={DATE_CELL}>{RECORDS_DATE}</span>
-      {lineFile && <RecordsFileCells line={line} lineFile={lineFile} scope={scope} readOnly={readOnly} />}
-      <span role="cell" className={cn(AMOUNT_CELL, isRecordsGap(records) && "text-[var(--color-text-tertiary)]", isCalculatedByRegistry(records) && QUIET_REASON)}>
-        {recordsFigureText(records)}
-      </span>
+      {lineFile ? <RecordsFileCells line={line} lineFile={lineFile} scope={scope} readOnly={readOnly} amount={amount} /> : amount}
     </div>
   );
 }
 
-function RecordsFileCells({ line, lineFile, scope, readOnly }: { line: EmissionLine; lineFile: LineFile; scope: EmissionBatchScope; readOnly: boolean }) {
+/** Files, Amount, then the ⋯, in the column headers' order. */
+function RecordsFileCells({ line, lineFile, scope, readOnly, amount }: { line: EmissionLine; lineFile: LineFile; scope: EmissionBatchScope; readOnly: boolean; amount: ReactNode }) {
   const slot = useLineFileSlot(line, lineFile, scope, readOnly);
   return (
     <>
       <span role="cell" className={DETAIL_CELL}>
         <LineFileEvidence line={line} lineFile={lineFile} scope={scope} slot={slot} />
       </span>
+      {amount}
       <span role="cell" className={MENU_CELL}>
         {slot.items.length > 0 && <EntryMenu label={`Actions for the records, ${line.displayName}`} items={slot.items} />}
       </span>

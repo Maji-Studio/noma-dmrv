@@ -43,20 +43,16 @@ export function useLineFileSlot(line: EmissionLine, lineFile: LineFile, scope: E
   const [actionError, setActionError] = useState<string | null>(null);
   const editable = !readOnly && !lineFile.locked;
 
-  // In the correction window a sent file cannot be removed, so the set is replaced; adding next to it stays allowed.
-  const items: EntryMenuItem[] = !editable ? [] : lineFile.canReplace
-    ? [
-        { label: "Add file", onSelect: () => setAddingFile(true) },
-        { label: REPLACE_FILES_LABEL, onSelect: () => { setActionError(null); setReplacing(true); } },
-      ]
-    : [
-        { label: "Add file", onSelect: () => setAddingFile(true) },
-        ...lineFile.documents.map((document) => ({
-          label: `Remove ${document.fileName}`,
-          destructive: true,
-          onSelect: () => { setActionError(null); setRemoving(document); },
-        })),
-      ];
+  // A file Isometric holds cannot be removed: in the correction window the set is replaced instead. Unsent files stay removable.
+  const items: EntryMenuItem[] = !editable ? [] : [
+    { label: "Add file", onSelect: () => setAddingFile(true) },
+    ...lineFile.documents.filter((document) => !document.sent).map((document) => ({
+      label: `Remove ${document.fileName}`,
+      destructive: true,
+      onSelect: () => { setActionError(null); setRemoving(document); },
+    })),
+    ...(lineFile.canReplace ? [{ label: REPLACE_FILES_LABEL, onSelect: () => { setActionError(null); setReplacing(true); } }] : []),
+  ];
 
   const confirmRemove = async () => {
     if (!removing) return;
@@ -127,11 +123,13 @@ export function LineFileEvidence({ line, lineFile, scope, slot, className }: {
             accept={ENTRY_FILE_ACCEPT}
             resolveDocumentType={entryDocumentType}
             requestUpload={requestUpload}
-            onUploaded={() => {
+            // The panel stays open until Done: closing it per file would abort the rest of a multi-file queue.
+            onUploaded={() => void invalidateEmissionEntryReads(queryClient, scope)}
+            // A refusal can mean the batch was claimed meanwhile; refresh so the slot shows the current lock.
+            onUploadError={(error) => {
+              slot.setUploadError(error);
               void invalidateEmissionEntryReads(queryClient, scope);
-              slot.stopAddFile();
             }}
-            onUploadError={slot.setUploadError}
           />
           {slot.uploadError && <ServerError message={slot.uploadError} />}
           <div>
