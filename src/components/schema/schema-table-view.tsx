@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
+import { LABEL_HIT_AREA } from "@/components/ui/touch-target";
 import { useMemo, useState, useCallback, type ReactNode } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -263,7 +263,7 @@ export function SchemaTableView({ tables, relationships }: SchemaTableViewProps)
             />
           </div>
           <div className="flex items-center justify-between flex-wrap gap-16">
-            <label className={cn(CENTRED_HIT_AREA, "inline-flex items-center gap-[8px] body-small text-[var(--color-text-secondary)] select-none cursor-pointer")}>
+            <label className={cn(LABEL_HIT_AREA, "inline-flex items-center gap-[8px] body-small text-[var(--color-text-secondary)] select-none cursor-pointer")}>
               <input
                 type="checkbox"
                 checked={hideLegacy}

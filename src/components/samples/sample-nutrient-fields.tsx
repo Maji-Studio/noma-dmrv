@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
+import { LABEL_HIT_AREA } from "@/components/ui/touch-target";
 import { LeafIcon } from "@phosphor-icons/react/dist/ssr";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import { FormField } from "@/components/forms/form-field";
@@ -63,7 +63,7 @@ export function SampleNutrientFields({
     >
       <label
         htmlFor="nutrientClaimEnabled"
-        className={cn(CENTRED_HIT_AREA, "flex cursor-pointer items-center gap-12")}
+        className={cn(LABEL_HIT_AREA, "flex cursor-pointer items-center gap-12")}
       >
         <input
           type="checkbox"

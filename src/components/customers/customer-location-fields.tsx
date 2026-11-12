@@ -2,7 +2,7 @@
 
 
 import { cn } from "@/lib/utils";
-import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
+import { LABEL_HIT_AREA } from "@/components/ui/touch-target";
 import type { FacilityDistanceInput } from "@/schemas/facility-distances";
 import { PartyFacilityDistances } from "@/components/party-facility-distances";
 import { useController, type UseFormReturn } from "react-hook-form";
@@ -243,7 +243,7 @@ export function CustomerLocationFields({
         <div className="flex flex-col gap-4">
           <label
             htmlFor={defaultId}
-            className={cn(CENTRED_HIT_AREA, "flex items-center gap-12 cursor-pointer")}
+            className={cn(LABEL_HIT_AREA, "flex items-center gap-12 cursor-pointer")}
           >
             <input
               type="checkbox"

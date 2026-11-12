@@ -50,6 +50,7 @@ Read these first. Each one fails quietly rather than loudly.
   `ICON_BUTTON_TOUCH_PROPS` for a standalone icon-only `Button` (spread it:
   `size="icon"` is a 32px square by default; the bundle adds the 44px hit area and
   `shrink-0`; row menus, location rows; keep 12px between neighbours). `CENTRED_HIT_AREA` (`::before`) for chips and badges.
+  `LABEL_HIT_AREA` for a `<label>` that wraps a checkbox or radio (it lifts the input above the pseudo-element so direct clicks still reach it; plain `CENTRED_HIT_AREA` on such a label makes the input unclickable).
   `INLINE_HIT_AREA` (`::after`, `_FROM_SM` variant) for inline links.
   `PHONE_TOUCH_TARGET` for a footer button or a select that must be 44px tall
   on a phone, and for every full-width action on the auth pages (form submits

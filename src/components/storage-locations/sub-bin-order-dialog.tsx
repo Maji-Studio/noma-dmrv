@@ -7,7 +7,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
+import { LABEL_HIT_AREA } from "@/components/ui/touch-target";
 import { ArrowDownIcon, ArrowUpIcon, DotsSixVerticalIcon } from "@phosphor-icons/react/dist/ssr";
 import { useId, useState } from "react";
 import { Button, Modal } from "@/components/ui";
@@ -141,7 +141,7 @@ export function SubBinOrderDialog({ isOpen, onClose, subBins, order, defaultOrde
 /** The part of a row that ticks it: the checkbox and the sub-bin's figures, wet first. */
 function SubBinChoice({ id, subBin, checked, onToggle, timeZone }: { id: string; subBin: OutputSubBin; checked: boolean; onToggle: (id: string) => void; timeZone: string }) {
   return (
-    <label className={cn(CENTRED_HIT_AREA, "flex min-w-0 flex-1 cursor-pointer items-center gap-8")}>
+    <label className={cn(LABEL_HIT_AREA, "flex min-w-0 flex-1 cursor-pointer items-center gap-8")}>
       <input
         id={id}
         type="checkbox"
