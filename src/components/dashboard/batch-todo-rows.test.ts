@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { batchTodoRows } from "./batch-todo-rows";
+import { BATCH_TODOS_FAILED_TITLE, batchTodoRows } from "./batch-todo-rows";
 
 const batches = [
   { id: "b2", code: "CB-26-002", name: null, facilityId: "f1" },
@@ -46,7 +46,7 @@ describe("batchTodoRows", () => {
 
   it("adds a failed-check row after the loaded rows, so a failed read never reads as all clear", () => {
     const rows = batchTodoRows(batches, summaries, "b2", { facilityId: "f1" });
-    expect(rows.map((row) => row.title)).toEqual(["1 open to-do", "Couldn't check credit batch to-dos"]);
+    expect(rows.map((row) => row.title)).toEqual(["1 open to-do", BATCH_TODOS_FAILED_TITLE]);
     expect(rows[1]).toMatchObject({ meta: "", href: "/credit-batches?facility=f1" });
     expect(batchTodoRows([], {}, null, { facilityId: "f1" })).toHaveLength(1);
   });

@@ -18,6 +18,9 @@ interface TodoBatch {
 
 type TodoCounts = Pick<CreditBatchHealthSummary, "issueCount" | "checkCount">;
 
+/** The row a failed read adds, so an unchecked panel never reads as all clear. */
+export const BATCH_TODOS_FAILED_TITLE = "Couldn't check credit batch to-dos. Open Credit batches to see them.";
+
 export function batchTodoRows(
   batches: readonly TodoBatch[],
   summaries: Readonly<Record<string, TodoCounts | undefined>>,
@@ -41,6 +44,6 @@ export function batchTodoRows(
       href: recordHref("creditBatch", batch.id, { facilityId: batch.facilityId }),
     }));
   return failure
-    ? [...rows, { id: "batch-todos-failed", title: "Couldn't check credit batch to-dos", meta: "", href: facilityListHref("/credit-batches", failure.facilityId) }]
+    ? [...rows, { id: "batch-todos-failed", title: BATCH_TODOS_FAILED_TITLE, meta: "", href: facilityListHref("/credit-batches", failure.facilityId) }]
     : rows;
 }

@@ -72,7 +72,7 @@ export function DashboardBody({ data: overview, isLoading: overviewLoading, erro
     );
   }
 
-  // A failed read adds no batch rows; the other rows stay.
+  // A failed read keeps the batch rows that loaded and adds a Couldn't check row, so it never reads as all clear.
   const todos = data
     ? [
         ...todoRows(data.attention, data.structuralGaps),
