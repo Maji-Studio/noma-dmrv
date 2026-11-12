@@ -25,7 +25,8 @@ beforeEach(() => {
     lsof: "exit 1",
     gh: `printf '%s\\n' "$*" >> "$FIXTURE/gh-calls"
 if [ "$FAIL_GH" = 1 ]; then exit 1; fi
-cat "$FIXTURE/response.json"`,
+cat "$FIXTURE/response.json"
+if [ "$FAIL_GH" = 2 ]; then exit 1; fi`,
   };
   for (const [name, body] of Object.entries(stubs)) writeFileSync(join(directory, name), `#!/bin/bash\n${body}\n`, { mode: EXECUTABLE_MODE });
   const branch = (name: string, prs: object[]) => ({ nodes: prs.map(pr => ({ ...pr, headRefName: name })) });
@@ -37,9 +38,9 @@ cat "$FIXTURE/response.json"`,
 });
 afterEach(() => rmSync(directory, { recursive: true, force: true }));
 
-function run(fail = false) {
+function run(fail: boolean | 2 = false) {
   return spawnSync("/bin/bash", [join(directory, "scripts/worktree.sh"), "status"], {
-    encoding: "utf8", env: { ...process.env, PATH: `${directory}:${process.env.PATH}`, FIXTURE: directory, FAIL_GH: fail ? "1" : "0" },
+    encoding: "utf8", env: { ...process.env, PATH: `${directory}:${process.env.PATH}`, FIXTURE: directory, FAIL_GH: fail === 2 ? "2" : fail ? "1" : "0" },
   });
 }
 
@@ -83,5 +84,12 @@ describe("worktree status", () => {
     expect(result.status, result.stderr + result.stdout).toBe(0);
     expect(result.stdout).toMatch(/alpha\s+3101\s+down\s+\?\s+-/);
     expect(result.stdout).toContain("chore/beta");
+  });
+
+  it("ignores a partial page when gh fails after printing one", () => {
+    const result = run(2);
+    expect(result.status, result.stderr + result.stdout).toBe(0);
+    expect(result.stdout).toMatch(/alpha\s+3101\s+down\s+\?\s+-/);
+    expect(result.stdout).not.toMatch(/#42/);
   });
 });

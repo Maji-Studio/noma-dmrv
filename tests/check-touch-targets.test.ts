@@ -73,13 +73,27 @@ describe("touch-target scanner", () => {
 
   it("accepts a spread, merged icon props, pseudo areas and the roster actions slot", () => {
     expect(scan([
-      '<Button {...ICON_BUTTON_TOUCH_PROPS} className="h-24" />',
+      '<Button {...ICON_BUTTON_TOUCH_PROPS} />',
+      '<Button className="h-24" {...ICON_BUTTON_TOUCH_PROPS} />',
+      '<Button {...ICON_BUTTON_TOUCH_PROPS} className={cn(ICON_BUTTON_TOUCH_PROPS.className, "h-24")} />',
       '<Button className={cn(ICON_BUTTON_TOUCH_PROPS.className, "h-32")} />',
+      '<select className={cn("h-32", PHONE_TOUCH_TARGET)} />', '<select className="h-32 min-h-44" />',
+      '<label className={cn(LABEL_HIT_AREA, "flex")}><input type="checkbox" className="size-16" /></label>',
       '<a className="h-24 after:h-44" />', '<button className="h-32 before:min-h-[44px]" />',
       '<div className={ROW_ACTION_HIT_AREA}><Button className="h-32" /></div>',
       '<OrganizationRosterRow actions={<Button className="h-32" />} />',
       '<label className={cn(CENTRED_HIT_AREA, "flex")}><input type="checkbox" className="size-16" /></label>',
     ].join(";\n"))).toEqual([]);
+  });
+
+  it("rejects a className after the icon-props spread that drops the hit area", () => {
+    expect(scan('<Button {...ICON_BUTTON_TOUCH_PROPS} className="h-24" />')).toHaveLength(1);
+  });
+
+  it("accepts only a physical height on a native select", () => {
+    expect(scan('<select className={cn("h-32", CENTRED_HIT_AREA)} />')).toHaveLength(1);
+    expect(scan('<select className="h-32 after:h-44" />')).toHaveLength(1);
+    expect(scan('<select className="h-32 before:min-h-[44px]" />')).toHaveLength(1);
   });
 
   it("does not let an unrelated ancestor or sibling recipe hide a violation", () => {

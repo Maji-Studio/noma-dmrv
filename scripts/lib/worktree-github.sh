@@ -8,7 +8,7 @@ REPO_OWNER="${REPO%%/*}"
 REPO_NAME="${REPO##*/}"
 
 read_worktree_github() {
-  local branches="$1" refs query branch_names
+  local branches="$1" refs query branch_names pages
   command -v gh >/dev/null && command -v jq >/dev/null || return 1
   branch_names="$(printf '%s\n' "$branches" | jq -Rsc 'split("\n") | map(select(length > 0)) | unique')"
   # Search PR heads rather than remote refs: merged PRs survive branch deletion.
@@ -20,7 +20,9 @@ read_worktree_github() {
       issues(first:$WORKTREE_ISSUE_PAGE_SIZE,after:\$endCursor){nodes{number linkedBranches(first:$WORKTREE_NESTED_PAGE_SIZE){nodes{ref{name}}}} pageInfo{hasNextPage endCursor}}
     }
   }"
-  gh api graphql --paginate -f query="$query" 2>/dev/null | jq -src --argjson branches "$branch_names" '
+  # Capture first: a page followed by a gh failure must not become partial rows.
+  pages="$(gh api graphql --paginate -f query="$query" 2>/dev/null)" || return 1
+  printf '%s' "$pages" | jq -src --argjson branches "$branch_names" '
     if any(.[]; (.errors | length) > 0 or .data.repository == null) then error("GitHub read failed") else
     [.[].data] as $pages |
     [$pages[].repository.issues.nodes[] | .number as $issue | .linkedBranches.nodes[] | select(.ref != null) | {branch:.ref.name,issue:$issue}] as $links |

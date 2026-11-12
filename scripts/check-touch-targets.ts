@@ -10,8 +10,11 @@ const ROOT = process.cwd();
 const INTERACTIVE_TAGS = new Set(["button", "a", "Link", "Button", "select"]);
 const INTERACTIVE_ROLES = new Set(["button", "link", "tab"]);
 const HIT_RECIPES = new Set([
-  "CENTRED_HIT_AREA", "INLINE_HIT_AREA", "ICON_BUTTON_TOUCH_PROPS", "PHONE_TOUCH_TARGET",
+  "CENTRED_HIT_AREA", "LABEL_HIT_AREA", "INLINE_HIT_AREA", "ICON_BUTTON_TOUCH_PROPS", "PHONE_TOUCH_TARGET",
 ]);
+/** A native `<select>` cannot take a pseudo-element, so only a real height counts. */
+const PHYSICAL_RECIPES = new Set(["PHONE_TOUCH_TARGET"]);
+const PHYSICAL_MIN_HEIGHT = new RegExp(`^(?:max-(?:sm|md|lg|xl|2xl):)?min-h-(?:${TOUCH_TARGET_PX}|\\[${TOUCH_TARGET_PX}px\\])!?$`);
 const SMALL_HEIGHT = /^(?:h|size|min-h)-(\d+(?:\.\d+)?|\[\d+(?:\.\d+)?px\])$/;
 // Unprefixed only: a breakpoint-gated pseudo area does not exist on a phone.
 const PSEUDO_HIT_AREA = new RegExp(`^(?:before|after):(?:h|min-h)-(?:${TOUCH_TARGET_PX}|\\[${TOUCH_TARGET_PX}px\\])!?$`);
@@ -36,7 +39,7 @@ function literals(node: ts.Node): string[] {
   return result;
 }
 
-function hasRecipe(node: ts.Node, allowed = HIT_RECIPES): boolean {
+function hasRecipe(node: ts.Node, allowed: ReadonlySet<string> = HIT_RECIPES): boolean {
   if (ts.isIdentifier(node) && allowed.has(node.text)) return true;
   let found = false;
   ts.forEachChild(node, child => { if (hasRecipe(child, allowed)) found = true; });
@@ -46,6 +49,21 @@ function hasRecipe(node: ts.Node, allowed = HIT_RECIPES): boolean {
 function attribute(node: Opening, name: string): ts.JsxAttribute | undefined {
   return node.attributes.properties.find((prop): prop is ts.JsxAttribute =>
     ts.isJsxAttribute(prop) && prop.name.getText() === name);
+}
+
+/**
+ * Attribute order decides: a later `className` replaces the className carried by
+ * an earlier spread, so it must name a recipe itself; a later spread of the icon
+ * props replaces an earlier `className`.
+ */
+function coveredByAttributes(node: Opening, allowed: ReadonlySet<string>): boolean {
+  let covered = false;
+  for (const prop of node.attributes.properties) {
+    if (ts.isJsxSpreadAttribute(prop)) { if (hasRecipe(prop, allowed)) covered = true; }
+    else if (ts.isJsxAttribute(prop) && prop.name.getText() === "className") covered = hasRecipe(prop, allowed);
+    else if (hasRecipe(prop, allowed)) covered = true;
+  }
+  return covered;
 }
 
 function coveredBySlot(node: Opening): boolean {
@@ -94,8 +112,11 @@ export function findTouchTargetViolations(
       const classes = attribute(node, "className");
       if (interactive && classes) {
         const tokens = literals(classes).flatMap(value => value.split(/\s+/));
-        if (!hasRecipe(node.attributes) && !coveredBySlot(node)
-          && !tokens.some(token => PSEUDO_HIT_AREA.test(token))) {
+        const covered = tag === "select"
+          ? coveredByAttributes(node, PHYSICAL_RECIPES) || tokens.some(token => PHYSICAL_MIN_HEIGHT.test(token))
+          : coveredByAttributes(node, HIT_RECIPES) || coveredBySlot(node)
+            || tokens.some(token => PSEUDO_HIT_AREA.test(token));
+        if (!covered) {
           const smallTokens = new Set(tokens.filter(token => {
             // Only unprefixed phone-level sizes count; all variants are out of scope.
             const match = SMALL_HEIGHT.exec(token.replace(MAX_VARIANT, "").replace(/^!|!$/g, ""));
