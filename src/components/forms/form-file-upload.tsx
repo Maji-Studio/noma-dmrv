@@ -24,7 +24,7 @@ import {
   clampDocumentUploadMaxMb,
   DOCUMENT_UPLOAD_MAX_MB,
 } from "@/lib/documents/upload-policy";
-import { useFileUpload } from "@/hooks/use-file-upload";
+import { useFileUpload, type RequestUploadOverride } from "@/hooks/use-file-upload";
 import type { DeferredFileEntry } from "@/hooks/use-deferred-attachments";
 import type {
   ApplicationBoundaryLogbookEvidenceType,
@@ -64,6 +64,8 @@ interface FormFileUploadProps {
   resolveDocumentType?: (file: File) => DocumentType;
   applicationEvidenceRole?: ApplicationVisualEvidenceRole;
   applicationLogbookEvidenceType?: ApplicationBoundaryLogbookEvidenceType;
+  /** Makes the upload request itself, for an owner with no row to name yet; entityType and entityId are then optional. */
+  requestUpload?: RequestUploadOverride;
   onUploaded?: (documentId: string) => void;
   onUploadError?: (error: string) => void;
   deferred?: boolean;
@@ -120,6 +122,7 @@ export function FormFileUpload({
   resolveDocumentType,
   applicationEvidenceRole,
   applicationLogbookEvidenceType,
+  requestUpload,
   onUploaded,
   onUploadError,
   deferred = false,
@@ -132,13 +135,13 @@ export function FormFileUpload({
   const [uploads, setUploads] = useState<UploadedEntry[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [deferredError, setDeferredError] = useState<string | null>(null);
-  const { upload } = useFileUpload();
+  const { upload } = useFileUpload(requestUpload);
   const uploadChainRef = useRef<Promise<void>>(Promise.resolve());
   const effectiveMaxSizeMb = clampDocumentUploadMaxMb(maxSizeMb);
 
   const isRealMode =
     !deferred &&
-    !!(entityType && entityId && (documentType || resolveDocumentType));
+    !!((requestUpload || (entityType && entityId)) && (documentType || resolveDocumentType));
 
   function getMissingExif(metadata: Record<string, unknown>): string[] {
     const missingExif = metadata.missingExif;
@@ -164,8 +167,8 @@ export function FormFileUpload({
     ]);
     try {
       const { documentId, metadata } = await upload({
-        entityType: entityType!,
-        entityId: entityId!,
+        entityType: entityType ?? "",
+        entityId: entityId ?? "",
         documentType: resolvedDocumentType,
         file,
         applicationEvidenceRole,

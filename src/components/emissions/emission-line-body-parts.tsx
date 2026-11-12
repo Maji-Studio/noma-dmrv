@@ -11,6 +11,7 @@ import Link from "next/link";
 import { ArrowUpRightIcon, ClockIcon, FileIcon, PlusIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms/server-error";
 import { Button, Notice } from "@/components/ui";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
 import { removalTemplateSetupHref, removalTemplatesSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
 import { entryFileMissing } from "@/lib/certification/emission-entry-evidence";
@@ -176,19 +177,45 @@ export function useEntryActions(onEdit: () => void, onDelete: () => void) {
     { label: "Add file", onSelect: () => setAddingFile(true) },
     { label: "Delete", onSelect: onDelete, destructive: true },
   ];
-  return { items, addingFile, startAddFile: () => setAddingFile(true), stopAddFile: () => setAddingFile(false), uploadError, setUploadError };
+  return { items, addingFile, startAddFile: () => { setUploadError(null); setAddingFile(true); }, stopAddFile: () => { setUploadError(null); setAddingFile(false); }, uploadError, setUploadError };
 }
 
 function AddFilePanel({ entry, scope, actions }: { entry: EmissionEntry; scope: EmissionBatchScope; actions: ReturnType<typeof useEntryActions> }) {
   if (!actions.addingFile) return null;
   return (
     <div className="flex flex-col gap-8 pt-4">
-      <EntryFileUpload id={`entry-file-${entry.id}`} entry={entry} scope={scope} onUploaded={actions.stopAddFile} onError={actions.setUploadError} />
+      {/* The panel stays open until Done: closing it per file would abort the rest of a multi-file upload. */}
+      <EntryFileUpload id={`entry-file-${entry.id}`} entry={entry} scope={scope} onUploaded={() => actions.setUploadError(null)} onError={actions.setUploadError} />
       {actions.uploadError && <ServerError message={actions.uploadError} />}
       <div>
-        <Button size="small" variant="weak" onClick={actions.stopAddFile}>Done</Button>
+        <Button size="small" variant="weak" className={PHONE_TOUCH_TARGET} onClick={actions.stopAddFile}>Done</Button>
       </div>
     </div>
+  );
+}
+
+/** The warning a slot shows when proof is required and no file is there. */
+export function FileMissingLabel() {
+  return (
+    <span className="inline-flex min-h-24 items-center gap-4 text-[var(--st-wait)]">
+      <WarningIcon size={ICON} weight="bold" aria-hidden="true" />
+      File missing
+    </span>
+  );
+}
+
+/** One file name that opens the file. */
+export function FileLink({ file }: { file: { fileName: string; href: string } }) {
+  return (
+    <a
+      href={file.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex min-h-24 max-w-full min-w-0 items-center gap-4 underline-offset-4 hover:text-[var(--color-text-primary)] hover:underline"
+    >
+      <FileIcon size={ICON} aria-hidden="true" className="shrink-0" />
+      <span className="truncate">{file.fileName}</span>
+    </a>
   );
 }
 
@@ -219,23 +246,9 @@ export function EntryEvidence({ entry, filePolicy, scope, actions, className, re
           </span>
         )}
         {missing ? (
-          <span className="inline-flex min-h-24 items-center gap-4 text-[var(--st-wait)]">
-            <WarningIcon size={ICON} weight="bold" aria-hidden="true" />
-            File missing
-          </span>
+          <FileMissingLabel />
         ) : noFiles ? null : files ? (
-          files.map((file) => (
-            <a
-              key={file.id}
-              href={file.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-h-24 max-w-full min-w-0 items-center gap-4 underline-offset-4 hover:text-[var(--color-text-primary)] hover:underline"
-            >
-              <FileIcon size={ICON} aria-hidden="true" className="shrink-0" />
-              <span className="truncate">{file.fileName}</span>
-            </a>
-          ))
+          files.map((file) => <FileLink key={file.id} file={file} />)
         ) : (
           <span className="inline-flex min-h-24 items-center gap-4 text-[var(--color-text-tertiary)]">
             <FileIcon size={ICON} aria-hidden="true" className="shrink-0" />

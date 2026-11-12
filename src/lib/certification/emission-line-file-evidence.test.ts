@@ -63,7 +63,8 @@ it("excludes an uploaded file when another Removal claims production", () => {
 it("attaches the stored file and its requirement to the read model", () => {
   const { batch, observation } = lineFileEvidenceFacts();
   const build = () => buildBatchEmissionLines(observation, [], new Map(), batch, [], batch.lineFiles)[0];
-  expect(build().lineFile).toEqual({ anchorId: "anchor", documents: [{ id: "document", fileName: "proof.pdf", version: 1 }], needsFile: true, policy: "lineFile" });
+  expect(build().lineFile).toEqual({ anchorId: "anchor", version: batch.lineFiles![0].anchor.version, documents: [{ id: "document", fileName: "proof.pdf", version: 1, sent: false }],
+    locked: false, canReplace: false, needsFile: true, policy: "lineFile" });
   batch.lineFiles = [{ ...batch.lineFiles![0], documents: [] }];
   expect(build()).toMatchObject({ state: "missingEvidence", lineFile: { anchorId: "anchor", documents: [], needsFile: true } });
   batch.automaticFigures["run-electricity"]!.magnitude = "0.000";

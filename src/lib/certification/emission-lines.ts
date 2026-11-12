@@ -62,6 +62,7 @@ export interface BatchEmissionLineFacts {
   enrichmentComplete: boolean;
   entriesCanSubmit?: boolean;
   recordsFileLocked?: boolean;
+  recordsFileReplaceable?: boolean;
   lineFiles?: readonly { anchor: { id: string; componentId: string; version: number; retiredAt?: Date | null }; documents: { id: string; fileName: string; version: number }[] }[];
   automaticFigures: Partial<Record<AutomaticSourceId, EmissionFigure | null>>;
   /** The batches counting this batch's linked feedstock transport, when every leg is owned elsewhere. */
@@ -153,12 +154,17 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
       blocker = { code: "lineNeedsReview", message: stale.reason ?? REENTER_EMISSION_ENTRY, ...(stale.reason == null ? { copy: { instruction: REENTER_EMISSION_ENTRY } } : {}), fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     }
     const total = unitMismatch || values.some((entry) => entry.total === null) ? null : sumFigures(figures);
+    // The files of the From records amount, for the review's file counts: only when that amount is sent with a file
+    // (not claimed by another Removal, not 0), the same rule as deriveLineFileEvidence.
+    const lineFileDocuments = recordsNeedFile(filePolicy, automaticFigure?.magnitude ?? "0")
+      ? (facts.lineFiles ?? []).filter(({ anchor }) => !anchor.retiredAt && anchor.componentId === component.id).flatMap(({ documents }) => documents.map(({ id, fileName }) => ({ id, fileName })))
+      : [];
     return { componentId: component.id, displayName: component.displayName, groupKey: group.key,
       groupName: group.displayName,
       groupPosition: stored?.templateOrder?.groupPosition ?? fallbackGroupOffset + groupIndex,
       position: stored?.templateOrder?.position ?? componentIndex,
       blueprintKey: component.blueprintKey, description: component.description,
-      entryPolicy: contract?.entryPolicy ?? "none", filePolicy, records, contract, state, automaticFigure, entries, total, ...(blocker ? { blocker } : {}) };
+      entryPolicy: contract?.entryPolicy ?? "none", filePolicy, ...(lineFileDocuments.length ? { lineFileDocuments } : {}), records, contract, state, automaticFigure, entries, total, ...(blocker ? { blocker } : {}) };
   })).sort((a, b) => a.groupPosition - b.groupPosition || a.position - b.position);
 }
 export type BatchEmissionLine = ReturnType<typeof deriveBatchEmissionLines>[number];

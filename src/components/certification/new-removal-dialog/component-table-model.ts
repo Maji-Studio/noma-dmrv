@@ -78,6 +78,8 @@ export interface ComponentRow {
   fileCount: number;
   /** Entries holding files, to read their names on demand. */
   fileEntryIds: string[];
+  /** The component files of the From records amount (names known, no extra read). */
+  lineFileNames?: string[];
   /** Blocked only: each distinct blocker, with its credit batches and its fix. */
   blocked: { items: ComponentBlocker[] } | null;
 }
@@ -147,9 +149,11 @@ function filesOf(lines: readonly BatchEmissionLine[]) {
         entry.kind === "value" && entry.counts && (entry.documentCount ?? 0) > 0 && entry.id,
     ),
   );
+  const lineFileNames = lines.flatMap((line) => (line.lineFileDocuments ?? []).map((document) => document.fileName));
   return {
-    count: withFiles.reduce((sum, entry) => sum + (entry.documentCount ?? 0), 0),
+    count: withFiles.reduce((sum, entry) => sum + (entry.documentCount ?? 0), 0) + lineFileNames.length,
     entryIds: withFiles.map((entry) => entry.id!),
+    lineFileNames,
   };
 }
 
@@ -256,7 +260,7 @@ export function componentRows(input: ComponentTableInput): ComponentRow[] {
     if (omitted.has(first.componentId)) {
       return {
         ...base, state: omissionState(lines, input.ledger.claims), source: "", figure: null, fileCount: 0,
-        fileEntryIds: [], blocked: null,
+        fileEntryIds: [], lineFileNames: [], blocked: null,
       };
     }
 
@@ -264,13 +268,13 @@ export function componentRows(input: ComponentTableInput): ComponentRow[] {
     if (unbindable || entries.some((entry) => entry.line.blocker)) {
       return {
         ...base, state: "blocked" as const, source: parts.join(", "), figure: null, fileCount: 0,
-        fileEntryIds: [], blocked: { items: blockedItems(entries, input, unbindable) },
+        fileEntryIds: [], lineFileNames: [], blocked: { items: blockedItems(entries, input, unbindable) },
       };
     }
 
     const files = filesOf(lines);
     const included = { ...base, state: "included" as const, fileCount: files.count,
-      fileEntryIds: files.entryIds, blocked: null };
+      fileEntryIds: files.entryIds, lineFileNames: files.lineFileNames, blocked: null };
 
     if (!input.review) {
       // Loading, or the compile stopped before it could compile: the context still
