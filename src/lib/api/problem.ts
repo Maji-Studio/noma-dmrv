@@ -84,8 +84,11 @@ export function oauthStepUpChallengeApplies(denial: ApiContextDenial, challenge:
     && (challenge.requiredScopes ?? []).every(scope => OAUTH_GRANTABLE_SCOPES.has(scope) && oauthRoleCeiling(challenge.role ?? null).has(scope));
 }
 
-export function oauthInsufficientScopeChallenge(audience: string, scopes: readonly ApiScope[], requiredScopes: readonly ApiScope[]): string {
-  const union = [...new Set([...scopes, ...requiredScopes])].filter(scope => OAUTH_GRANTABLE_SCOPES.has(scope));
+export function oauthInsufficientScopeChallenge(audience: string, scopes: readonly ApiScope[], requiredScopes: readonly ApiScope[], role: string | null): string {
+  const ceiling = oauthRoleCeiling(role);
+  const offered = [...scopes, ...requiredScopes].flatMap(scope => scope.endsWith(":write")
+    ? [scope.replace(/:write$/, ":read") as ApiScope, scope] : [scope]);
+  const union = [...new Set(offered)].filter(scope => OAUTH_GRANTABLE_SCOPES.has(scope) && ceiling.has(scope));
   return `Bearer error="insufficient_scope", scope="${union.join(" ")}", resource_metadata="${oauthResourceMetadataUrl(audience)}"`;
 }
 
@@ -97,7 +100,7 @@ export function apiDenialResponse(denial: ApiContextDenial, instance: string, re
   if (status === 401) {
     response.headers.set("WWW-Authenticate", `Bearer ${challenge.oauth ? 'error="invalid_token", ' : ""}resource_metadata="${oauthResourceMetadataUrl(audience)}", scope="${OAUTH_REQUESTABLE_SCOPES.join(" ")}"`);
   } else if (oauthStepUpChallengeApplies(denial, challenge)) {
-    response.headers.set("WWW-Authenticate", oauthInsufficientScopeChallenge(audience, challenge.scopes ?? [], challenge.requiredScopes ?? []));
+    response.headers.set("WWW-Authenticate", oauthInsufficientScopeChallenge(audience, challenge.scopes ?? [], challenge.requiredScopes ?? [], challenge.role ?? null));
   }
   return response;
 }

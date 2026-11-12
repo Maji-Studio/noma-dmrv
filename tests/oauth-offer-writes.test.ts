@@ -1,6 +1,9 @@
 import { and, eq, inArray, like } from "drizzle-orm";
 import { afterEach, beforeAll, expect, it, vi } from "vitest";
 import { createOAuthFlowFixture, type OAuthFlowFixture } from "./helpers/oauth-flow";
+import { rpcBody } from "./helpers/mcp";
+import { buildConsentAreas, preselectStepUp } from "@/components/oauth/consent-areas";
+import type { ApiScope } from "@/lib/auth/api-scopes";
 import { OAUTH_STEP_UP_TTL_MS } from "@/config/oauth";
 
 const request = vi.hoisted(() => ({ headers: new Headers() }));
@@ -72,6 +75,67 @@ it.each(["mcp", "rest"] as const)("offers writes initially, preserves read-only 
   expect(await getOAuthConsentViewFn({ oauthQuery: stepUp.location.search.slice(1) })).toMatchObject({ success: true, data: {
     newlyRequestedScopes: ["feedstocks:write"], alreadyAllowedScopes: ["feedstocks:read"], stepUpScopes: ["feedstocks:write"], isStepUp: true,
   } });
+});
+
+it.each(["mcp", "rest"] as const)("replays the %s challenge to grant an orders write through plain Allow", async audience => {
+  f = await createOAuthFlowFixture({ scope: "feedstocks:read feedstocks:write orders:read orders:write offline_access" });
+  request.headers = f.headers;
+  const resource = f.config[audience];
+  const first = await f.authorize({ resource, scope: "feedstocks:read offline_access" });
+  const token = await (await first.consent("feedstocks:read offline_access")).exchange();
+  expect(token.status).toBe(200);
+  expect(token.scope?.split(" ").sort()).toEqual(["feedstocks:read", "offline_access"]);
+
+  async function callOrdersWrite(credential: typeof token) {
+    if (audience === "mcp") {
+      const { POST } = await import("@/app/api/mcp/route");
+      return POST(credential.request(resource, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "record_order", arguments: {} } }) }));
+    }
+    const { POST } = await import("@/app/api/v1/orders/route");
+    return POST(credential.request(`${resource}/orders`, { method: "POST" }));
+  }
+  const refused = await callOrdersWrite(token);
+  expect(refused.status).toBe(403);
+  expect(refused.headers.get("www-authenticate")).toContain('error="insufficient_scope"');
+  const challengeScope = /\bscope="([^"]+)"/.exec(refused.headers.get("www-authenticate") ?? "")?.[1];
+  expect(challengeScope).toBeDefined();
+  const scope = [...new Set([...challengeScope!.split(" "), "offline_access"])].join(" ");
+  const stepUp = await f.authorize({ resource, scope });
+  expect(stepUp.location.pathname).toBe("/oauth/consent");
+  const { getOAuthConsentViewFn } = await import("@/fn/oauth");
+  const result = await getOAuthConsentViewFn({ oauthQuery: stepUp.location.search.slice(1) });
+  expect(result.success).toBe(true);
+  if (!result.success) throw new Error("Step-up consent view failed");
+  const view = result.data;
+  expect(view.isStepUp).toBe(true);
+  expect(view.stepUpScopes).toContain("orders:write");
+
+  // Mirror ConsentBody's plain Allow in step-up mode, including linked read pegs.
+  const newly = view.newlyRequestedScopes as ApiScope[];
+  const allowed = view.alreadyAllowedScopes as ApiScope[];
+  const areas = buildConsentAreas([...newly, ...allowed]);
+  expect(areas.find(area => area.entity === "orders")).toMatchObject({ read: "orders:read", write: "orders:write" });
+  const ticked = preselectStepUp(areas, newly, view.stepUpScopes as ApiScope[]);
+  const submitted = [...new Set<string>([...allowed, ...ticked])].filter(value => value !== "offline_access");
+  if (view.offlineAccessRequested) submitted.push("offline_access");
+  const upgraded = await (await stepUp.consent(submitted.join(" "))).exchange();
+  expect(upgraded.status).toBe(200);
+  expect(upgraded.scope?.split(" ")).toEqual(expect.arrayContaining(["orders:read", "orders:write"]));
+  expect(await upgraded.resolve()).toMatchObject({ ok: true, ctx: {
+    scopes: expect.arrayContaining(["feedstocks:read", "orders:read", "orders:write"]),
+  } });
+  const admitted = await callOrdersWrite(upgraded);
+  // Both empty writes reach the required request key check after scope admission.
+  if (audience === "mcp") {
+    expect(admitted.status).toBe(200);
+    expect((await rpcBody(admitted)).result).toMatchObject({
+      isError: true, structuredContent: { code: "idempotency_key_required" },
+    });
+  } else {
+    expect(admitted.status).toBe(400);
+    expect(await admitted.json()).toMatchObject({ code: "idempotency_key_required" });
+  }
 });
 
 it("replaces one pending tuple and isolates other users, clients and organizations through expiry", async () => {

@@ -2,10 +2,11 @@ import { inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { toActionFailure } from "@/fn/action-errors";
 import { env } from "@/config/env";
 import { beforeEach, expect, it, vi } from "vitest";
-import { actionFailureResponse, apiDenialResponse, oauthStepUpChallengeApplies, problemResponse } from "./problem";
+import { actionFailureResponse, apiDenialResponse, oauthInsufficientScopeChallenge, oauthStepUpChallengeApplies, problemResponse } from "./problem";
 import type { DomainErrorCode } from "@/lib/domain-errors";
 import { problemSchema, customerDeleteConflictSchema } from "./problem-schema";
 import { conflictCode } from "@/lib/conflict-ref";
+import { OAUTH_GRANTABLE_SCOPES } from "@/lib/auth/oauth-scopes";
 import type { ApiContextDenial } from "@/lib/auth/api-context";
 
 vi.mock("@/config/env", async (importOriginal) => {
@@ -228,6 +229,35 @@ it("adds a step-up union for OAuth missing scope only", () => {
   expect(response.status).toBe(403);
   expect(response.headers.get("www-authenticate")).toContain('error="insufficient_scope", scope="feedstocks:read feedstocks:write"');
   expect(apiDenialResponse("missing_scope", "/api/v1/feedstocks", "id").headers.has("www-authenticate")).toBe(false);
+});
+
+it("offers the matching read when stepping up to a write in a new area", () => {
+  env.OAUTH_PROVIDER_ENABLED = true;
+  const response = apiDenialResponse("missing_scope", "/api/v1/orders", "id", {
+    oauth: true, role: "member", scopes: ["feedstocks:read"], requiredScopes: ["orders:write"],
+  });
+  expect(response.status).toBe(403);
+  expect(response.headers.get("www-authenticate")).toContain('scope="feedstocks:read orders:read orders:write"');
+});
+
+it("adds reads for held writes too, preserves order and excludes deletes", () => {
+  const challenge = oauthInsufficientScopeChallenge("https://example.test/api/v1",
+    ["feedstocks:write", "feedstocks:delete"], ["orders:write", "feedstocks:write", "orders:delete"], "member");
+  expect(challenge).toContain('scope="feedstocks:read feedstocks:write orders:read orders:write"');
+  expect(challenge).not.toContain(":delete");
+});
+
+it("does not imply a read that is not OAuth-grantable", () => {
+  const has = OAUTH_GRANTABLE_SCOPES.has.bind(OAUTH_GRANTABLE_SCOPES);
+  vi.spyOn(OAUTH_GRANTABLE_SCOPES, "has").mockImplementation(scope => scope !== "orders:read" && has(scope));
+  const challenge = oauthInsufficientScopeChallenge("https://example.test/api/v1", [], ["orders:write"], "member");
+  expect(challenge).toContain('scope="orders:write"');
+});
+
+it.each(["unknown", null])("offers no held, required or implied scopes for an empty ceiling (%s)", role => {
+  const challenge = oauthInsufficientScopeChallenge("https://example.test/api/v1",
+    ["feedstocks:write", "feedstocks:read", "feedstocks:delete"], ["orders:write", "orders:delete"], role);
+  expect(challenge).toContain('scope=""');
 });
 
 it("shares step-up eligibility across denials, provider state, principals, scopes and role ceilings", () => {
