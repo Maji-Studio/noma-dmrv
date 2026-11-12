@@ -17,7 +17,7 @@ function fill(email = "Admin@Example.com", confirm = PASSWORD) {
   fireEvent.change(screen.getByLabelText("Password"), { target: { value: PASSWORD } });
   fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: confirm } });
   // Submit the form directly: jsdom would otherwise stop an invalid email before React Hook Form runs.
-  fireEvent.submit(screen.getByRole("button", { name: "Create admin account" }).closest("form")!);
+  fireEvent.submit(screen.getByRole("button", { name: "Create Platform Admin account" }).closest("form")!);
 }
 
 afterEach(() => {
@@ -59,7 +59,9 @@ describe("SetupForm", () => {
     render(<SetupForm />);
     fill();
     await waitFor(() => expect(document.body.textContent).toContain("Your Platform Admin account is ready."));
-    expect(screen.getByRole("link", { name: "Go to sign in" }).getAttribute("href")).toBe("/login");
+    expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe("/login");
+    expect(screen.getByText("Account ready")).toBeTruthy();
+    expect(screen.queryByText("Set up noma dMRV")).toBeNull();
     expect(mocks.push).not.toHaveBeenCalled();
   });
 });
