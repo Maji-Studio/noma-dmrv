@@ -177,7 +177,7 @@ jobs:
           NODE_ENV: development
         run: pnpm db:ensure-admin
 
-      # Re-running must preserve user and organization identities.
+      # Re-running proves bootstrap can run twice without failing.
       - name: Re-run bootstrap to prove it is idempotent
         env:
           NODE_ENV: development

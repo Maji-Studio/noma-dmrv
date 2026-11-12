@@ -337,9 +337,11 @@ Notes:
 - Vercel Production/Preview secrets sync as sensitive; `NEXT_PUBLIC_*` as
   non-sensitive. Local `vercel build --target=preview` cannot reconstruct
   sensitive values — use local env injection for local builds.
-- `ADMIN_EMAIL`, `ISOMETRIC_ACCESS_TOKEN` and `ISOMETRIC_CLIENT_SECRET` live
-  in the 1Password items for workflows only, outside `.env.tpl`, so they are not
-  synced to Vercel. Sync never deletes, so older Vercel copies stay until removed
+- `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ISOMETRIC_ACCESS_TOKEN` and
+  `ISOMETRIC_CLIENT_SECRET` live only in the staging item, for
+  `reset-seed-staging`, outside `.env.tpl`, so they are not synced to Vercel.
+  Copies left in the production item can be removed; env sync reports them as
+  untracked there. Sync never deletes, so older Vercel copies stay until removed
   by hand.
 - **Optional vars may be missing from an item.** Both sync scripts skip template
   refs with no matching field (per-var warning) and abort only on a missing

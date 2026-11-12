@@ -367,7 +367,7 @@ entry in repeated parameters and comma-separated lists must qualify.
 
 These scripts share the rule, with explicit overrides for remote targets:
 
-- `pnpm db:reset` (`reset-db.ts`): `DB_RESET_ALLOW_REMOTE=true`.
+- `pnpm db:reset` and `pnpm db:reset:plain` (`reset-db.ts`): `DB_RESET_ALLOW_REMOTE=true`.
 - `pnpm db:assert-local` (`assert-local-db.ts`): `DB_MIGRATE_ALLOW_REMOTE=true`.
 - `pnpm feedstock:recalculate --include-sent`: `--allow-remote-include-sent`.
 - `pnpm db:ensure-admin` development bootstrap: `ALLOW_DEV_BOOTSTRAP=1`.
@@ -562,7 +562,7 @@ Document destructive changes and their reset requirement in the related feature 
 
 The development gate applies the merge candidate's complete migration chain to an empty, disposable database, bootstraps its admin and organization, seeds current development data, and verifies the schema. It tests the supported reset-and-seed development path without requiring upgrades of obsolete demo rows.
 
-The independent `fresh-database-gate` also runs on every PR, merge-queue group and manual run. It applies the full chain to another empty database, runs development-mode bootstrap twice to verify stable identities, and verifies the schema. Neither job substitutes schema push for migrations; promotion labels do not bypass either job.
+The independent `fresh-database-gate` also runs on every PR, merge-queue group and manual run. It applies the full chain to another empty database, runs development-mode bootstrap twice to prove it can run twice without failing, and verifies the schema. Neither job substitutes schema push for migrations; promotion labels do not bypass either job.
 
 ## Certification Tables
 
