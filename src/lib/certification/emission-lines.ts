@@ -154,8 +154,9 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
       blocker = { code: "lineNeedsReview", message: stale.reason ?? REENTER_EMISSION_ENTRY, ...(stale.reason == null ? { copy: { instruction: REENTER_EMISSION_ENTRY } } : {}), fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     }
     const total = unitMismatch || values.some((entry) => entry.total === null) ? null : sumFigures(figures);
-    // The files of the From records amount, for the review's file counts.
-    const lineFileDocuments = filePolicy === "lineFile"
+    // The files of the From records amount, for the review's file counts: only when that amount is sent with a file
+    // (not claimed by another Removal, not 0), the same rule as deriveLineFileEvidence.
+    const lineFileDocuments = recordsNeedFile(filePolicy, automaticFigure?.magnitude ?? "0")
       ? (facts.lineFiles ?? []).filter(({ anchor }) => !anchor.retiredAt && anchor.componentId === component.id).flatMap(({ documents }) => documents.map(({ id, fileName }) => ({ id, fileName })))
       : [];
     return { componentId: component.id, displayName: component.displayName, groupKey: group.key,

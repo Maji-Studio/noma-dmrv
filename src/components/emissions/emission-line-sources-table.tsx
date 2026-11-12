@@ -133,7 +133,7 @@ function RecordsFileCells({ line, lineFile, scope, readOnly, amount }: { line: E
       <span role="cell" className={MENU_CELL}>
         {slot.items.length > 0 && <EntryMenu label={`Actions for the records, ${line.displayName}`} items={slot.items} />}
       </span>
-      <LineFileDialogs line={line} slot={slot} />
+      <LineFileDialogs line={line} lineFile={lineFile} slot={slot} />
     </>
   );
 }

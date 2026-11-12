@@ -8,17 +8,12 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { attachEmissionLineFileFn, removeEmissionLineFileFn, replaceEmissionLineFilesFn } from "@/fn/emission-line-files";
-import { throwActionError } from "@/lib/stale-version";
 import type { RequestUploadOverride } from "./use-file-upload";
 import type { ActionResult } from "@/types/actions";
+import { unwrap } from "./types";
 import type { EmissionBatchScope } from "./use-emission-entries";
 import { invalidateEmissionEntryReads } from "./stale-reads";
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
-
-function unwrap<T>(result: ActionResult<T>): T {
-  if (!result.success) throwActionError(result);
-  return result.data;
-}
 
 /** The upload request for a component's file: the server makes the anchor with the first file. */
 export function useEmissionLineFileUploadRequest(scope: EmissionBatchScope, componentId: string): RequestUploadOverride {

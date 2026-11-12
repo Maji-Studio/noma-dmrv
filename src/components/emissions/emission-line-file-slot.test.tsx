@@ -104,9 +104,11 @@ describe("component file on the From records row", () => {
     expect(await screen.findByRole("menuitem", { name: `Remove ${DOCUMENT.fileName}` })).toBeTruthy();
     fireEvent.click(await screen.findByRole("menuitem", { name: "Replace files" }));
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("The files already sent to Isometric stay in history and are no longer sent. You add the new files next.")).toBeTruthy();
+    expect(within(dialog).getByText("The files already sent to Isometric stay in history and are no longer sent. Files not sent yet are removed. You add the new files next.")).toBeTruthy();
     fireEvent.click(within(dialog).getByRole("button", { name: "Replace files" }));
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith({ creditBatchId: "cb", componentId: "line-1", anchorId: "anchor", expectedVersion: 4 }));
+    // The next step, adding the new files, opens in place.
+    expect(await table.findByRole("button", { name: "Done" })).toBeTruthy();
   });
 
   it("keeps the slot off a records row another batch counts", () => {

@@ -13,6 +13,7 @@ import { ConfirmActionDialog } from "@/components/certification/confirm-action-d
 import { FormFileUpload } from "@/components/forms/form-file-upload";
 import { ServerError } from "@/components/forms/server-error";
 import { Button } from "@/components/ui";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { invalidateEmissionEntryReads } from "@/hooks/stale-reads";
@@ -42,10 +43,12 @@ export function useLineFileSlot(line: EmissionLine, lineFile: LineFile, scope: E
   const [replacing, setReplacing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const editable = !readOnly && !lineFile.locked;
+  const startAddFile = () => { setUploadError(null); setAddingFile(true); };
+  const stopAddFile = () => { setUploadError(null); setAddingFile(false); };
 
   // A file Isometric holds cannot be removed: in the correction window the set is replaced instead. Unsent files stay removable.
   const items: EntryMenuItem[] = !editable ? [] : [
-    { label: "Add file", onSelect: () => setAddingFile(true) },
+    { label: "Add file", onSelect: () => startAddFile() },
     ...lineFile.documents.filter((document) => !document.sent).map((document) => ({
       label: `Remove ${document.fileName}`,
       destructive: true,
@@ -71,8 +74,10 @@ export function useLineFileSlot(line: EmissionLine, lineFile: LineFile, scope: E
     setActionError(null);
     try {
       await replace.mutateAsync({ creditBatchId: scope.creditBatchId, componentId: line.componentId, anchorId: lineFile.anchorId, expectedVersion: lineFile.version });
-      toast.success(`Files replaced on ${line.displayName}. Add the new files.`);
+      toast.success(`Files replaced on ${line.displayName}.`);
       setReplacing(false);
+      // The next step is adding the new files, so the upload opens in place.
+      startAddFile();
     } catch (caught) {
       setActionError(toSaveErrorMessage(caught, "The files were not replaced. Try again."));
     }
@@ -80,8 +85,7 @@ export function useLineFileSlot(line: EmissionLine, lineFile: LineFile, scope: E
 
   return {
     items, editable, addingFile, uploadError, setUploadError, actionError,
-    startAddFile: () => setAddingFile(true),
-    stopAddFile: () => setAddingFile(false),
+    startAddFile, stopAddFile,
     removing, replacing, removePending: remove.isPending, replacePending: replace.isPending,
     cancelRemove: () => setRemoving(null), cancelReplace: () => setReplacing(false),
     confirmRemove, confirmReplace,
@@ -124,7 +128,10 @@ export function LineFileEvidence({ line, lineFile, scope, slot, className }: {
             resolveDocumentType={entryDocumentType}
             requestUpload={requestUpload}
             // The panel stays open until Done: closing it per file would abort the rest of a multi-file queue.
-            onUploaded={() => void invalidateEmissionEntryReads(queryClient, scope)}
+            onUploaded={() => {
+              slot.setUploadError(null);
+              void invalidateEmissionEntryReads(queryClient, scope);
+            }}
             // A refusal can mean the batch was claimed meanwhile; refresh so the slot shows the current lock.
             onUploadError={(error) => {
               slot.setUploadError(error);
@@ -133,7 +140,7 @@ export function LineFileEvidence({ line, lineFile, scope, slot, className }: {
           />
           {slot.uploadError && <ServerError message={slot.uploadError} />}
           <div>
-            <Button size="small" variant="weak" onClick={slot.stopAddFile}>Done</Button>
+            <Button size="small" variant="weak" className={PHONE_TOUCH_TARGET} onClick={slot.stopAddFile}>Done</Button>
           </div>
         </div>
       )}
@@ -142,7 +149,7 @@ export function LineFileEvidence({ line, lineFile, scope, slot, className }: {
 }
 
 /** The two confirms the ⋯ menu opens. */
-export function LineFileDialogs({ line, slot }: { line: EmissionLine; slot: ReturnType<typeof useLineFileSlot> }) {
+export function LineFileDialogs({ line, lineFile, slot }: { line: EmissionLine; lineFile: LineFile; slot: ReturnType<typeof useLineFileSlot> }) {
   return (
     <>
       <DeleteConfirmDialog
@@ -158,7 +165,7 @@ export function LineFileDialogs({ line, slot }: { line: EmissionLine; slot: Retu
       <ConfirmActionDialog
         isOpen={slot.replacing}
         title={`Replace the files on ${line.displayName}?`}
-        body="The files already sent to Isometric stay in history and are no longer sent. You add the new files next."
+        body={`The files already sent to Isometric stay in history and are no longer sent.${lineFile.documents.some((document) => !document.sent) ? " Files not sent yet are removed." : ""} You add the new files next.`}
         confirmLabel={REPLACE_FILES_LABEL}
         onConfirm={() => void slot.confirmReplace()}
         onClose={slot.cancelReplace}

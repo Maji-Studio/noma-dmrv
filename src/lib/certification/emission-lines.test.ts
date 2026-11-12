@@ -312,3 +312,17 @@ it.each(ENTRY_FILE_CASES)("applies the entry file requirement to $label", ({ mag
   expect(componentResult.state).toBe(missing ? "missingEvidence" : "filled");
   expect(componentResult.blocker?.code).toBe(missing ? "entryMissingEvidence" : undefined);
 });
+
+it.each([
+  ["a sent records amount", "1", false, 1],
+  ["a records amount of 0", "0", false, 0],
+  ["records claimed by another Removal", "1", true, 0],
+] as const)("counts the component files of %s for the review", (_case, magnitude, omitted, count) => {
+  const f = facts();
+  const componentId = deriveBatchEmissionLines(f)[0].componentId;
+  f.lineSources[componentId] = { ...f.lineSources[componentId], filePolicy: "lineFile" };
+  f.automaticFigures = { "run-electricity": { magnitude, unit: "kWh" } };
+  if (omitted) f.omittedAutomaticSources = ["run-electricity"];
+  f.lineFiles = [{ anchor: { id: "anchor", componentId, version: 2 }, documents: [{ id: "proof", fileName: "proof.pdf", version: 1 }] }];
+  expect(deriveBatchEmissionLines(f)[0].lineFileDocuments ?? []).toHaveLength(count);
+});

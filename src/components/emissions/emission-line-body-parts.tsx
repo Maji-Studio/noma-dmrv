@@ -11,6 +11,7 @@ import Link from "next/link";
 import { ArrowUpRightIcon, ClockIcon, FileIcon, PlusIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms/server-error";
 import { Button, Notice } from "@/components/ui";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
 import { removalTemplateSetupHref, removalTemplatesSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
 import { entryFileMissing } from "@/lib/certification/emission-entry-evidence";
@@ -176,17 +177,18 @@ export function useEntryActions(onEdit: () => void, onDelete: () => void) {
     { label: "Add file", onSelect: () => setAddingFile(true) },
     { label: "Delete", onSelect: onDelete, destructive: true },
   ];
-  return { items, addingFile, startAddFile: () => setAddingFile(true), stopAddFile: () => setAddingFile(false), uploadError, setUploadError };
+  return { items, addingFile, startAddFile: () => { setUploadError(null); setAddingFile(true); }, stopAddFile: () => { setUploadError(null); setAddingFile(false); }, uploadError, setUploadError };
 }
 
 function AddFilePanel({ entry, scope, actions }: { entry: EmissionEntry; scope: EmissionBatchScope; actions: ReturnType<typeof useEntryActions> }) {
   if (!actions.addingFile) return null;
   return (
     <div className="flex flex-col gap-8 pt-4">
-      <EntryFileUpload id={`entry-file-${entry.id}`} entry={entry} scope={scope} onUploaded={actions.stopAddFile} onError={actions.setUploadError} />
+      {/* The panel stays open until Done: closing it per file would abort the rest of a multi-file upload. */}
+      <EntryFileUpload id={`entry-file-${entry.id}`} entry={entry} scope={scope} onUploaded={() => actions.setUploadError(null)} onError={actions.setUploadError} />
       {actions.uploadError && <ServerError message={actions.uploadError} />}
       <div>
-        <Button size="small" variant="weak" onClick={actions.stopAddFile}>Done</Button>
+        <Button size="small" variant="weak" className={PHONE_TOUCH_TARGET} onClick={actions.stopAddFile}>Done</Button>
       </div>
     </div>
   );
