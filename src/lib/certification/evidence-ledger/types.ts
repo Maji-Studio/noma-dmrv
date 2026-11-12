@@ -83,6 +83,7 @@ export interface LedgerCategory {
 }
 
 export interface LedgerModel {
+  organizationName: string;
   memberBatchCodes: string | null;
   facilityName: string | null;
   externalProjectId: string | null;

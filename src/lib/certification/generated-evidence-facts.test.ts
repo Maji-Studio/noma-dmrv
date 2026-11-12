@@ -40,13 +40,22 @@ function context(tier: "200_year" | "1000_year"): RemovalSubmissionContext {
   } as unknown as RemovalSubmissionContext;
 }
 
-// Captured from the pre-refactor implementation. These bytes are sent snapshot baselines.
+// Source-fact pins stay frozen; rendered-model pins include the owning organization.
 it.each([
-  ["200_year", "6728022445c054c6858c7a714fac47052b34fbdd3a28b462e080db83c5a74635", "c7d57cf565c7373bd07972575f5af336a3fd07eb36e835e25dfb02690df6e01a"],
-  ["1000_year", "571b6a6a8e44759fb9153158121b55db1400daf365fe95fd917f9800080aeeeb", "72fe09a141bac25e1f787a074ec4366a0156faf14db16faa77e65edfe9d22c6e"],
+  ["200_year", "6728022445c054c6858c7a714fac47052b34fbdd3a28b462e080db83c5a74635", "1b7214372e1d942c09cc44ec6f9247721f94dd9a6778eae3131f53ebfe9b2efa"],
+  ["1000_year", "571b6a6a8e44759fb9153158121b55db1400daf365fe95fd917f9800080aeeeb", "c110345ca85c513ac1592d1fef99a901eac0dec4e437d1195aee91e7dc96ee34"],
 ] as const)("preserves frozen fingerprints and ledger content for %s", (tier, durability, modelHash) => {
   const ctx = context(tier);
   expect(generatedEvidenceFacts(ctx)).toEqual({ format: "ledger-inputs-v2", transport: "cd977aea589d4819e58f092fdf33c74cdba4b62357c430d193666292a8209e41", durability });
-  expect(stableLedgerContentHash(transportLedgerModel(ctx, "Facility", "2026-01-20"))).toBe("9a4d664ffc906fcc5a7e8a7b2a9b516d0685eb37be4e7952d6ccdd8c02209c28");
-  expect(stableLedgerContentHash(durabilityLedgerModel(ctx, "Facility", "2026-01-20").model)).toBe(modelHash);
+  expect(stableLedgerContentHash(transportLedgerModel(ctx, "Facility", "2026-01-20", "Example Carbon"))).toBe("762a1802d960971a0d73699e495c5024a0be813f913f5c83c4d3bb4780524c9b");
+  expect(stableLedgerContentHash(durabilityLedgerModel(ctx, "Facility", "2026-01-20", "Example Carbon").model)).toBe(modelHash);
+});
+
+
+it.each(["200_year", "1000_year"] as const)("invalidates rendered ledger hashes on an organization rename for %s", (tier) => {
+  const ctx = context(tier);
+  expect(stableLedgerContentHash(transportLedgerModel(ctx, "Facility", "first", "Example Carbon")))
+    .not.toBe(stableLedgerContentHash(transportLedgerModel(ctx, "Facility", "later", "Another Operator")));
+  expect(stableLedgerContentHash(durabilityLedgerModel(ctx, "Facility", "first", "Example Carbon").model))
+    .not.toBe(stableLedgerContentHash(durabilityLedgerModel(ctx, "Facility", "later", "Another Operator").model));
 });

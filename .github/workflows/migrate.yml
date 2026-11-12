@@ -21,14 +21,13 @@ on:
         options:
           - reset-seed-staging
           - reset-empty-staging
-          - bootstrap-production
           - reset-production
       authorized:
         description: "Check only after explicit approval to wipe production"
         required: false
         type: boolean
       confirmation:
-        description: "Type RESET AND SEED STAGING, RESET STAGING (EMPTY), BOOTSTRAP PRODUCTION, or RESET PRODUCTION to confirm"
+        description: "Type RESET AND SEED STAGING, RESET STAGING (EMPTY), or RESET PRODUCTION to confirm"
         required: true
         type: string
 
@@ -178,63 +177,6 @@ jobs:
       - name: Verify production schema matches Drizzle definitions
         run: pnpm db:verify-schema
 
-  # ── One-time manual production bootstrap ──────────────────────────────────────────
-  bootstrap-production:
-    runs-on: ubuntu-latest
-    environment: production
-    if: >-
-      github.event_name == 'workflow_dispatch' &&
-      github.ref == 'refs/heads/main' &&
-      github.event.inputs.action == 'bootstrap-production' &&
-      github.event.inputs.confirmation == 'BOOTSTRAP PRODUCTION'
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-
-      - name: Load production bootstrap secrets from 1Password
-        uses: 1password/load-secrets-action@70062d7a876d3eb6334754fa26efd2fbd90c32f2 # v5.0.1
-        with:
-          export-env: true
-          version: ${{ env.OP_CLI_VERSION }}
-        env:
-          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
-          DATABASE_URL: op://Environment Variables/noma-dmrv env production/DATABASE_URL
-          # Provider CA keeps managed database TLS verification enabled.
-          DATABASE_CA_CERT: op://Environment Variables/noma-dmrv env production/DATABASE_CA_CERT
-          ADMIN_EMAIL: op://Environment Variables/noma-dmrv env production/ADMIN_EMAIL
-          ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env production/ADMIN_PASSWORD
-          CREDENTIALS_ENCRYPTION_KEY: op://Environment Variables/noma-dmrv env production/CREDENTIALS_ENCRYPTION_KEY
-          ISOMETRIC_ACCESS_TOKEN: op://Environment Variables/noma-dmrv env production/ISOMETRIC_ACCESS_TOKEN
-          ISOMETRIC_CLIENT_SECRET: op://Environment Variables/noma-dmrv env production/ISOMETRIC_CLIENT_SECRET
-
-      - name: Setup pnpm
-        # Version comes from packageManager in package.json.
-        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Typecheck application
-        run: pnpm typecheck
-
-      - name: Log production database target
-        run: |
-          node -e "const url = new URL(process.env.DATABASE_URL); console.log(`Database target: host=${url.hostname} port=${url.port || '5432'} user=${decodeURIComponent(url.username)} db=${url.pathname.slice(1)} sslmode=${url.searchParams.get('sslmode') ?? 'not set'}`)"
-
-      - name: Bootstrap production admin, organization, and registry credentials
-        env:
-          NODE_ENV: production
-        run: pnpm db:ensure-admin
-
   # ── Manual reset + seed: staging ───────────────────────────────────────
   reset-seed-staging:
     runs-on: ubuntu-latest
@@ -332,7 +274,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Load staging database + admin secrets from 1Password
+      - name: Load staging database secrets from 1Password
         uses: 1password/load-secrets-action@70062d7a876d3eb6334754fa26efd2fbd90c32f2 # v5.0.1
         with:
           export-env: true
@@ -343,8 +285,6 @@ jobs:
           # Provider CA so the pg pool verifies the managed database's TLS.
           DATABASE_CA_CERT: op://Environment Variables/noma-dmrv env staging/DATABASE_CA_CERT
           DB_RESET_ALLOW_REMOTE: op://Environment Variables/noma-dmrv env staging/DB_RESET_ALLOW_REMOTE
-          ADMIN_EMAIL: op://Environment Variables/noma-dmrv env staging/ADMIN_EMAIL
-          ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env staging/ADMIN_PASSWORD
 
       - name: Setup pnpm
         # Version comes from packageManager in package.json.
@@ -363,12 +303,9 @@ jobs:
         run: |
           node -e "const url = new URL(process.env.DATABASE_URL); console.log(`Database target: host=${url.hostname} port=${url.port || '5432'} user=${decodeURIComponent(url.username)} db=${url.pathname.slice(1)} sslmode=${url.searchParams.get('sslmode') ?? 'not set'}`)"
 
-      # No seed: drops all data, re-applies tracked migrations, ensures the
-      # admin user (so you can still sign in) — an empty start-from-scratch DB.
+      # No seed or bootstrap: the first visitor chooses the Platform Admin.
       - name: Reset staging database (empty, no demo data)
-        env:
-          ALLOW_DEV_BOOTSTRAP: "1"
-        run: pnpm db:reset && pnpm db:verify-schema
+        run: pnpm db:reset:plain && pnpm db:verify-schema
 
   # ── Manual reset: production ────────────────────────────────────────────
   reset-production:
@@ -387,7 +324,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Load production database + admin secrets from 1Password
+      - name: Load production database secrets from 1Password
         uses: 1password/load-secrets-action@70062d7a876d3eb6334754fa26efd2fbd90c32f2 # v5.0.1
         with:
           export-env: true
@@ -398,11 +335,6 @@ jobs:
           # Provider CA keeps managed database TLS verification enabled.
           DATABASE_CA_CERT: op://Environment Variables/noma-dmrv env production/DATABASE_CA_CERT
           DB_RESET_ALLOW_REMOTE: op://Environment Variables/noma-dmrv env production/DB_RESET_ALLOW_REMOTE
-          ADMIN_EMAIL: op://Environment Variables/noma-dmrv env production/ADMIN_EMAIL
-          ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env production/ADMIN_PASSWORD
-          CREDENTIALS_ENCRYPTION_KEY: op://Environment Variables/noma-dmrv env production/CREDENTIALS_ENCRYPTION_KEY
-          ISOMETRIC_ACCESS_TOKEN: op://Environment Variables/noma-dmrv env production/ISOMETRIC_ACCESS_TOKEN
-          ISOMETRIC_CLIENT_SECRET: op://Environment Variables/noma-dmrv env production/ISOMETRIC_CLIENT_SECRET
 
       - name: Setup pnpm
         # Version comes from packageManager in package.json.
@@ -425,5 +357,5 @@ jobs:
         env:
           NODE_ENV: production
         run: |
-          pnpm db:reset
+          pnpm db:reset:plain
           pnpm db:verify-schema

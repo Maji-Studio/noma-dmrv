@@ -65,7 +65,7 @@ workspace and document read keeps normal organization scoping.
 - **How `activeOrganizationId` gets set:** every successful explicit switch persists `users.lastActiveOrganizationId`. On session creation, the hook restores that organization only after revalidating current access. If it is missing or stale, ordinary users receive their first membership ordered by membership creation time then id; Platform Admins receive the first organization ordered by organization creation time then id. Users with no accessible organizations remain without an active org. The saved id is a preference, never an authorization grant.
 - **`allowUserToCreateOrganization: false`** — orgs are created only through the Platform-Admin-guarded server action, which makes the *selected* user an Admin, not the acting admin. `afterCreateOrganization` seeds starter types via `seedOrgDefaults` and deliberately swallows failures rather than wedging the create.
 - **The CLI org-context seam is `runWithCliOrgContext` (`src/lib/cli/org-context.ts`).** A CLI (today the Mafinga seed) has no session, so it runs server actions inside an org context written to an `AsyncLocalStorage` that `resolveOrgContext()` reads first. The seam accepts identity IDs only and verifies them itself: the user must hold `users.role = 'admin'` and the organization must exist, and the context it builds is always Admin plus Platform Admin. It refuses to run when `NODE_ENV=production` without `ALLOW_DEV_BOOTSTRAP=1`. The storage lives in `src/lib/auth/cli-org-context-store.ts` and only that CLI module may write to it, so `src/lib/auth/server.ts` exports the read side alone. **Request code must never import either module**: a request resolves its context from the session.
-- **`users.role` is declared `input: false`** on the Better Auth additionalField, so it can never be set through self-service signup. Role is assigned only by the admin-bootstrap CLI (`src/lib/cli/ensure-admin-core.ts`) or a Platform Admin path.
+- **`users.role` is declared `input: false`** on the Better Auth additionalField, so it can never be set through self-service signup. Role is assigned by first-run setup, the development admin CLI (`src/lib/cli/ensure-admin-core.ts`), or a Platform Admin path.
 
 The deliberate `// org-scope-ok:` credential-verification seam,
 `verifyIsometricCredentialsForOrganization(ctx, organizationId)`, uses the same
@@ -124,9 +124,21 @@ Two distinct limiters — a real trip hazard:
 1. Better Auth's limiter (`src/lib/auth/better-auth.ts`) is on unless `DISABLE_RATE_LIMIT === "true"` in development/test or in a CI production build on a loopback origin (policy in `src/lib/auth/rate-limit-policy.ts`, entry in [security.md](./security.md); E2E relies on it, see [testing.md](./testing.md)). Production deployments always keep it on. It has tightened custom rules on `/sign-in/email`, `/sign-up/email`, `/request-password-reset`, `/reset-password`.
 2. `withAction` and `withAuthAction` have an opt-in per-user in-memory limiter (`options.rateLimit`) for expensive actions only.
 
+## Plain first run
+
+`db:reset:plain` replays migrations without creating users or organizations.
+The first visitor chooses an email and password at `/setup`.
+`hasAnyUser()` supplies the routing check; `createFirstAdminAction` validates
+input and calls `createFirstPlatformAdmin`, which rechecks the empty-user condition
+under a transaction-scoped advisory lock. The user is a verified Platform Admin
+named Admin, with a Better Auth credential account. No organization is created.
+The action signs in through Better Auth's `nextCookies` plugin and returns
+`/platform/organizations`. If session creation fails after the account commits,
+it returns `/login` with a warning. Any existing user closes setup.
+
 ## Invitations
 
-Signup is invite-only: public signup is off in code (`disableSignUp: true` in `src/lib/auth/better-auth.ts`), with no env flag to turn it on. Users join through an organization invite or the admin bootstrap CLI.
+Signup is invite-only: public signup is off in code (`disableSignUp: true` in `src/lib/auth/better-auth.ts`), with no env flag to turn it on. The first Platform Admin is chosen at `/setup` while no user exists; later users join through organization invitations. Local development, CI and seeded staging retain the env-based admin CLI.
 
 Organization Admins invite from organization settings; Better Auth enforces invitation and membership changes server-side. Re-inviting the same email cancels the stale pending invite. Email delivery is best-effort — the inviter always gets a copyable accept link. Invitations and membership management live in Settings, Members (`/settings/members`).
 
@@ -167,10 +179,11 @@ Successful password changes and resets disconnect the user's connected apps in e
 
 Email changes use `useChangeEmail` → `changeEmailFn` in `src/fn/profile.ts` → `auth.api.changeEmail`, with server-side Zod validation and a fixed Profile callback. The action requires the current password through Better Auth’s `verifyPassword` and limits requests to 5 per 15 minutes per user; the HTTP `/change-email` endpoint is refused so it cannot bypass password verification. A confirmation link goes to the new address and a best-effort notice goes to the old address when the request is made. The address changes only when the link is opened. Requests require a fresh session, using Better Auth's default `freshAge` of 24 hours. The app's before-hook enforces freshness because Better Auth 1.7.10's sensitive-session middleware checks session validity only. The freshness before-hook runs for direct API calls; HTTP requests are refused first. A stale session returns `SESSION_EXPIRED`, translated by the action to `session_expired` and propagated by the hook as an `ActionError`; sign in again before retrying. Confirmation checks the authoritative session store, bypassing the cookie cache, and requires the requester's session creation time, floored to seconds, to be no later than the link's signed `iat`; password reset revokes all sessions, so a later sign-in cannot redeem the old link. Refusals redirect to the safe callback with `error=SIGN_IN_REQUIRED` for no session, `INVALID_TOKEN` for an already-used link or a session newer than the link, and `WRONG_ACCOUNT` for another account, without creating a session or setting a cookie. An address already belonging to an account returns the same `{ status: true }` and pending state, with neither email sent. Delivery failures for confirmation propagate like normal verification; notice failures never block the request.
 
-Memberships, credentials and Platform Admin authority use user IDs and stored roles, so changing an address preserves them. Pending invitations remain bound to their original recipient address; ask an Admin to cancel and re-invite the new address. The admin bootstrap CLI still finds its target by `ADMIN_EMAIL`: after a Platform Admin changes their email, update that operator configuration before rerunning bootstrap or it can create another admin at the old address.
+Memberships, credentials and Platform Admin authority use user IDs and stored roles, so changing an address preserves them. Pending invitations remain bound to their original recipient address; ask an Admin to cancel and re-invite the new address. The development admin CLI still finds its target by `ADMIN_EMAIL`: after a Platform Admin changes their email, update that operator configuration before rerunning bootstrap or it can create another admin at the old address.
 
-For staging/prod that configuration is `ADMIN_EMAIL` in the matching
-1Password item, and bootstrap runs through the `migrate.yml` workflow.
+For seeded staging that configuration is `ADMIN_EMAIL` in the staging
+1Password item, used by `reset-seed-staging`. Plain production setup does not
+consume `ADMIN_EMAIL` or `ADMIN_PASSWORD`; the CLI refuses production.
 
 ## Better Auth schema and credential identity
 

@@ -72,7 +72,7 @@ export function ForgotPasswordForm() {
             <FormInput
               id="email"
               type="email"
-              placeholder="name@darkearthcarbon.com"
+              placeholder="name@company.com"
               disabled={isSubmitting}
               error={!!errors.email}
               aria-label="Email address"

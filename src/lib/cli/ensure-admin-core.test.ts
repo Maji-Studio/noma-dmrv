@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { accounts, users } from "@/db/schema";
 import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH } from "@/config/auth";
 import { hashPassword } from "better-auth/crypto";
-import { ensureAdminUser, ensureOrgFoundation, resolveBootstrapMode, type EnsureAdminDb } from "./ensure-admin-core";
+import { ensureAdminUser, ensureOrgFoundation, assertDevelopmentBootstrapAllowed, type EnsureAdminDb } from "./ensure-admin-core";
 
 vi.mock("better-auth/crypto", () => ({ hashPassword: vi.fn(async () => "test-hash") }));
 vi.mock("@/db", () => ({ db: {} }));
@@ -13,43 +13,44 @@ const TEST_HASH = "test-hash";
 
 describe("bootstrap database locality", () => {
   it("refuses a remote host override on a localhost URL", () => {
-    expect(() => resolveBootstrapMode({
+    expect(() => assertDevelopmentBootstrapAllowed({
       DATABASE_URL: "postgresql://localhost/app?host=db.example.com",
     })).toThrow("Refusing development bootstrap against a non-local database");
   });
 
   it("allows an explicit development override for a remote host override", () => {
-    expect(resolveBootstrapMode({
+    expect(assertDevelopmentBootstrapAllowed({
       DATABASE_URL: "postgresql://localhost/app?host=db.example.com",
       ALLOW_DEV_BOOTSTRAP: "1",
-    })).toBe("development");
+    })).toBeUndefined();
   });
 
   it("allows IPv6 loopback development bootstrap", () => {
-    expect(resolveBootstrapMode({
+    expect(assertDevelopmentBootstrapAllowed({
       DATABASE_URL: "postgresql://postgres@[::1]/app",
-    })).toBe("development");
+    })).toBeUndefined();
   });
 
   it.each([undefined, "", "   "])("preserves the missing or blank URL error for %s", (databaseUrl) => {
-    expect(() => resolveBootstrapMode({
+    expect(() => assertDevelopmentBootstrapAllowed({
       DATABASE_URL: databaseUrl,
       ALLOW_DEV_BOOTSTRAP: "1",
     })).toThrow("DATABASE_URL environment variable is not set or is blank");
   });
 
   it("preserves the invalid URL error even with a development override", () => {
-    expect(() => resolveBootstrapMode({
+    expect(() => assertDevelopmentBootstrapAllowed({
       DATABASE_URL: "not-a-url",
       ALLOW_DEV_BOOTSTRAP: "1",
     })).toThrow("DATABASE_URL environment variable is not a valid URL");
   });
 
-  it.each([undefined, "not-a-url"])("keeps production mode independent of URL validity for %s", (databaseUrl) => {
-    expect(resolveBootstrapMode({
+  it.each([undefined, "not-a-url"])("refuses production before checking URL validity for %s", (databaseUrl) => {
+    expect(() => assertDevelopmentBootstrapAllowed({
       NODE_ENV: "production",
       DATABASE_URL: databaseUrl,
-    })).toBe("production");
+      ALLOW_DEV_BOOTSTRAP: "1",
+    })).toThrow("Open /setup");
   });
 });
 
@@ -80,7 +81,7 @@ describe("bootstrap credential identity", () => {
 
   it("uses the generated admin user ID as the credential account ID", async () => {
     const { db, writes } = mockDatabase();
-    const userId = await ensureAdminUser(db, "admin@example.invalid", TEST_PASSWORD, "development");
+    const userId = await ensureAdminUser(db, "admin@example.invalid", TEST_PASSWORD);
     expect(writes.find((write) => write.table === users)?.data.id).toBe(userId);
     expect(writes.find((write) => write.table === accounts)?.data).toMatchObject({
       accountId: userId, userId, providerId: "credential",
@@ -89,7 +90,7 @@ describe("bootstrap credential identity", () => {
 
   it("uses an existing user's ID when creating their missing credential", async () => {
     const { db, writes } = mockDatabase([[{ id: EXISTING_USER_ID }], []]);
-    await ensureAdminUser(db, "admin@example.invalid", TEST_PASSWORD, "development");
+    await ensureAdminUser(db, "admin@example.invalid", TEST_PASSWORD);
     expect(writes.find((write) => write.table === accounts)?.data).toMatchObject({
       accountId: EXISTING_USER_ID, userId: EXISTING_USER_ID,
     });
@@ -97,7 +98,7 @@ describe("bootstrap credential identity", () => {
 
   it("updates the existing development credential password", async () => {
     const { db, writes } = mockDatabase([[{ id: EXISTING_USER_ID }], [{ id: "account-id" }]]);
-    await ensureAdminUser(db, "admin@example.invalid", TEST_PASSWORD, "development");
+    await ensureAdminUser(db, "admin@example.invalid", TEST_PASSWORD);
     expect(writes.find((write) => write.table === accounts)?.data).toEqual({
       password: TEST_HASH,
     });
@@ -105,7 +106,7 @@ describe("bootstrap credential identity", () => {
 
   it("uses the generated teammate user ID for credentials", async () => {
     const { db, writes } = mockDatabase();
-    await ensureOrgFoundation(db, EXISTING_USER_ID, TEST_HASH, "development");
+    await ensureOrgFoundation(db, EXISTING_USER_ID, TEST_HASH);
     const userId = writes.find((write) => write.table === users)?.data.id;
     expect(userId).toEqual(expect.any(String));
     expect(writes.find((write) => write.table === accounts)?.data).toMatchObject({
@@ -118,7 +119,7 @@ describe("bootstrap credential identity", () => {
     vi.mocked(hashPassword).mockClear();
 
     await expect(ensureAdminUser(
-      db, "admin@example.invalid", "x".repeat(AUTH_PASSWORD_MAX_LENGTH + 1), "development",
+      db, "admin@example.invalid", "x".repeat(AUTH_PASSWORD_MAX_LENGTH + 1),
     )).rejects.toThrow(
       `ADMIN_PASSWORD must be between ${AUTH_PASSWORD_MIN_LENGTH} and ${AUTH_PASSWORD_MAX_LENGTH} characters`,
     );

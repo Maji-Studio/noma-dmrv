@@ -158,7 +158,7 @@ function masthead(model: DurabilityLedgerModel): ReactElement {
   const left = v({}, {},
     v(styles.wordmarkRow, {},
       t(styles.wordmark, "noma"),
-      t(styles.wordmarkSub, "dMRV · DARK EARTH CARBON"),
+      t(styles.wordmarkSub, `dMRV · ${model.organizationName.toUpperCase()}`),
     ),
     t(styles.eyebrow, "BIOCHAR IN SOIL · MODULE 1.2 · §3 T2 · §8.3.1"),
     h(Text, { style: styles.title }, "200-Year Durability\nEvidence Ledger"),

@@ -59,6 +59,12 @@ export const ACTION_BOUNDARY_ALLOWLIST: readonly ActionBoundaryException[] = [
     reason: "Invitation bootstrap runs before an account or active organization exists.",
   },
   {
+    file: "src/fn/first-run.ts",
+    function: "createFirstAdminAction",
+    sites: { "action-failure": 1 },
+    reason: "First-run setup creates the first account, so no session or active organization exists yet.",
+  },
+  {
     file: "src/fn/organizations.ts",
     function: "toWarnableResult",
     sites: { "catch-failure": 4 },

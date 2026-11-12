@@ -10,6 +10,7 @@ const run = {
   startTime: new Date("2026-01-01"), endTime: new Date("2026-01-02"), samples: [],
 } as unknown as ProductionRunForCertification;
 const metadata = {
+  organizationName: "Example Carbon",
   memberBatchCodes: "CB-1", facilityName: "Facility", externalProjectId: null,
   generatedAtIso: "2026-01-03T00:00:00.000Z",
 };

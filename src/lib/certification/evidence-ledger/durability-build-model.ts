@@ -37,6 +37,7 @@ export interface BuildDurabilityLedgerModelArgs {
   rowOrder?: LedgerRowOrder;
   /** Facility reference soil temperature (7 °C-floored; non-null past the gate). */
   facilityReferenceSoilTemperature: FacilityReferenceSoilTemperature;
+  organizationName: string;
   memberBatchCodes: string | null;
   facilityName: string | null;
   externalProjectId: string | null;
@@ -98,6 +99,7 @@ export function buildDurabilityLedgerModel(
 
   const soil = args.facilityReferenceSoilTemperature;
   return {
+    organizationName: args.organizationName,
     memberBatchCodes: args.memberBatchCodes,
     facilityName: args.facilityName,
     externalProjectId: args.externalProjectId,

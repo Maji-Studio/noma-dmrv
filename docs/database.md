@@ -367,7 +367,7 @@ entry in repeated parameters and comma-separated lists must qualify.
 
 These scripts share the rule, with explicit overrides for remote targets:
 
-- `pnpm db:reset` (`reset-db.ts`): `DB_RESET_ALLOW_REMOTE=true`.
+- `pnpm db:reset` and `pnpm db:reset:plain` (`reset-db.ts`): `DB_RESET_ALLOW_REMOTE=true`.
 - `pnpm db:assert-local` (`assert-local-db.ts`): `DB_MIGRATE_ALLOW_REMOTE=true`.
 - `pnpm feedstock:recalculate --include-sent`: `--allow-remote-include-sent`.
 - `pnpm db:ensure-admin` development bootstrap: `ALLOW_DEV_BOOTSTRAP=1`.
@@ -381,7 +381,8 @@ These scripts share the rule, with explicit overrides for remote targets:
 | `pnpm db:studio` | Open Drizzle Studio. | Safe |
 | `pnpm db:verify-schema` | Diff the live database against the Drizzle schema. | Safe |
 | `pnpm db:push` | Push schema directly. Schema experimentation only — never after a migration has been generated. | Local only |
-| `pnpm db:reset` | `reset-db.ts` → `db:migrate` → `db:ensure-admin`. Applies the **full migration chain** (not `push`), so it is the local rehearsal of the CI/production path — a broken migration surfaces here. | Destructive |
+| `pnpm db:reset:plain` | `reset-db.ts` → `db:migrate`. Plain local setup and empty-staging/production resets. | Destructive |
+| `pnpm db:reset` | `reset-db.ts` → `db:migrate` → `db:ensure-admin`. Local, CI and seeded-staging path with admin bootstrap. | Destructive |
 
 - **Fresh clone: run `pnpm dev:docker:init`.** Plain `pnpm dev` starts Docker,
   waits for Postgres, confirms `DATABASE_URL` is local (`pnpm db:assert-local`),
@@ -393,6 +394,19 @@ These scripts share the rule, with explicit overrides for remote targets:
 - Connection via `DATABASE_URL`. `src/db/index.ts` builds the app pool from `getPgPoolConfig` (`src/lib/pg-pool-config.ts`, connection string and SSL) and `resolveAppPoolConfig` (`src/db/pool-config.ts`, which owns every `DEFAULT_DB_POOL_*` constant and `MAX_VERCEL_DB_POOL_MAX`). Four environment variables feed it: `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`, `DB_POOL_CONNECTION_TIMEOUT_MS`, and `DB_POOL_LOCK_TIMEOUT_MS`. CLI scripts build short-lived pools through `src/lib/cli/*` and do not share the app pool. The Mafinga seed (`src/lib/cli/seed/`) is the one exception: it calls the real server actions, so it uses the app pool they use.
 - The module-scope pool is registered with Vercel's [`attachDatabasePool`](https://vercel.com/docs/functions/functions-api-reference/vercel-functions-package#database-connection-pool-management), which keeps a Fluid Compute instance alive until `pg` releases its idle clients. The idle default is 5 seconds. `DB_POOL_MAX` defaults to 1, and each environment sets its own value from measurement (see [Pool sizing and compute placement](#pool-sizing-and-compute-placement)); a Vercel deployment fails closed above `MAX_VERCEL_DB_POOL_MAX` because per-instance pools multiply.
 - Pooled statements wait at most 1 second for a conflicting database lock by default, configurable with the positive `DB_POOL_LOCK_TIMEOUT_MS`. Keep it below the pool connection-acquisition timeout. PostgreSQL reports `55P03` on a lock timeout; the waiting transaction rolls back and can be retried after the conflicting operation finishes. This prevents a waiting writer from occupying the only pooled connection during registry cleanup. Dedicated certification lock connections do not inherit this setting: an active registry DELETE retains its fence until the protected callback finishes. This is a lock-acquisition timeout, not a statement or remote-request deadline.
+
+### Plain first run
+
+`pnpm db:reset:plain` drops the database schemas and replays tracked migrations
+without admin bootstrap or demo data. The cleanup migration removes the unused
+default organization from a fresh chain and leaves it where it holds data. The
+first visitor chooses the Platform Admin at `/setup`, then creates organizations
+from `/platform/organizations`.
+
+`pnpm db:reset` retains env-based admin bootstrap and the default development
+organization for local development, CI and seeded staging. `ADMIN_EMAIL` and
+`ADMIN_PASSWORD` serve only those paths; `db:ensure-admin` refuses production.
+The manually confirmed empty-staging and production resets use `db:reset:plain`.
 
 ### Mafinga demo seed
 
@@ -548,7 +562,7 @@ Document destructive changes and their reset requirement in the related feature 
 
 The development gate applies the merge candidate's complete migration chain to an empty, disposable database, bootstraps its admin and organization, seeds current development data, and verifies the schema. It tests the supported reset-and-seed development path without requiring upgrades of obsolete demo rows.
 
-The independent `fresh-database-gate` also runs on every PR, merge-queue group and manual run. It applies the full chain to another empty database, runs production-mode bootstrap twice to prove idempotence, and verifies the schema. Neither job substitutes schema push for migrations; promotion labels do not bypass either job.
+The independent `fresh-database-gate` also runs on every PR, merge-queue group and manual run. It applies the full chain to another empty database, runs development-mode bootstrap twice to prove it can run twice without failing, and verifies the schema. Neither job substitutes schema push for migrations; promotion labels do not bypass either job.
 
 ## Certification Tables
 

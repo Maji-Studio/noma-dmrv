@@ -18,12 +18,13 @@ function memberCodes(ctx: RemovalSubmissionContext) {
 }
 
 /** Deterministic render inputs; correction reads compare source facts separately. */
-export function transportLedgerModel(ctx: RemovalSubmissionContext, facilityName: string | null, generatedAtIso: string) {
+export function transportLedgerModel(ctx: RemovalSubmissionContext, facilityName: string | null, generatedAtIso: string, organizationName: string) {
   const memberBatchCodes = memberCodes(ctx);
 
   return buildLedgerModel({
     legsByCategory: ctx.transportLegs,
     rowOrder: "canonical",
+    organizationName,
     memberBatchCodes,
     facilityName,
     externalProjectId: ctx.mapping!.externalProjectId,
@@ -31,13 +32,14 @@ export function transportLedgerModel(ctx: RemovalSubmissionContext, facilityName
   });
 
 }
-export function durabilityLedgerModel(ctx: RemovalSubmissionContext, facilityName: string | null, generatedAtIso: string) {
+export function durabilityLedgerModel(ctx: RemovalSubmissionContext, facilityName: string | null, generatedAtIso: string, organizationName: string) {
   const memberBatchCodes = memberCodes(ctx);
 
   const commonModelArgs = {
     batches: ctx.batchesWithSamples,
     rowOrder: "canonical" as const,
     attributionByRunId: ctx.attributionByRunId,
+    organizationName,
     memberBatchCodes,
     facilityName,
     externalProjectId: ctx.mapping!.externalProjectId,

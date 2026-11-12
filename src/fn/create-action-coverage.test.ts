@@ -51,6 +51,7 @@ const EXCEPTION: Record<string, string> = {
   "certification/emission-zeros#recordEmissionZerosFn": "Reuses zero entries and checks the removal version.",
   "feedstock-types#importIsometricFeedstockTypeFn": "Refuses an already imported isometricFeedstockTypeId.",
   "organizations#createOrganizationAction": "platform create outside an org; replays through its own store keyed by parseCreateIntentKey",
+  "first-run#createFirstAdminAction": "Creates the first account only while no user exists, under an advisory lock; a retry is refused.",
   "invitation-bootstrap#bootstrapInvitationAccountAction": "Pre-sign-in bootstrap creates only a pending user; retries send a cooldown-limited setup email.",
   "certification/create-removal-with-batches#createRemovalWithBatchesAction": "Rechecks ungrouped batches under row locks.",
   "certification/ghg-statements#createGhgStatementDraft": "External POST adopts or refuses a matching remote statement under a facility lock.",

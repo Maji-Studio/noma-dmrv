@@ -42,6 +42,7 @@ function emptyCategories(): TransportLegsByCategory {
 
 const META = {
   memberBatchCodes: "CB-26-001",
+  organizationName: "Example Carbon",
   facilityName: "Dark Earth Hub",
   externalProjectId: "prj_TEST",
   generatedAtIso: "2026-06-19T00:00:00.000Z",

@@ -17,7 +17,7 @@ const runs = [{
   dieselOperationLiters: 0, dieselGensetLiters: 0, preprocessingFuelLiters: 0, electricityKwh: 0,
   startTime: new Date("2026-01-01"), endTime: new Date("2026-01-02"), samples: [],
 }] as unknown as ProductionRunForCertification[];
-const metadata = { memberBatchCodes: null, facilityName: null, externalProjectId: null, generatedAtIso: "2026-01-01T00:00:00.000Z" };
+const metadata = { organizationName: "Example Carbon", memberBatchCodes: null, facilityName: null, externalProjectId: null, generatedAtIso: "2026-01-01T00:00:00.000Z" };
 
 beforeEach(() => {
   vi.resetAllMocks();

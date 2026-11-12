@@ -17,6 +17,8 @@
  * the submit pipeline which already resolved the caller).
  */
 import { durabilityLedgerModel, stableLedgerContentHash } from "@/lib/certification/evidence-ledger-models";
+import { getActiveOrganization } from "@/data-access/organizations";
+import { SafeError } from "@/lib/errors";
 import { getFacilityById } from "@/data-access/facilities";
 import type { OrgContext } from "@/lib/auth/server";
 import { CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION } from "@/lib/calculations/biochar-removal";
@@ -95,8 +97,12 @@ export async function ensureDurabilityEvidenceLedgerSourceFromContext(
     });
   }
 
-  const facility = await getFacilityById(orgCtx, ctx.facilityId);
-  const ledger = durabilityLedgerModel(ctx, facility?.name ?? null, new Date().toISOString());
+  const [facility, organization] = await Promise.all([
+    getFacilityById(orgCtx, ctx.facilityId),
+    getActiveOrganization(orgCtx),
+  ]);
+  if (!organization) throw new SafeError("Organization not found.");
+  const ledger = durabilityLedgerModel(ctx, facility?.name ?? null, new Date().toISOString(), organization.name);
   const { model } = ledger;
   const render = () => ledger.option === "1000_year"
     ? renderThousandYearDurabilityLedgerPdf(ledger.model)

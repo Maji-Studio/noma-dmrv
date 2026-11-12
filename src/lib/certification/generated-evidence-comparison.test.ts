@@ -36,9 +36,9 @@ beforeEach(() => { vi.resetAllMocks(); deploy.blueprint = ""; deploy.formula = "
 async function comparison(changed: boolean) {
   const ctx = context();
   vi.mocked(getSentRemovalForComparison).mockResolvedValue({ payloadSnapshot: { generatedEvidenceFacts: generatedEvidenceFacts(ctx) } } as never);
-  const before = transportLedgerModel(ctx, "Facility", "first");
+  const before = transportLedgerModel(ctx, "Facility", "first", "Example Carbon");
   if (changed) { ctx.transportLegs.feedstock[0].distanceKm = 10; ctx.transportLegs.feedstock[1].distanceKm = 10; }
-  const after = transportLedgerModel(ctx, "Facility", "later");
+  const after = transportLedgerModel(ctx, "Facility", "later", "Example Carbon");
   expect(after.categories[0].subtotalTkm).toBe(before.categories[0].subtotalTkm);
   const differences = await changedGeneratedEvidence(org, "removal", ctx);
   return { before, after, differences, state: deriveRemovalSemanticCorrection({ windowOpen: true, previous: {},
@@ -111,9 +111,9 @@ it("compares the frozen facts independently of duplicate or newer active ledger 
 it("makes member-code ledger order deterministic while preserving already sorted content", () => {
   const ctx = context();
   ctx.memberBatches.push({ ...ctx.memberBatches[0], id: "batch-z", code: "CB-2" });
-  const before = transportLedgerModel(ctx, "Facility", "first");
+  const before = transportLedgerModel(ctx, "Facility", "first", "Example Carbon");
   ctx.memberBatches.reverse();
-  const after = transportLedgerModel(ctx, "Facility", "later");
+  const after = transportLedgerModel(ctx, "Facility", "later", "Example Carbon");
   expect(after.memberBatchCodes).toBe("CB-1 · CB-2");
   expect(stableLedgerContentHash(after)).toBe(stableLedgerContentHash(before));
 });
@@ -162,10 +162,10 @@ it.each(["blueprint", "formula"] as const)("ignores a deployed %s constant after
     runs: [{ id: "run", biocharDryMassKg: 100 }],
   }] as never;
   const baseline = generatedEvidenceFacts(ctx);
-  const before = durabilityLedgerModel(ctx, null, "").model;
+  const before = durabilityLedgerModel(ctx, null, "", "Example Carbon").model;
   vi.mocked(getSentRemovalForComparison).mockResolvedValue({ payloadSnapshot: { generatedEvidenceFacts: baseline } } as never);
   deploy[constant] = "deployed-version";
-  const after = durabilityLedgerModel(ctx, null, "").model;
+  const after = durabilityLedgerModel(ctx, null, "", "Example Carbon").model;
   // Prove the mocked deploy actually changes the generated model.
   expect(stableLedgerContentHash(after)).not.toBe(stableLedgerContentHash(before));
   expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), baseline).status).toBe("unchanged");
@@ -227,20 +227,20 @@ it.each(["200_year", "1000_year"] as const)("compares batch product mass instead
   }] as never;
   const baseline = generatedEvidenceFacts(ctx);
   expect(baseline.durability).not.toBeNull();
-  const before = durabilityLedgerModel(ctx, null, "").model;
+  const before = durabilityLedgerModel(ctx, null, "", "Example Carbon").model;
   // Correct total output, preserving the 50 kg applied from this run.
   ctx.batchesWithSamples[0].runs[0].biocharDryMassKg = 200;
   ctx.attributionByRunId.set("run", 50 / 200);
   expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), baseline).status).toBe("unchanged");
-  expect(stableLedgerContentHash(durabilityLedgerModel(ctx, null, "").model)).toBe(stableLedgerContentHash(before));
+  expect(stableLedgerContentHash(durabilityLedgerModel(ctx, null, "", "Example Carbon").model)).toBe(stableLedgerContentHash(before));
   // Redistributing applied mass between runs still renders the same batch mass.
   ctx.attributionByRunId.set("run", 60 / 200);
   ctx.attributionByRunId.set("other-run", 40 / 100);
   expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), baseline).status).toBe("unchanged");
-  expect(stableLedgerContentHash(durabilityLedgerModel(ctx, null, "").model)).toBe(stableLedgerContentHash(before));
+  expect(stableLedgerContentHash(durabilityLedgerModel(ctx, null, "", "Example Carbon").model)).toBe(stableLedgerContentHash(before));
   ctx.attributionByRunId.set("run", 70 / 200);
   expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), baseline).status).toBe("changed");
-  expect(stableLedgerContentHash(durabilityLedgerModel(ctx, null, "").model)).not.toBe(stableLedgerContentHash(before));
+  expect(stableLedgerContentHash(durabilityLedgerModel(ctx, null, "", "Example Carbon").model)).not.toBe(stableLedgerContentHash(before));
   const resubmitted = generatedEvidenceFacts(ctx);
   expect(compareGeneratedEvidenceFacts(generatedEvidenceFacts(ctx), resubmitted).status).toBe("unchanged");
 });

@@ -97,7 +97,7 @@ function masthead(model: ThousandYearDurabilityLedgerModel): ReactElement {
       styles.wordmarkRow,
       {},
       t(styles.wordmark, "noma"),
-      t(styles.wordmarkSub, "dMRV · DARK EARTH CARBON"),
+      t(styles.wordmarkSub, `dMRV · ${model.organizationName.toUpperCase()}`),
     ),
     t(styles.eyebrow, "BIOCHAR IN AGRICULTURAL SOILS · 1000 YEAR"),
     h(Text, { style: styles.title }, "Durability Evidence Ledger"),
