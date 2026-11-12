@@ -14,7 +14,7 @@ export async function loadFacilityEmissionsOverviewScope(ctx: OrgContext, facili
     )),
     db.select({
       id: creditBatches.id, code: creditBatches.code, startDate: creditBatches.startDate,
-      endDate: creditBatches.endDate, status: creditBatches.status,
+      endDate: creditBatches.endDate,
       removalTemplateId: creditBatches.removalTemplateId,
       productionEmissionsClaimedByRemovalId: creditBatches.productionEmissionsClaimedByRemovalId,
       productionEmissionsClaimReservedBySubmissionId: creditBatches.productionEmissionsClaimReservedBySubmissionId,

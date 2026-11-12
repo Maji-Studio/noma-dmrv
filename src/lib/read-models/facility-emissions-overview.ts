@@ -7,7 +7,6 @@ import { formatFacilityDate } from "@/lib/date-utils";
 export type FacilityEmissionsOverview = {
   batches: Array<{
     creditBatchId: string; code: string; startDate: string; endDate: string | null;
-    status: string;
     templateName: string | null;
     lineCounts: {
       total: number; open: number; fileMissing: number; needsReview: number; notRecorded: number;
@@ -48,7 +47,7 @@ export async function loadFacilityEmissionsOverview(
     const stored = display.storedEntries;
     return {
       creditBatchId: batch.id, code: batch.code, startDate: batch.startDate,
-      endDate: batch.endDate, status: batch.status,
+      endDate: batch.endDate,
       // Template observations retain component names, but no template-level name.
       templateName: null,
       // One setup item represents an unread or unpinned template until its lines are known.

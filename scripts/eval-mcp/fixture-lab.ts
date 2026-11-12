@@ -25,7 +25,7 @@ export interface LabEvalFixture extends IntakeFixture {
 }
 
 const batchColumns = {
-  id: creditBatches.id, code: creditBatches.code, facilityId: creditBatches.facilityId, status: creditBatches.status,
+  id: creditBatches.id, code: creditBatches.code, facilityId: creditBatches.facilityId,
   startDate: creditBatches.startDate, endDate: creditBatches.endDate, archivedAt: creditBatches.archivedAt,
 };
 
@@ -57,7 +57,7 @@ export async function seedLabFixture(caseId: string, now = new Date()): Promise<
     const today = formatFacilityDate(now, FACILITY_TIME_ZONE);
     await db.insert(creditBatches).values({
       organizationId: org, code: LAB_BATCH_CODE, facilityId: fixture.facilityId, feedstockTypeId: fixture.feedstockTypeId,
-      productionProcessId: process.id, status: "pending", startDate: addDaysIso(today, -LAB_BATCH_WINDOW_DAYS), endDate: today, certifier: "isometric",
+      productionProcessId: process.id, startDate: addDaysIso(today, -LAB_BATCH_WINDOW_DAYS), endDate: today, certifier: "isometric",
     });
     const credential = await createApiKey(fixture.ctx, { name: "MCP evaluation", scopes: LAB_SCOPES, expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS });
     const [batch] = await readBatches(org);

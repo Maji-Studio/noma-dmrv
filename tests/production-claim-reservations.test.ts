@@ -145,7 +145,6 @@ async function createFixture(): Promise<Fixture> {
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
         productionProcessId: productionProcess.id,
-        status: "pending",
         startDate: "2026-06-01",
         endDate: "2026-06-30",
         certifier: "isometric",

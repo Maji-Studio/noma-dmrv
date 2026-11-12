@@ -51,7 +51,7 @@ export async function certifyOutputLineage(f: Parents, lineage: CertifiedOutputL
     fieldSizeHa: FIELD_SIZE_HA, gpsLatitude: FIELD_LATITUDE, gpsLongitude: FIELD_LONGITUDE }).returning();
   const [process] = await db.insert(productionProcesses).values({ organizationId, facilityId: f.facility.id, feedstockTypeId: intake.feedstockTypeId }).returning();
   const [batch] = await db.insert(creditBatches).values({ organizationId, code: `E2E-OSL-CB-${suffix}`, facilityId: f.facility.id, feedstockTypeId: intake.feedstockTypeId,
-    productionProcessId: process.id, status: "pending", startDate: "2026-09-01", endDate: "2026-09-30", certifier: "isometric" }).returning();
+    productionProcessId: process.id, startDate: "2026-09-01", endDate: "2026-09-30", certifier: "isometric" }).returning();
   const [removal] = await insertRemovalFixture(db, { organizationId, facilityId: f.facility.id });
   await db.insert(creditBatchProductionRuns).values({ organizationId, creditBatchId: batch.id, productionRunId: lineage.runId });
   await db.insert(creditBatchApplications).values({ organizationId, creditBatchId: batch.id, applicationId: application.id,

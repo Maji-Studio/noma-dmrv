@@ -813,7 +813,7 @@ it("scopes the facility overview and excludes archived batches", async () => {
     entryId = entry.id;
     const overview = await loadFacilityEmissionsOverview(ctx, lineage.facilityId);
     expect(overview.batches.find((row) => row.creditBatchId === batch.id)).toMatchObject({
-      status: batch.status, lastEntryOn: "2026-06-13", entriesThisMonth: 1,
+      lastEntryOn: "2026-06-13", entriesThisMonth: 1,
       lineCounts: { total: 2, open: 2, fileMissing: 1, notRecorded: 1 },
     });
     await expect(loadFacilityEmissionsOverview({ ...ctx, organizationId: otherOrg }, lineage.facilityId)).rejects.toThrow();

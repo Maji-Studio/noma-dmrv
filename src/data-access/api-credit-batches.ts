@@ -3,11 +3,11 @@ import { db } from "@/db";
 import { creditBatches } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
-import type { CreditBatchSampling, CreditBatchStatus } from "@/schemas/credit-batches";
+import type { CreditBatchSampling } from "@/schemas/credit-batches";
 import { requireOrgScope, type Executor } from "./utils";
 import { lookupCursorCreatedAt, lookupPosition, lookupSearch, requireApiLookupFacility, type ApiLookupIdentifier, type ApiLookupPosition } from "./api-lookup-filters";
 
-export interface ApiCreditBatchFilters { q?: string; facilityId?: string; code?: string; status?: CreditBatchStatus; sampling?: CreditBatchSampling }
+export interface ApiCreditBatchFilters { q?: string; facilityId?: string; code?: string; sampling?: CreditBatchSampling }
 
 /** The narrow lookup projection: never the rich batch result with its rollups. */
 function batchQuery(ctx: OrgContext, executor: Executor) {
@@ -18,7 +18,6 @@ function batchQuery(ctx: OrgContext, executor: Executor) {
     version: creditBatches.version,
     facilityId: creditBatches.facilityId,
     feedstockTypeId: creditBatches.feedstockTypeId,
-    status: creditBatches.status,
     sampling: creditBatches.sampling,
     startDate: creditBatches.startDate,
     endDate: creditBatches.endDate,
@@ -48,7 +47,6 @@ export async function listApiCreditBatches(ctx: OrgContext, filters: ApiCreditBa
   return batchQuery(ctx, db).where(and(
     eq(creditBatches.organizationId, ctx.organizationId), isNull(creditBatches.archivedAt),
     filters.facilityId ? eq(creditBatches.facilityId, filters.facilityId) : undefined,
-    filters.status ? eq(creditBatches.status, filters.status) : undefined,
     filters.sampling ? eq(creditBatches.sampling, filters.sampling) : undefined,
     filters.code !== undefined ? eq(creditBatches.code, filters.code) : undefined,
     lookupSearch({ name: creditBatches.code }, filters.q),

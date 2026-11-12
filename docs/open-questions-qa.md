@@ -24,19 +24,6 @@ bound); these are the decisions it deliberately did not make.
   after "now" (with an explicit planned-samples workflow if planning is a real
   need), then enforce in `src/schemas/samples` + data-access (S).
 
-### Who owns the Credit Batch lifecycle? (`credit-batches/lifecycle`)
-
-- `credit_batches.status` still defaults every row to `pending` with no
-  transition path; the badge/filter were removed from the UI rather than
-  wired to anything. The enum (draft/pending/verified/issued/rejected) remains
-  in the schema. The dashboard's period-ended attention rows still read only
-  `status = 'pending'` batches, and take their wording from the holding
-  Removals' display state (`creditBatchAttention`, #1528).
-- **Resolve via:** define the lifecycle's owner (local readiness vs Isometric
-  submission/verification/issuance webhooks) and its transitions, then either
-  drive the column from that machine and restore the badge, or drop the column
-  (M).
-
 ### Blueprint-key gaps: operator-fixable or admin diagnostic? (`certification/blueprint-key-gaps`)
 
 - The Removal wizard now names unresolved template blueprint keys instead of

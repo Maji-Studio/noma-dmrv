@@ -350,7 +350,7 @@ it("publishes lab sample and credit batch reads with their own scopes, and lab s
   const sample = document.components.schemas.lab_sample.properties as Record<string, JsonSchema>;
   for (const field of ["facilityId", "durabilityOption", "creditBatchCode", "productionRunId", "timeZone"]) expect(sample).not.toHaveProperty(field);
   expect(Object.keys(document.components.schemas.credit_batch.properties as object).sort()).toEqual(
-    ["archivedAt", "code", "createdAt", "endDate", "facilityId", "feedstockTypeId", "id", "sampling", "startDate", "status", "updatedAt", "version"]);
+    ["archivedAt", "code", "createdAt", "endDate", "facilityId", "feedstockTypeId", "id", "sampling", "startDate", "updatedAt", "version"]);
   expect(document.components.schemas.facility.properties).toHaveProperty("durabilityOption");
   expect(document.paths["/credit-batches"]).not.toHaveProperty("post");
   expect(document.paths["/lab-samples"].post).toMatchObject({ operationId: "record_lab_sample", "x-required-scope": "lab-samples:write" });

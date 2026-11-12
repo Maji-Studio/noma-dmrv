@@ -14,7 +14,6 @@ import * as React from "react"
  * - Production run status: running, complete, failed, cancelled
  * - Delivery status: delivered
  * - Application status: delivered, applied
- * - Credit batch status: draft, pending, verified, issued, rejected
  *
  * Follows design system color tokens.
  */
@@ -105,13 +104,6 @@ export interface StatusBadgeProps
  * @example
  * // Application status
  * <StatusBadge status="applied" />
- *
- * @example
- * // Credit batch status
- * <StatusBadge status="pending" />
- * <StatusBadge status="verified" />
- * <StatusBadge status="issued" />
- * <StatusBadge status="rejected" />
  *
  * @example
  * // With custom label

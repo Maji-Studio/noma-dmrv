@@ -23,7 +23,7 @@ function counts(overrides: Partial<EmissionLineCounts> = {}): EmissionLineCounts
 
 function batch(code: string, startDate: string, endDate: string | null, lineCounts = counts()): FacilityEmissionsOverviewBatch {
   return {
-    creditBatchId: `id-${code}`, code, startDate, endDate, status: "pending",
+    creditBatchId: `id-${code}`, code, startDate, endDate,
     templateName: "Template", lineCounts, entriesThisMonth: 0, lastEntryOn: null,
   };
 }

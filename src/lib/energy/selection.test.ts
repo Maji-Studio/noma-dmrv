@@ -7,8 +7,8 @@ import {
 } from "./selection";
 import type { EnergyCreditBatchInput, EnergyFlow, EnergyGap } from "./types";
 
-const JULY: EnergyCreditBatchInput = { id: "jul", code: "CB-JUL", startDate: "2026-07-01", endDate: "2026-07-31", status: "pending" };
-const SEPTEMBER: EnergyCreditBatchInput = { id: "sep", code: "CB-SEP", startDate: "2026-09-01", endDate: "2026-09-30", status: "pending" };
+const JULY: EnergyCreditBatchInput = { id: "jul", code: "CB-JUL", startDate: "2026-07-01", endDate: "2026-07-31" };
+const SEPTEMBER: EnergyCreditBatchInput = { id: "sep", code: "CB-SEP", startDate: "2026-09-01", endDate: "2026-09-30" };
 const BATCHES = [JULY, SEPTEMBER];
 const PERIOD = { from: "2026-09-01", to: "2026-09-30" };
 const julyDeliveryInSeptember: EnergyFlow = {

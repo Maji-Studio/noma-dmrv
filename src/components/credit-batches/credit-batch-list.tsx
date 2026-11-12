@@ -10,8 +10,7 @@ import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * CreditBatchList component
  * The Timeline (default) or the List: compact rows with folded filters,
- * pagination, the timeline's lifecycle state and the dry applied biochar. The
- * dormant credit_batches.status column is not rendered; progress comes from
+ * pagination, the timeline's lifecycle state and the dry applied biochar. Progress comes from
  * data readiness, Removal submission, and the linked GHG Statement's verifier
  * status.
  *

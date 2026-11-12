@@ -58,7 +58,7 @@ import {
   creditBatchAttention,
   feedstocksMissingDataWhere,
   PERIOD_ENDED_NOT_SUBMITTED_TITLE,
-  pendingBatchesWhere,
+  activeBatchesWhere,
   runsMissingMassWhere,
 } from "./dashboard-attention";
 import { facilityListHref } from "@/lib/dashboard-links";
@@ -93,7 +93,6 @@ export type {
   DashboardActivityItem,
   DashboardCertification,
   DashboardCertificationBatch,
-  DashboardCreditBatchStatus,
   DashboardStation,
   DashboardStationKey,
   DashboardStationReason,
@@ -249,7 +248,6 @@ export async function getDashboardOverview(
         eq(creditBatches.organizationId, ctx.organizationId),
         eq(creditBatches.facilityId, facilityId),
         isNull(creditBatches.archivedAt),
-        ne(creditBatches.status, "rejected"),
         ...(fetchStartDay
           ? [gte(creditBatches.endDate, fetchStartDay)]
           : []),
@@ -628,14 +626,14 @@ function groupedRow(
   return { id: `${kind}-group`, entityCode: list, count, recordIds, recordItems, date: null, title, href };
 }
 
-/** Pending batches take their title from `creditBatchAttention`. */
+/** Active batches take their title from `creditBatchAttention`. */
 const ATTENTION_TITLES: Record<Exclude<AttentionKind, "batch-pending">, string> = {
   "run-mass": "Complete run missing mass data",
   "feedstock-missing": "Feedstock record missing data",
   "application-evidence": "Application missing evidence",
 };
 
-/** Flags sort before pending batches; within a kind the branch ordinal holds. */
+/** Flags sort before active batches; within a kind the branch ordinal holds. */
 const FLAG_ORDER: FlagKind[] = [
   "run-mass",
   "feedstock-missing",
@@ -664,7 +662,7 @@ function attentionHref(
  * `union all` of capped, narrow, indexed selects; a window count and id list
  * carry each check's uncapped size, so an over-cap check folds into one
  * grouped row (`capOrGroup`). An item disappears the moment the underlying
- * record is fixed (no independent lifecycle). Pending batches are read
+ * record is fixed (no independent lifecycle). Active batches are read
  * uncapped with their Removals' display facts (correlated subqueries, no
  * extra round trip): an interrupted Removal is one row per Removal, a period
  * closed without a submission one row per batch (`creditBatchAttention`),
@@ -755,7 +753,7 @@ export async function getDashboardAttentionItems(
       // Redundant org predicate for the lexical guard (see note above).
       .where(
         and(
-          pendingBatchesWhere(orgId, facilityId),
+          activeBatchesWhere(orgId, facilityId),
           eq(creditBatches.organizationId, orgId),
         ),
       )

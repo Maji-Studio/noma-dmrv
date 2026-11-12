@@ -6,6 +6,16 @@ current behavior is indexed in the
 
 # Isometric Docs Change Log
 
+## 2026-11-11: Drop the credit batch status and its durability-evidence triggers (#1046)
+
+`credit_batches.status` and its enum are gone; it never left `pending`. Where a
+batch stands with Isometric comes from its Removal and GHG Statement. Migration
+0177 also drops the three P0-06 durability-evidence triggers from 0053, 0054
+and 0070. They read the status and only fired for `verified` or `issued`
+batches, which never existed, so no write was ever refused by them. The 200-year
+evidence gates at Removal submission are unchanged. No registry contract
+change.
+
 ## 2026-11-11: Credit batch component file for run energy (#1519)
 
 An entry needs no file when its own amount is exactly zero: its single value,

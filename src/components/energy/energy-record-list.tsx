@@ -21,17 +21,9 @@ import {
   recordHasMissingReadings,
   recordRankValue,
 } from "@/lib/energy/selection";
-import type {
-  EnergyCreditBatchInput,
-  EnergyRecord,
-  EnergyRecordScope,
-} from "@/lib/energy/types";
+import type { EnergyRecord, EnergyRecordScope } from "@/lib/energy/types";
 import { formatDateRange, formatDayString } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
-import {
-  formatCreditBatchStatus,
-  type CreditBatchStatus,
-} from "@/schemas/credit-batches";
 import { formatActivity } from "./energy-display";
 import { EnergyRecordBreakdown, EnergySourceBar } from "./energy-record-breakdown";
 
@@ -64,18 +56,8 @@ function energyRecordHref(record: EnergyRecord, facilityId: string): string {
   }
 }
 
-function recordContext(
-  record: EnergyRecord,
-  batches: Map<string, EnergyCreditBatchInput>,
-): string | null {
-  if (record.scope !== "batch") return record.context;
-  const status = batches.get(record.id)?.status;
-  return status ? formatCreditBatchStatus(status as CreditBatchStatus) : null;
-}
-
 interface EnergyRecordListProps {
   records: EnergyRecord[];
-  creditBatches: EnergyCreditBatchInput[];
   facilityId: string;
   scope: EnergyRecordScope;
   onScopeChange: (scope: EnergyRecordScope) => void;
@@ -83,14 +65,12 @@ interface EnergyRecordListProps {
 
 export function EnergyRecordList({
   records,
-  creditBatches,
   facilityId,
   scope,
   onScopeChange,
 }: EnergyRecordListProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
-  const batches = new Map(creditBatches.map((batch) => [batch.id, batch]));
   const ranked = rankRecords(records.filter((record) => record.scope === scope));
   const shown = showAll ? ranked : ranked.slice(0, TOP_ROWS);
   const maxValue = ranked[0] ? recordRankValue(ranked[0]) : 0;
@@ -156,7 +136,7 @@ export function EnergyRecordList({
                 {shown.map((record) => {
                   const open = openId === record.id;
                   const value = recordRankValue(record);
-                  const context = recordContext(record, batches);
+                  const context = record.context;
                   const breakdownId = `energy-breakdown-${record.id}`;
                   return (
                     <Fragment key={record.id}>

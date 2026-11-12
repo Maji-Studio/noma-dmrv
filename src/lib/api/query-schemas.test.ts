@@ -50,9 +50,9 @@ it("parses lab sample filters, canonicalizing UUIDs and requiring offset instant
   }
 });
 
-it("parses credit batch filters against the status and sampling vocabularies", () => {
-  expect(parseApiQuery(request("?status=pending&sampling=sampled&code=CB-1"), creditBatchListSchema))
-    .toEqual({ limit: API_LIST_DEFAULT_LIMIT, status: "pending", sampling: "sampled", code: "CB-1" });
+it("parses credit batch filters against the sampling vocabulary", () => {
+  expect(parseApiQuery(request("?sampling=sampled&code=CB-1"), creditBatchListSchema))
+    .toEqual({ limit: API_LIST_DEFAULT_LIMIT, sampling: "sampled", code: "CB-1" });
   for (const query of ["?status=archived", "?sampling=maybe", "?creditBatchId=x", "?status=draft&status=pending"]) {
     expect(() => parseApiQuery(request(query), creditBatchListSchema)).toThrow(expect.objectContaining({ code: "invalid_query" }));
   }
@@ -103,4 +103,10 @@ it("defaults formulations to active and accepts only explicit archive booleans",
   for (const query of ["?archived=1", "?archived=", "?archived=yes", "?archived=true&archived=false"]) {
     expect(() => parseApiQuery(request(query), resourceQueries.formulations.list)).toThrow();
   }
+});
+
+it("rejects the retired credit batch status filter for REST and MCP", () => {
+  expect(creditBatchListSchema.safeParse({ status: "pending" }).success).toBe(false);
+  expect(() => parseApiQuery(request("?status=pending"), creditBatchListSchema))
+    .toThrow(expect.objectContaining({ status: 400, code: "invalid_query" }));
 });

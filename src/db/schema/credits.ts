@@ -12,7 +12,7 @@ import {
   unique,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
-import { creditBatchSampling, creditBatchStatus } from './common';
+import { creditBatchSampling } from './common';
 import { massKg, percent, ppm } from './numeric-families';
 import { facilities } from './facilities';
 import { feedstockTypes } from './feedstock';
@@ -54,7 +54,6 @@ export const creditBatches = pgTable(
       .notNull()
       .references(() => productionProcesses.id),
     removalTemplateId: text('removal_template_id'),
-    status: creditBatchStatus('status').default('pending').notNull(),
     // Fixed at creation. Unsampled is accepted only after the current process
     // clears its live Method-B eligibility gates (ADR 0022).
     sampling: creditBatchSampling('sampling').default('sampled').notNull(),
