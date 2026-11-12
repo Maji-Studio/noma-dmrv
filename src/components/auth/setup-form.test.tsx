@@ -64,4 +64,16 @@ describe("SetupForm", () => {
     expect(screen.queryByText("Set up noma dMRV")).toBeNull();
     expect(mocks.push).not.toHaveBeenCalled();
   });
+
+  it("sends one request when submitted twice before the server answers", async () => {
+    let finish!: (value: unknown) => void;
+    mocks.action.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    render(<SetupForm />);
+    fill();
+    fireEvent.submit(screen.getByRole("button", { name: "Create Platform Admin account" }).closest("form")!);
+    await waitFor(() => expect(mocks.action).toHaveBeenCalledTimes(1));
+    finish({ success: true, data: { redirectTo: "/platform/organizations" } });
+    await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+    expect(mocks.action).toHaveBeenCalledTimes(1);
+  });
 });

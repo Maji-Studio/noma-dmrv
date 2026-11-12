@@ -14,9 +14,11 @@ import {
 } from "@/components/forms";
 import { createFirstAdminAction } from "@/fn/first-run";
 import {
+  FIRST_ADMIN_SETUP_FALLBACK,
   firstAdminFormSchema,
   type FirstAdminFormData,
 } from "@/schemas/first-run";
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { AuthPrimaryLink, AuthResult } from "./auth-result";
 
 export function SetupForm() {
@@ -26,6 +28,7 @@ export function SetupForm() {
     href: string;
   } | null>(null);
   const router = useRouter();
+  const latched = useLatchedSubmit();
   // Hold busy through the navigation; clear it only on a failure.
   const [navigating, startNavigation] = useTransition();
 
@@ -49,7 +52,7 @@ export function SetupForm() {
 
     if (!result.success) {
       setServerError(
-        result.error || "Your Platform Admin account could not be created. Try again.",
+        result.error || FIRST_ADMIN_SETUP_FALLBACK,
       );
       return;
     }
@@ -88,7 +91,7 @@ export function SetupForm() {
       <div className="bg-[var(--color-background-white)] rounded-none border border-[var(--color-border-primary)] p-32 shadow-sm">
         <form
           method="post"
-          onSubmit={handleSubmit(onSubmit)}
+          onSubmit={latched(handleSubmit(onSubmit))}
           className="space-y-24"
         >
           <ResolvedErrorRevalidator control={control} trigger={trigger} />
