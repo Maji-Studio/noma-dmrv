@@ -1,18 +1,16 @@
 import { selectDraftRemovalEntries } from "@/lib/certification/removal-draft-entry-selection";
 import { ISOMETRIC_PROVIDER, REMOVAL_SUBMISSION_TYPE } from "@/lib/isometric/utils/constants";
 import type { OrgContext } from "@/lib/auth/server";
-import { requireOrgScope } from "./utils";
-import { getCreditBatchesByRemovalId } from "./certifier-removals";
-import { loadFacilityEmissionEntryCarry } from "./emission-entry-carry";
-import { loadCreditBatchRollups } from "./credit-batch-accounting";
-import { loadBatchEmissionEntryFacts } from "./emission-entry-facts";
-import { getLatestTemplateObservations } from "./removal-template-observations";
-import { listEmissionEntryDraftContenders, listEmissionEntryAvailableApplications, loadEmissionEntryReservations } from "./emission-entry-contenders";
-import { getLatestSubmission } from "./certification-submissions";
+import { getCreditBatchesByRemovalId } from "@/data-access/certifier-removals";
+import { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
+import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
+import { loadBatchEmissionEntryFacts } from "@/data-access/emission-entry-facts";
+import { getLatestTemplateObservations } from "@/data-access/removal-template-observations";
+import { listEmissionEntryDraftContenders, listEmissionEntryAvailableApplications, loadEmissionEntryReservations } from "@/data-access/emission-entry-contenders";
+import { getLatestSubmission } from "@/data-access/certification-submissions";
 
 /** Same entry selection as the full context, without transport, registry templates or evidence rendering. */
 export async function loadDraftRemovalCarriedEntries(ctx: OrgContext, removalId: string, facilityId: string) {
-  requireOrgScope(ctx);
   const batches = await getCreditBatchesByRemovalId(ctx, removalId);
   const ids = batches.map(batch => batch.id);
   const observations = await getLatestTemplateObservations(ctx, ISOMETRIC_PROVIDER, [...new Set(batches.flatMap(batch => batch.removalTemplateId ? [batch.removalTemplateId] : []))]);

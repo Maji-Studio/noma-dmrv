@@ -6,7 +6,7 @@ import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import type { RemovalSubmissionContext } from "./certify-context-types";
 import { changedGeneratedEvidence } from "./generated-evidence-comparison";
 import { durabilityLedgerModel, stableLedgerContentHash, transportLedgerModel } from "./evidence-ledger-models";
-import { deriveRemovalSemanticCorrection } from "@/lib/certification/removal-semantic-correction";
+import { deriveRemovalSemanticCorrection, CHANGED_GENERATED_EVIDENCE_KEY } from "@/lib/certification/removal-semantic-correction";
 
 vi.mock("@/data-access/removal-entry-correction", () => ({ getSentRemovalForComparison: vi.fn() }));
 const deploy = vi.hoisted(() => ({ blueprint: "", formula: "" }));
@@ -42,7 +42,7 @@ async function comparison(changed: boolean) {
   expect(after.categories[0].subtotalTkm).toBe(before.categories[0].subtotalTkm);
   const differences = await changedGeneratedEvidence(org, "removal", ctx);
   return { before, after, differences, state: deriveRemovalSemanticCorrection({ windowOpen: true, previous: {},
-    current: differences.length ? { changedGeneratedEvidence: differences } : {}, previousEntries: [], currentEntries: [], componentIds: [], batchIds: ["batch"] }) };
+    current: differences.length ? { [CHANGED_GENERATED_EVIDENCE_KEY]: differences } : {}, previousEntries: [], currentEntries: [], componentIds: [], batchIds: ["batch"] }) };
 }
 it("detects per-leg changes even when the submitted transport total stays equal", async () => {
   const result = await comparison(true);

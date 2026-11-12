@@ -1,21 +1,18 @@
 import { carriedEntrySnapshotSchema } from "@/lib/certification/carried-entry-snapshot";
-import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "@/db";
-import { creditBatches } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
 import { entryLine } from "@/lib/certification/emission-entry-rules";
 import { lateEntryFigures, type CarriedEntryRow } from "@/lib/certification/late-entry-figures";
-import { requireOrgScope } from "./utils";
-import { getCreditBatchesByRemovalId, getCertifierRemovalById } from "./certifier-removals";
-import { getSentRemovalForComparison } from "./removal-entry-correction";
+import { getCreditBatchesByRemovalId, getCertifierRemovalById } from "@/data-access/certifier-removals";
+import { getSentRemovalForComparison } from "@/data-access/removal-entry-correction";
 import { loadDraftRemovalCarriedEntries } from "./removal-draft-carried-entries";
-import { getTemplateObservationById } from "./removal-template-observations";
-import { getRemovalCodes } from "./removal-codes";
-import { loadFacilityEmissionEntryCarry } from "./emission-entry-carry";
-import { readRecordLockLineage } from "./record-lock-lineage";
+import { getTemplateObservationById } from "@/data-access/removal-template-observations";
+import { getRemovalCodes } from "@/data-access/removal-codes";
+import { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
+import { loadRecordLockLineage } from "@/data-access/record-lock-lineage";
+import { getCreditBatchCodes } from "@/data-access/credit-batch-codes";
 import { readsAsReturnedFromPersisted } from "@/lib/record-lock";
 
 export type RemovalCarriedEntry = CarriedEntryRow;
@@ -29,7 +26,6 @@ const snapshotSchema = z.object({
 
 /** Entry-only sheet read; sent values are frozen and only display labels are hydrated. */
 export async function loadRemovalCarriedEntries(ctx: OrgContext, removalId: string): Promise<RemovalCarriedEntries> {
-  requireOrgScope(ctx);
   const removal = await getCertifierRemovalById(ctx, removalId);
   if (!removal) throw new SafeError("Removal was not found.");
   const sent = await getSentRemovalForComparison(ctx, removalId);
@@ -42,10 +38,7 @@ export async function loadRemovalCarriedEntries(ctx: OrgContext, removalId: stri
   if (!entries.length) return { facilityId: removal.facilityId, carriedEntries: [], lateEntries };
   const earlier = new Map(entries.map(entry => [entry.entryId, entry.earlierRemovalId]));
   const [batches, observation, codes] = await Promise.all([
-    db.select({ id: creditBatches.id, code: creditBatches.code }).from(creditBatches).where(and(
-      eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.facilityId, removal.facilityId),
-      inArray(creditBatches.id, [...new Set(entries.map(entry => entry.creditBatchId))]),
-    )),
+    getCreditBatchCodes(ctx, removal.facilityId, [...new Set(entries.map(entry => entry.creditBatchId))]),
     snapshot.templateObservationId ? getTemplateObservationById(ctx, snapshot.templateObservationId) : null,
     getRemovalCodes(ctx, [...earlier.values()].filter((id): id is string => !!id)),
   ]);
@@ -63,10 +56,9 @@ export async function loadRemovalCarriedEntries(ctx: OrgContext, removalId: stri
 
 /** Live late entries keep their own observation's labels, beside the frozen sent list. */
 async function loadRevisionLateEntries(ctx: OrgContext, removal: { id: string; facilityId: string; ghgStatementId: string | null }): Promise<RemovalCarriedEntry[]> {
-  requireOrgScope(ctx);
   const { id: removalId, facilityId } = removal;
   // Facility discovery only for a returned Removal; every other sent sheet stays a snapshot read.
-  const [lineage] = await readRecordLockLineage(ctx, db, [{ removalId, ghgStatementId: removal.ghgStatementId }]);
+  const [lineage] = await loadRecordLockLineage(ctx, [{ removalId, ghgStatementId: removal.ghgStatementId }]);
   if (!lineage || !readsAsReturnedFromPersisted(lineage)) return [];
   const members = await getCreditBatchesByRemovalId(ctx, removalId);
   const memberIds = members.map(batch => batch.id);

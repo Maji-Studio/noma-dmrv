@@ -11,7 +11,7 @@
  * (measured, else Eq.2-derived) so the displayed rows feed the submitted mean.
  */
 import { evaluateRunEligibility } from "@/lib/calculations/biochar-eligibility";
-import { selectTwoHundredYearLedgerSamples } from "./input-selection";
+import { selectTwoHundredYearLedgerRows, type LedgerRowOrder } from "./input-selection";
 import {
   buildPerBatchDurabilityData,
   type CreditBatchDurabilityInput,
@@ -34,6 +34,7 @@ export interface BuildDurabilityLedgerModelArgs {
   })[];
   /** Per-run applied-biochar fraction (scales each batch's product mass). */
   attributionByRunId: Map<string, number>;
+  rowOrder?: LedgerRowOrder;
   /** Facility reference soil temperature (7 °C-floored; non-null past the gate). */
   facilityReferenceSoilTemperature: FacilityReferenceSoilTemperature;
   memberBatchCodes: string | null;
@@ -46,7 +47,7 @@ function statOf(value: ValueWithStdDev | null): LedgerStat | null {
   return value == null ? null : { mean: value.mean, stdDev: value.stdDev };
 }
 
-type SelectedSample = ReturnType<typeof selectTwoHundredYearLedgerSamples>["samples"][number];
+type SelectedSample = ReturnType<typeof selectTwoHundredYearLedgerRows>[number]["samples"][number];
 
 function buildReplicate({ sample, input }: SelectedSample, index: number): LedgerReplicate {
   const derived = input.inorganicCarbonPercent === null && input.totalCarbonPercent !== null && input.organicCarbonPercent !== null;
@@ -63,24 +64,13 @@ function buildReplicate({ sample, input }: SelectedSample, index: number): Ledge
 export function buildDurabilityLedgerModel(
   args: BuildDurabilityLedgerModelArgs,
 ): DurabilityLedgerModel {
-  const perBatch = buildPerBatchDurabilityData(
-    args.batches,
-    args.attributionByRunId,
-  );
-  const samplesByBatchId = new Map(
-    args.batches.map((b) => [b.creditBatchId, b.samples]),
-  );
-  const timezoneByBatchId = new Map(
-    args.batches.map((b) => [b.creditBatchId, b.facilityTimezone ?? null]),
-  );
-
+  const rows = selectTwoHundredYearLedgerRows(args.batches, args.attributionByRunId, args.rowOrder);
+  const perBatch = buildPerBatchDurabilityData(rows.map(row => row.batch), args.attributionByRunId);
+  const selectedByBatchId = new Map(rows.map(row => [row.batch.creditBatchId, row]));
   const batches: LedgerBatch[] = [];
   for (const dp of perBatch) {
-    const samples = samplesByBatchId.get(dp.creditBatchId) ?? [];
-    const facilityTimezone = timezoneByBatchId.get(dp.creditBatchId) ?? null;
-    const selected = selectTwoHundredYearLedgerSamples(samples, facilityTimezone);
-    // Unsampled batches submit through Method B and have no ledger row.
-    if (!selected.replicates.length || dp.hToCorgRatio == null) continue;
+    const selected = selectedByBatchId.get(dp.creditBatchId)!;
+    if (dp.hToCorgRatio == null) continue;
     const eligibility = evaluateRunEligibility(selected.samples.map(({ input }) => input));
     const oValues = selected.samples.flatMap(({ input }) => input.oToCOrgRatio === null ? [] : [input.oToCOrgRatio]);
 
@@ -95,7 +85,7 @@ export function buildDurabilityLedgerModel(
       totalCarbonPercent: statOf(dp.totalCarbonPercent),
       inorganicCarbonPercent: statOf(dp.inorganicCarbonPercent),
       oToCorg: meanAndStdDevStat(oValues),
-      productMassKg: dp.productMassKg,
+      productMassKg: selected.productMassKg,
       eligibility: {
         hToCorgMean: eligibility.meanHToCOrgRatio,
         oToCorgMean: eligibility.meanOToCOrgRatio,

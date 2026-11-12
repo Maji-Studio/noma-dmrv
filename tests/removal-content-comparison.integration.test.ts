@@ -1,7 +1,7 @@
 import { normalizeCarriedEntriesForHash } from "@/lib/certification/removal-entry-hash";
 import * as contextBuilder from "@/lib/certification/removal-context-build";
 import { generatedEvidenceFacts } from "@/lib/certification/generated-evidence-facts";
-import { loadRemovalCarriedEntries } from "@/data-access/removal-carried-entries";
+import { loadRemovalCarriedEntries } from "@/lib/certification/removal-carried-entries";
 /**
  * Real-DB regression for the one Removal comparison. The "sent" baseline is the
  * semantic payload the REAL compile produced from the sent entries, stored as the

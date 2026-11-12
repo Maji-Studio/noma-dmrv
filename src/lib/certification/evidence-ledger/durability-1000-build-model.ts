@@ -1,10 +1,10 @@
-import { samplingDay, selectThousandYearLedgerSamples } from "./input-selection";
+import { samplingDay, selectThousandYearLedgerSamples, selectThousandYearLedgerRows, orderDurabilityLedgerBatches, type LedgerRowOrder } from "./input-selection";
 import {
   CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION,
   computeBlueprint1000YearDurability,
 } from "@/lib/calculations/biochar-removal";
 import {
-  buildPerBatchDurabilityData,
+  attributedProductMassKg,
   type CreditBatchDurabilityInput,
 } from "@/lib/isometric/utils/durability-aggregation";
 import {
@@ -21,6 +21,7 @@ export interface BuildThousandYearDurabilityLedgerModelArgs {
     facilityTimezone?: string | null;
   })[];
   attributionByRunId: Map<string, number>;
+  rowOrder?: LedgerRowOrder;
   memberBatchCodes: string | null;
   facilityName: string | null;
   externalProjectId: string | null;
@@ -99,20 +100,18 @@ export function buildThousandYearDurabilityLedgerModel(
     args.componentKey ?? CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR;
   const isLegacy =
     componentKey === DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR;
-  const productMassByBatchId = new Map(
-    buildPerBatchDurabilityData(args.batches, args.attributionByRunId).map(
-      (batch) => [batch.creditBatchId, batch.productMassKg],
-    ),
-  );
-  const batches = args.batches
-    .map((batch) => {
-      const orderedSamples = [...batch.samples].sort((left, right) =>
-        String(left.id).localeCompare(String(right.id)),
-      );
-      const replicates = isLegacy
-        ? orderedSamples.map((sample, index) => buildLegacyReplicate(sample, index, batch.facilityTimezone))
-          .filter((replicate): replicate is ThousandYearLedgerReplicate => replicate !== null)
-        : selectThousandYearLedgerSamples(batch.samples, batch.facilityTimezone).map(buildReplicate);
+  const rows = isLegacy
+    ? orderDurabilityLedgerBatches(args.batches, args.rowOrder ?? "provided").map(batch => ({
+      batch, samples: null, productMassKg: attributedProductMassKg(batch.runs, args.attributionByRunId),
+    }))
+    : selectThousandYearLedgerRows(args.batches, args.attributionByRunId, args.rowOrder);
+  const batches = rows
+    .map(({ batch, samples, productMassKg }) => {
+      const replicates = samples
+        ? samples.map(buildReplicate)
+        : [...batch.samples].sort((left, right) => String(left.id).localeCompare(String(right.id)))
+          .map((sample, index) => buildLegacyReplicate(sample, index, batch.facilityTimezone))
+          .filter((replicate): replicate is ThousandYearLedgerReplicate => replicate !== null);
       if (replicates.length === 0) return null;
       const currentDurability = isLegacy
         ? null
@@ -140,7 +139,7 @@ export function buildThousandYearDurabilityLedgerModel(
         creditBatchCode: batch.creditBatchCode,
         replicates,
         replicateCount: replicates.length,
-        productMassKg: productMassByBatchId.get(batch.creditBatchId) ?? 0,
+        productMassKg,
         componentKey,
         componentLabel: isLegacy
           ? "Legacy 1,000-year durability component"
