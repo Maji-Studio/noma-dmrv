@@ -49,7 +49,7 @@ export function SetupForm() {
 
     if (!result.success) {
       setServerError(
-        result.error || "Your admin account could not be created. Try again.",
+        result.error || "Your Platform Admin account could not be created. Try again.",
       );
       return;
     }
