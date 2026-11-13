@@ -89,7 +89,8 @@ export function assertSentEntryInCorrectionWindow(
     throw new SafeError(EMISSION_ENTRY_OUTSIDE_CORRECTION_WINDOW);
 }
 
-/** New attempts are allowed only after the registry returned the prior submission.
+/** New attempts are allowed only after the registry returned the prior submission
+ * or its absence was confirmed and the prior version retired for Send again.
  * Recovery of possible remote effects retains the locks without reopening entry writes.
  * Called before the claim's own artifact lock so the union keeps global order.
  */

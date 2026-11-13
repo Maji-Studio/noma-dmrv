@@ -631,6 +631,8 @@ private-document state. It must not be copied into ordinary data access.
 
 ## Record locks
 
+A Removal retired after confirmed registry absence retains its submitted identity and keeps its records Sent while Send again prepares a new version.
+
 The converted certification-lineage and dependency guards use the record-lock policy in [ADR 0035](./adr/0035-record-locks-follow-dependencies-and-registry-lineage.md). `src/lib/record-lock.ts` contains the client-safe per-kind predicates returning `level`, `heldBy`, `freeFields` and `howToFree`. Open has no consumers; In use has numeric consumers; Sent takes precedence and has no free fields. Data-access resolves organization-scoped facts rather than trusting screen membership.
 
 `freeFields` is typed against each record kind's update input and enforced on changed

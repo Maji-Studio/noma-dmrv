@@ -9,6 +9,7 @@
  * `submission-metadata` is a pure util already used by client components.
  */
 
+import { isRegistryMissingSubmission } from "./registry-missing-submission";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import {
   getMetadataValue,
@@ -24,7 +25,7 @@ import {
   type RemoteGhgStatus,
 } from "./status";
 
-export type SubmissionDisplayFacts = Pick<CertificationSubmissionRow, "status" | "metadata" | "payloadSnapshot">;
+export type SubmissionDisplayFacts = Pick<CertificationSubmissionRow, "status" | "metadata" | "payloadSnapshot"> & Partial<Pick<CertificationSubmissionRow, "externalId">>;
 
 export type CertificationArtifact = "removal" | "ghgStatement";
 
@@ -94,7 +95,8 @@ export function hasSubmittedRemovalVersion(
   reportingWindow: RemovalReportingWindowDates,
 ): boolean {
   return versions.some((version) =>
-    (version.status === "submitted" || version.status === "accepted") &&
+    (version.status === "submitted" || version.status === "accepted" ||
+      isRegistryMissingSubmission({ ...version, externalId: version.externalId ?? null })) &&
     !isRemovalSubmissionInterruptedFromSubmission(version, reportingWindow),
   );
 }
@@ -172,6 +174,8 @@ export function deriveSubmissionStatus(
   return deriveRemovalStatus({
     local,
     lockInFlight: isLockedInFlight,
+    externalId: latest?.externalId,
+    metadata: latest?.metadata,
     submissionInterrupted: isRemovalSubmissionInterruptedFromSubmission(
       latest,
       reportingWindow,
