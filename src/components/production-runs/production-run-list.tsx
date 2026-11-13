@@ -540,7 +540,7 @@ export function ProductionRunList() {
       onModeChange={handleModeChange}
       title={sideSheetTitle}
       subtitle={sideSheetSubtitle}
-      {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: !isProductionRunOutputLocked(sheetLock) })}
+      {...recordLockSheetProps({ record: { kind: "productionRun", id: displaySideSheet?.entity?.id }, lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: !isProductionRunOutputLocked(sheetLock) })}
       canEdit={isRecordEditable(sheetLock)}
       editLabel="Edit production run"
       readOnly={sheetReadOnly}

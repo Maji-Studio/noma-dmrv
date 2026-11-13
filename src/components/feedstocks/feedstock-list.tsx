@@ -587,7 +587,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       }
       title={sideSheetTitle}
       subtitle={sideSheetSubtitle}
-      {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
+      {...recordLockSheetProps({ record: { kind: "feedstock", id: displaySideSheet?.entity?.id }, lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
       canEdit={isRecordEditable(sheetLock)}
       editLabel="Edit feedstock"
       readOnly={sheetReadOnly}

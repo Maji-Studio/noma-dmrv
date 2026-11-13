@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { useForm } from "react-hook-form";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { FormActions } from "@/components/forms/form-actions";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RecordLockLink, RecordLockView } from "@/lib/record-lock-view";
@@ -10,6 +10,11 @@ import { RecordLockFormFrame, recordLockSheetProps } from "./record-lock-sheet-p
 import { INTERRUPTED_HOW_TO_FREE, INTERRUPTED_HOW_TO_FREE_ONE, INTERRUPTED_MIXED_HOW_TO_FREE_ONE } from "@/lib/record-lock";
 import { RecordLockNotice } from "./record-lock-notice";
 import { RecordUsedBy } from "./record-used-by";
+import type { RecordUsedByChain, RecordUsedByNode } from "@/lib/record-used-by-chain";
+
+const chainRead = vi.hoisted(() => ({ result: { data: undefined, isError: false } as { data: unknown; isError: boolean } }));
+vi.mock("@/hooks/use-record-used-by-chain", () => ({ useRecordUsedByChain: () => chainRead.result }));
+vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "UTC", hint: "" }) }));
 
 afterEach(cleanup);
 
@@ -276,8 +281,25 @@ describe("returned by Isometric", () => {
   });
 });
 
+function node(kind: RecordUsedByNode["kind"], id: string, code: string): RecordUsedByNode {
+  return { kind, id, code, name: null, facilityId: FACILITY, at: "2026-04-20", calendarDay: true };
+}
+
+function chainOf(downstream: RecordUsedByNode[], extra: Partial<RecordUsedByChain> = {}): RecordUsedByChain {
+  const self = node("productionRun", "run-1", "PR-26-004");
+  return {
+    self, upstream: [node("feedstock", "fs-1", "FS-26-001")], downstream,
+    edges: downstream.map((to) => ({ from: "productionRun:run-1", to: `${to.kind}:${to.id}`, mass: null })),
+    creditBatches: [], took: {}, ...extra,
+  };
+}
+
+const RECORD = { kind: "productionRun", id: "run-1" } as const;
+
 describe("RecordUsedBy", () => {
-  it("lists every record that uses it, linking those with a sheet", () => {
+  afterEach(() => { chainRead.result = { data: undefined, isError: false }; });
+
+  it("lists every record that uses it when no record is given (storage bins), linking those with a sheet", () => {
     render(<RecordUsedBy lock={view("sent", [REMOVAL], [PRODUCT, LOSS])} />);
     expect(screen.getByText("Used by")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Biochar product BP-26-021" }).getAttribute("href"))
@@ -286,15 +308,74 @@ describe("RecordUsedBy", () => {
   });
 
   it("answers None when nothing uses it, and nothing before the read answers", () => {
-    const { container, rerender } = render(<RecordUsedBy lock={undefined} />);
+    const { container, rerender } = render(<RecordUsedBy lock={undefined} record={RECORD} />);
     expect(container.textContent).toBe("");
-    rerender(<RecordUsedBy lock={view("open", [])} />);
+    rerender(<RecordUsedBy lock={view("open", [])} record={RECORD} />);
     expect(screen.getByText("None")).toBeTruthy();
   });
 
   it("counts storage bin references", () => {
     render(<RecordUsedBy lock={view("inUse", [], [{ kind: "binReference", id: "feedstock batches", label: "feedstock batches", facilityId: FACILITY, count: 12 }])} />);
     expect(screen.getByText("Feedstock batches (12)")).toBeTruthy();
+  });
+
+  it("draws the chain: this record ringed, what used it linked, the credit batch as a band", () => {
+    chainRead.result = {
+      isError: false,
+      data: chainOf([node("biocharProduct", "product-1", "BP-26-021")], {
+        creditBatches: [{ id: "cb-1", code: "CB-26-003", name: null, facilityId: FACILITY, startDate: "2026-04-01", endDate: "2026-04-30" }],
+      }),
+    };
+    render(<RecordUsedBy lock={view("sent", [REMOVAL], [PRODUCT])} record={RECORD} />);
+    expect(screen.getByRole("figure", { name: "Where this record went" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /^Biochar product BP-26-021/ }).getAttribute("href"))
+      .toBe(`/biochar-products?facility=${FACILITY}&biocharProduct=product-1`);
+    expect(screen.getByRole("link", { name: "Feedstock intake FS-26-001, Apr 20" }).getAttribute("href")).toContain("feedstock=fs-1");
+    expect(screen.getByLabelText(/Production run PR-26-004.*this record/).getAttribute("href")).toBeNull();
+    expect(screen.getByRole("link", { name: "CB-26-003" }).getAttribute("href")).toContain("/credit-batches/cb-1");
+    expect(screen.queryByRole("link", { name: /^Credit batch CB-26-003, / })).toBeNull();
+  });
+
+  it("stacks a column of more than four, opens it, and closes it again from the header and Show less", () => {
+    const orders = ["1", "2", "3", "4", "5"].map((n) => node("order", `o-${n}`, `OR-26-00${n}`));
+    chainRead.result = { isError: false, data: chainOf(orders) };
+    render(<RecordUsedBy lock={view("inUse", [], [PRODUCT])} record={RECORD} />);
+    expect(screen.queryByText("OR-26-001")).toBeNull();
+    const group = screen.getByRole("button", { name: "Show all 5 orders" });
+    expect(group.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(group);
+    expect(screen.getByText("OR-26-005")).toBeTruthy();
+    const header = screen.getByRole("button", { name: "Orders" });
+    expect(header.getAttribute("aria-expanded")).toBe("true");
+
+    fireEvent.click(header);
+    expect(screen.queryByText("OR-26-001")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show all 5 orders" }));
+    fireEvent.click(screen.getByRole("button", { name: /Show less/ }));
+    expect(screen.queryByText("OR-26-001")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Show less/ })).toBeNull();
+  });
+
+  it("lists samples under the chart and keeps users the chain does not reach", () => {
+    chainRead.result = { isError: false, data: chainOf([node("sample", "s-1", "SAM-26-007")]) };
+    render(<RecordUsedBy lock={view("inUse", [], [PRODUCT, LOSS])} record={RECORD} />);
+    expect(screen.getByRole("link", { name: "SAM-26-007" }).getAttribute("href")).toContain("sample=s-1");
+    expect(screen.getByText("North hopper")).toBeTruthy();
+  });
+
+  it("falls back to the plain link list when the chain read fails", () => {
+    chainRead.result = { isError: true, data: undefined };
+    render(<RecordUsedBy lock={view("sent", [REMOVAL], [PRODUCT])} record={RECORD} />);
+    expect(screen.queryByRole("figure")).toBeNull();
+    expect(screen.getByRole("link", { name: "Biochar product BP-26-021" })).toBeTruthy();
+  });
+
+  it("holds the section's place while the chain loads", () => {
+    render(<RecordUsedBy lock={view("sent", [REMOVAL], [PRODUCT])} record={RECORD} />);
+    expect(screen.getByRole("status", { name: "Loading records" })).toBeTruthy();
+    expect(screen.getByText("Used by")).toBeTruthy();
   });
 });
 
