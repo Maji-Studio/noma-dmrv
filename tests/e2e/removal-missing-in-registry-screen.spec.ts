@@ -92,6 +92,7 @@ test.describe("Removal missing in Isometric", () => {
           return;
         }
 
+        await expect(sheet.getByRole("button", { name: "Send again" })).toBeVisible();
         await sheet.getByRole("button", { name: "Send again" }).click();
         await expect(page).toHaveURL(new RegExp(`resume=${removal.removalId}`), { timeout: 60_000 });
         const review = page.getByRole("dialog");

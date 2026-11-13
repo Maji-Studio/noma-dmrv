@@ -23,7 +23,7 @@ export function ResendComparisonGroup({
     return (
       <section aria-labelledby="review-resend" className="flex flex-col gap-4">
         <h3 id="review-resend" className="body-lead font-medium">{heading}</h3>
-        <p className={cn("body-small", MUTED)}>The earlier numbers could not be read.</p>
+        <p className={cn("body-small", MUTED)}>{`noma could not read the figures sent in version ${comparison.previousVersion}.`}</p>
       </section>
     );
   }

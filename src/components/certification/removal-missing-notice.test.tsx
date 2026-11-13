@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RemovalMissingNotice } from "./removal-missing-notice";
+import { RemovalMissingNotice, RemovalResendScope, SendAgainButton } from "./removal-missing-notice";
 
 const mocks = vi.hoisted(() => ({
   presence: undefined as string | undefined,
@@ -17,6 +17,9 @@ vi.mock("@/hooks/use-removal-resend", () => ({
 }));
 
 const props = { facilityId: "f1", removalId: "r1", reviewHref: "/removals?resume=r1&facility=f1" };
+function Sheet() {
+  return <RemovalResendScope enabled {...props}><RemovalMissingNotice /><SendAgainButton /></RemovalResendScope>;
+}
 
 describe("RemovalMissingNotice", () => {
   beforeEach(() => {
@@ -29,12 +32,12 @@ describe("RemovalMissingNotice", () => {
 
   it.each(["present", "unknown", undefined])("shows nothing when the check says %s", (state) => {
     mocks.presence = state;
-    const { container } = render(<RemovalMissingNotice {...props} />);
+    const { container } = render(<Sheet />);
     expect(container.childElementCount).toBe(0);
   });
 
   it("prepares the resend, then opens the review", async () => {
-    render(<RemovalMissingNotice {...props} />);
+    render(<Sheet />);
     expect(screen.getByText("Missing in Isometric")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Send again" }));
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith(props.reviewHref));
@@ -44,10 +47,18 @@ describe("RemovalMissingNotice", () => {
   it("stays on the sheet and shows the message when preparing fails", async () => {
     mocks.mutateAsync.mockRejectedValue(new Error("Isometric still has it."));
     mocks.error = new Error("Isometric still has it.");
-    render(<RemovalMissingNotice {...props} />);
+    render(<Sheet />);
     fireEvent.click(screen.getByRole("button", { name: "Send again" }));
     await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalled());
     expect(mocks.push).not.toHaveBeenCalled();
     expect(screen.getByRole("alert").textContent).toBe("Isometric still has it.");
+  });
+
+  it("keeps the refusal readable after the check says the Removal is back", async () => {
+    mocks.error = new Error("Isometric still has it.");
+    mocks.presence = "present";
+    render(<Sheet />);
+    expect(screen.getByRole("alert").textContent).toBe("Isometric still has it.");
+    expect(screen.queryByRole("button", { name: "Send again" })).toBeNull();
   });
 });
