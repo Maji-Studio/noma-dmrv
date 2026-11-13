@@ -197,7 +197,7 @@ export interface ChangedFigure {
   after?: string;
 }
 
-function ValueBlock({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
+export function ValueBlock({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
   return (
     <div className="flex min-w-0 flex-col gap-2 bg-[var(--color-background-light)] px-12 py-10">
       <span className={cn("body-caption", MUTED)}>{label}</span>

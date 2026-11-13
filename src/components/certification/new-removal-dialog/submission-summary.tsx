@@ -22,6 +22,7 @@ import { formatTonnes } from "@/lib/format-utils";
 import type { SharedSourceFile } from "@/lib/certification/shared-source-files";
 import { cn } from "@/lib/utils";
 import { RemovalAdvisoryList, CompilationWarnings } from "./compilation-notices";
+import { ResendComparisonGroup } from "./resend-comparison";
 import { ChangedGroup, FixedAck, FixList, type ChangedFigure } from "./review-parts";
 import { SharedSourceFileNotes } from "./shared-source-file-notices";
 import {
@@ -49,6 +50,8 @@ type SubmissionSummaryProps = SubmissionFactsInput & {
   entries: readonly FixEntry[];
   /** Figures changed since the last submit; empty unless the Removal came back. */
   changes: readonly ChangedFigure[];
+  /** The Removal name of a template component, for the comparison with the version Isometric lost. */
+  componentName?: (componentId: string) => string | undefined;
   /** Files that back evidence of different kinds (#1531); advisory. */
   sharedFiles?: readonly SharedSourceFile[];
   onFix: () => void;
@@ -96,6 +99,7 @@ export function SubmissionSummary({
   facilityId,
   entries,
   changes,
+  componentName = () => undefined,
   rechecking = false,
   sharedFiles = [],
   onFix,
@@ -164,6 +168,7 @@ export function SubmissionSummary({
     <div className="flex flex-col gap-16">
       <FixedAck entries={entries} />
       <ChangedGroup changes={changes} />
+      <ResendComparisonGroup comparison={factsInput.compilation?.resendComparison} componentName={componentName} />
       <section aria-label="What this Removal sends" className={cn(BLOCK_BORDER, "flex flex-col")}>
         <div className="flex flex-col gap-2 px-16 pt-16 pb-12">
           <span className="inline-flex items-center gap-4 body-small text-[var(--color-text-secondary)]">

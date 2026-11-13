@@ -555,6 +555,7 @@ export function SubmitStep({
           rechecking={compilationQuery.isFetching}
           entries={fixEntries}
           changes={changes}
+          componentName={(componentId) => componentTable.rows.find((row) => row.componentId === componentId)?.name}
           onFix={markFixUsed}
           onOpenDetails={() => showDetails(true)}
           onRetryCompilation={() => {

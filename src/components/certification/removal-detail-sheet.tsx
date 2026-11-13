@@ -67,6 +67,7 @@ import type { SheetReadOnly } from "@/lib/linked-record-read-only";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import { firstReturn, RemovalCorrectionNotice } from "./removal-correction-needed";
 import { RemovalResubmitNotice, ResubmitRemovalAction } from "./removal-resubmit-notice";
+import { RemovalMissingNotice } from "./removal-missing-notice";
 import { RemovalMissingRunsNotice } from "./removal-missing-runs-notice";
 import { RemovalEvidenceLinksNotice } from "./removal-evidence-links-notice";
 
@@ -346,6 +347,9 @@ export function RemovalDetailSheet({
                 <RemovalResubmitNotice correction={correction} facilityId={facilityId} readOnly={!!readOnly} />
               ) : (
                 <RemovalCorrectionNotice lock={lock} readOnly={!!readOnly} />
+              )}
+              {open && canManage && !readOnly && workflowStatus.kind === "submitted" && (
+                <RemovalMissingNotice facilityId={facilityId} removalId={summary.removalId} reviewHref={reviewHref} />
               )}
               <RemovalMissingRunsNotice batches={summary.missingProductionRuns} facilityId={facilityId} canManage={canManage && !readOnly} readOnly={!!readOnly} />
               <RemovalEvidenceLinksNotice links={summary.evidenceLinks} readOnly={!!readOnly} />
