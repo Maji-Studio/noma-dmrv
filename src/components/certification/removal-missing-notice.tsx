@@ -79,3 +79,8 @@ export function SendAgainButton() {
     </Button>
   );
 }
+
+/** Footer actions that give way to Send again: a missing Removal has one primary next step. */
+export function HiddenWhileMissing({ children }: { children: ReactNode }) {
+  return useContext(ResendContext)?.missing ? null : <>{children}</>;
+}

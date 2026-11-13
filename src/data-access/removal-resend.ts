@@ -61,12 +61,12 @@ export async function retireMissingRemovalSubmission(
     const latest = await getLatestSubmissionWithExecutor(ctx, tx, key, input.facilityId);
     const alreadyRetired = isRegistryMissingSubmission(latest);
     if (!latest || (latest.status !== "submitted" && !alreadyRetired) || !latest.externalId || latest.lockedAt) {
-      throw new SafeError("This Removal has no completed submission to send again. Refresh its status.");
+      throw new SafeError("This Removal has no completed submission to send again. Close and reopen this Removal to check again.");
     }
     const projectId = await getRemovalResendProjectId(ctx, input.facilityId, latest.payloadSnapshot, tx);
     const presence = projectId ? await check(latest.externalId, projectId) : "unknown";
     if (presence !== "missing") throw new SafeError(presence === "present"
-      ? "This Removal is still in Isometric. Refresh its status."
+      ? "This Removal is still in Isometric. Close and reopen this Removal to check again."
       : "Isometric could not confirm whether this Removal exists. Try again.");
     if (alreadyRetired) return { removalId: input.removalId, previousVersion: latest.version, prepared: false };
     const registrations = await tx.select({

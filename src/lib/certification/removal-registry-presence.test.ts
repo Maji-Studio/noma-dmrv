@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { logger } from "@/lib/log";
 import { IsometricApiError } from "@/lib/isometric/client";
 import { buildBiocharApplicationReference } from "@/lib/isometric/biochar-applications";
 import { decideSubmissionClaim, REMOVAL_SUBMISSION_CLAIM_POLICY } from "@/lib/isometric/utils/submission-claim";
@@ -18,6 +19,13 @@ describe("missing Removal recovery", () => {
     expect(await readRemovalRegistryPresence(async () => { throw new IsometricApiError("network", 404, null, "network"); }, "rmv_old")).toBe("unknown");
     expect(await readRemovalRegistryPresence(async () => { throw new Error("timeout"); }, "rmv_old")).toBe("unknown");
     expect(await readRemovalRegistryPresence(async () => ({ id: "rmv_old" }), "rmv_old")).toBe("present");
+  });
+  it("logs an unknown read with the id and no request body", async () => {
+    const spy = vi.spyOn(logger, "error").mockImplementation(() => undefined);
+    await readRemovalRegistryPresence(async () => { throw new IsometricApiError("failure", 500, { secret: "x" }); }, "rmv_old");
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ externalId: "rmv_old" }), "Registry presence read failed");
+    expect(JSON.stringify(spy.mock.calls)).not.toContain("secret");
+    spy.mockRestore();
   });
   it("recognizes only the confirmed retired identity", () => {
     expect(isRegistryMissingSubmission(missing)).toBe(true);

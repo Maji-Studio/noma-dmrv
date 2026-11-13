@@ -97,7 +97,7 @@ test.describe("Removal missing in Isometric", () => {
         await expect(page).toHaveURL(new RegExp(`resume=${removal.removalId}`), { timeout: 60_000 });
         const review = page.getByRole("dialog");
         await expect(review.getByText(/^Compared with version 1$/)).toBeVisible({ timeout: 60_000 });
-        await expect(review).toContainText("The figures match the version Isometric lost.");
+        await expect(review).toContainText("The emission inputs match the version Isometric lost.");
         await shoot(page, "review-comparison", size);
       } finally {
         await cleanup?.();

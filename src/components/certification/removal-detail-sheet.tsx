@@ -67,7 +67,7 @@ import type { SheetReadOnly } from "@/lib/linked-record-read-only";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import { firstReturn, RemovalCorrectionNotice } from "./removal-correction-needed";
 import { RemovalResubmitNotice, ResubmitRemovalAction } from "./removal-resubmit-notice";
-import { RemovalMissingNotice, RemovalResendScope, SendAgainButton } from "./removal-missing-notice";
+import { RemovalMissingNotice, HiddenWhileMissing, RemovalResendScope, SendAgainButton } from "./removal-missing-notice";
 import { RemovalMissingRunsNotice } from "./removal-missing-runs-notice";
 import { RemovalEvidenceLinksNotice } from "./removal-evidence-links-notice";
 
@@ -509,7 +509,7 @@ export function RemovalDetailSheet({
           <SlideOverPanel.Footer
             preview={!readOnly && thingsToFix ? <p className="body-small text-[var(--color-text-secondary)]">{thingsToFix}</p> : undefined}
           >
-            {!readOnly && <ResubmitRemovalAction correction={correction} facilityId={facilityId} />}
+            {!readOnly && <HiddenWhileMissing><ResubmitRemovalAction correction={correction} facilityId={facilityId} /></HiddenWhileMissing>}
             <SendAgainButton />
             {/* Under a changed-since-review stop, Submit again only refuses again: Delete Removal is the way out (#1114). */}
             <RemovalReviewAction

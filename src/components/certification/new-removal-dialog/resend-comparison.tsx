@@ -33,8 +33,8 @@ export function ResendComparisonGroup({
         <h3 id="review-resend" className="body-lead font-medium">{heading}</h3>
         <p className={cn("body-small", MUTED)}>
           {rows.length === 0
-            ? "The figures match the version Isometric lost."
-            : `${rows.length} ${pluralize(rows.length, "figure differs", "figures differ")} from the version Isometric lost.`}
+            ? "The emission inputs match the version Isometric lost."
+            : `${rows.length} ${pluralize(rows.length, "emission input differs", "emission inputs differ")} from the version Isometric lost.`}
         </p>
       </div>
       {rows.length > 0 && (

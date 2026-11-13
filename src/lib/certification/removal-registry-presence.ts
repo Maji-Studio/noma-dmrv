@@ -1,3 +1,4 @@
+import { logger, sanitizeErrorMessage } from "@/lib/log";
 import { isMissingIsometricResource } from "@/lib/isometric/error-utils";
 
 export type RemovalRegistryPresence = "present" | "missing" | "unknown";
@@ -9,6 +10,9 @@ export async function readRemovalRegistryPresence(read: () => Promise<unknown>, 
     await read();
     return "present";
   } catch (error) {
-    return isMissingIsometricResource(error, null, externalId) ? "missing" : "unknown";
+    if (isMissingIsometricResource(error, null, externalId)) return "missing";
+    // Server-side only (the client imports its types). Ids and the sanitized message, never bodies or PII.
+    logger.error({ externalId, error: sanitizeErrorMessage(error) }, "Registry presence read failed");
+    return "unknown";
   }
 }
