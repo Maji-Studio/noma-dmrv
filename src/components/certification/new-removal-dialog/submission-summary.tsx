@@ -167,7 +167,8 @@ export function SubmissionSummary({
   return (
     <div className="flex flex-col gap-16">
       <FixedAck entries={entries} />
-      <ChangedGroup changes={changes} />
+      {/* One place: the comparison with the lost version already lists what changed, so the returned-Removal group steps aside. */}
+      {!factsInput.compilation?.resendComparison && <ChangedGroup changes={changes} />}
       <ResendComparisonGroup comparison={factsInput.compilation?.resendComparison} componentName={componentName} />
       <section aria-label="What this Removal sends" className={cn(BLOCK_BORDER, "flex flex-col")}>
         <div className="flex flex-col gap-2 px-16 pt-16 pb-12">

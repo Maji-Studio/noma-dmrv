@@ -348,7 +348,7 @@ export function RemovalDetailSheet({
               ) : (
                 <RemovalCorrectionNotice lock={lock} readOnly={!!readOnly} />
               )}
-              {open && canManage && !readOnly && workflowStatus.kind === "submitted" && (
+              {open && canManage && !readOnly && summary.hasFinalizedSubmission && (
                 <RemovalMissingNotice facilityId={facilityId} removalId={summary.removalId} reviewHref={reviewHref} />
               )}
               <RemovalMissingRunsNotice batches={summary.missingProductionRuns} facilityId={facilityId} canManage={canManage && !readOnly} readOnly={!!readOnly} />
