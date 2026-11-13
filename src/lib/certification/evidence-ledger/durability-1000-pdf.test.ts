@@ -4,9 +4,10 @@ import { renderThousandYearDurabilityLedgerPdf } from "./durability-1000-pdf";
 import { theme } from "./pdf-theme";
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 
-// The wordmark's right edge, in pt.
 const PAGE_MARGIN = Number(theme.page.paddingHorizontal);
-const WORDMARK_RIGHT = 80;
+// Width of the `noma` wordmark in pt, with a little slack for the gap.
+const WORDMARK_WIDTH = 46;
+const WORDMARK_RIGHT = PAGE_MARGIN + WORDMARK_WIDTH;
 const GEOMETRY_TOLERANCE = 0.5;
 // Distance from the page top (pt): the name lines end above the eyebrow,
 // and the meta column ends above the claim band.
