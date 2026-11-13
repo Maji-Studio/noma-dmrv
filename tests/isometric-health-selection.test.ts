@@ -142,10 +142,131 @@ test("actual summary shell fails for every incomplete required outcome", () => {
     execute({ OPENAPI_RESULT: "compatible" });
     assert.match(readFileSync(join(directory, "summary.md"), "utf8"),
       /Public OpenAPI compatibility \| success \(spec changed, still compiles\)/);
+    assert.throws(() => execute({ OPENAPI: "failure", OPENAPI_RESULT: "breaking" }));
+    assert.match(readFileSync(join(directory, "summary.md"), "utf8"),
+      /Public OpenAPI compatibility \| failure \(breaking spec change\)/);
     for (const key of outcomeKeys) {
       for (const outcome of ["failure", "skipped", "cancelled", ""]) {
         assert.throws(() => execute({ [key]: outcome }), `${key}=${outcome} must fail`);
       }
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}, collectionTimeoutMs);
+
+const certifyTypesFile = "src/lib/isometric/generated/certify.d.ts";
+const removedOperationsScript = "scripts/certify-removed-operations.mjs";
+const certifyFixture = `export interface paths {
+    "/ghg_entries": {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never; };
+        get: operations["list"];
+        post: operations["create"];
+        patch?: never;
+    };
+}
+export interface operations { list: {}; create: {}; }
+`;
+const compatibleFixture = certifyFixture.replace('patch?: never;', '/** Added operation */ patch: operations["update"];');
+const removedFixture = certifyFixture.replace('post: operations["create"];', 'post?: never;');
+const openapiRun = steps.find((step) => step.id === "openapi")?.run;
+assert.ok(openapiRun);
+const diffLineLimit = Number(openapiRun.match(/diff_line_limit=(\d+)/)?.[1]);
+assert.ok(diffLineLimit > 0);
+const longFixture = `/**\n${Array.from({ length: diffLineLimit }, (_, index) => ` * Description ${index}`).join("\n")}\n */\n`
+  + certifyFixture + "// DIFF_TAIL_SENTINEL\n";
+
+test.each([
+  { name: "unchanged", generated: certifyFixture, typecheck: 0, regenerate: 0, exit: 0, result: "unchanged" },
+  { name: "compatible addition", generated: compatibleFixture, typecheck: 0, regenerate: 0, exit: 0, result: "compatible" },
+  { name: "typecheck failure", generated: compatibleFixture, typecheck: 1, regenerate: 0, exit: 1, result: "breaking" },
+  { name: "removed operation", generated: removedFixture, typecheck: 0, regenerate: 0, exit: 1, result: "breaking" },
+  { name: "removed operation and typecheck failure", generated: removedFixture, typecheck: 1, regenerate: 0, exit: 1, result: "breaking" },
+  { name: "regenerate failure", generated: compatibleFixture, typecheck: 0, regenerate: 7, exit: 7, result: "" },
+  { name: "long compatible diff", generated: longFixture, typecheck: 0, regenerate: 0, exit: 0, result: "compatible" },
+  { name: "long breaking diff", generated: longFixture, typecheck: 1, regenerate: 0, exit: 1, result: "breaking" },
+])("actual OpenAPI shell handles $name", (scenario) => {
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), "isometric-health-openapi-")));
+  try {
+    mkdirSync(join(directory, "src/lib/isometric/generated"), { recursive: true });
+    mkdirSync(join(directory, "scripts"));
+    mkdirSync(join(directory, "bin"));
+    mkdirSync(join(directory, "runner-temp"));
+    symlinkSync(join(root, "node_modules"), join(directory, "node_modules"));
+    writeFileSync(join(directory, certifyTypesFile), certifyFixture);
+    writeFileSync(join(directory, removedOperationsScript), readFileSync(join(root, removedOperationsScript)));
+    writeFileSync(join(directory, "generated.d.ts"), scenario.generated);
+    writeFileSync(join(directory, "output"), "");
+    writeFileSync(join(directory, "summary.md"), "");
+    writeFileSync(join(directory, "calls"), "");
+    writeFileSync(join(directory, "bin/pnpm"), `#!/bin/bash
+set -eo pipefail
+echo "$1" >> "$PNPM_CALLS"
+case "$1" in
+  regenerate-certify-types)
+    if [ "$REGENERATE_STATUS" -ne 0 ]; then
+      echo 'fixture generation failed' >&2
+      exit "$REGENERATE_STATUS"
+    fi
+    cp "$GENERATED_FILE" "${certifyTypesFile}"
+    ;;
+  typecheck)
+    if [ "$TYPECHECK_STATUS" -ne 0 ]; then
+      echo 'fixture tsc error TS2339' >&2
+    fi
+    exit "$TYPECHECK_STATUS"
+    ;;
+  *) echo "Unexpected pnpm command: $1" >&2; exit 99 ;;
+esac
+`, { mode: 0o755 });
+    const env: NodeJS.ProcessEnv = {
+      PATH: `${join(directory, "bin")}:${process.env.PATH}`,
+      NODE_ENV: "test",
+      HOME: directory,
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_NOSYSTEM: "1",
+      RUNNER_TEMP: join(directory, "runner-temp"),
+      GITHUB_OUTPUT: join(directory, "output"),
+      GITHUB_STEP_SUMMARY: join(directory, "summary.md"),
+      GENERATED_FILE: join(directory, "generated.d.ts"),
+      PNPM_CALLS: join(directory, "calls"),
+      REGENERATE_STATUS: String(scenario.regenerate),
+      TYPECHECK_STATUS: String(scenario.typecheck),
+    };
+    const git = (...args: string[]) => execFileSync("git", args, {
+      cwd: directory, env, encoding: "utf8", stdio: "pipe",
+    });
+    git("init", "--quiet");
+    git("add", certifyTypesFile, removedOperationsScript);
+    git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "core.hooksPath=/dev/null",
+      "commit", "--quiet", "--no-gpg-sign", "-m", "fixture");
+    const execution = spawnSync("bash", ["-eo", "pipefail", "-c", openapiRun], {
+      cwd: directory, env, encoding: "utf8", timeout: collectionTimeoutMs,
+    });
+    const output = readFileSync(join(directory, "output"), "utf8");
+    const summary = readFileSync(join(directory, "summary.md"), "utf8");
+    const calls = readFileSync(join(directory, "calls"), "utf8");
+    const log = execution.stdout + execution.stderr;
+    assert.equal(execution.status, scenario.exit, log);
+    assert.equal(output, scenario.result ? `result=${scenario.result}\n` : "");
+    assert.equal(calls, scenario.result && scenario.result !== "unchanged"
+      ? "regenerate-certify-types\ntypecheck\n" : "regenerate-certify-types\n");
+    if (scenario.result === "compatible") {
+      assert.match(log, /::warning::Certify OpenAPI spec changed/);
+      assert.match(summary, /<details>\s*<summary>Certify OpenAPI spec changed, still compiles<\/summary>/);
+      assert.match(summary, /```text\n[\s\S]*```diff\n[\s\S]*<\/details>/);
+      assert.match(summary, /pnpm regenerate-certify-types/);
+    }
+    if (scenario.result === "breaking") assert.match(log, /::error::Breaking Certify spec change/);
+    if (scenario.generated === removedFixture) assert.match(log, /::error::Removed Certify operation: POST \/ghg_entries/);
+    if (scenario.typecheck) assert.match(log, /fixture tsc error TS2339/);
+    if (scenario.regenerate) assert.match(log, /fixture generation failed/);
+    if (scenario.generated === longFixture) {
+      const printed = scenario.result === "compatible" ? summary : log;
+      const diff = git("--no-pager", "diff", "--", certifyTypesFile);
+      assert.ok(printed.includes(diff.split("\n").slice(0, diffLineLimit).join("\n")));
+      assert.match(printed, new RegExp(`Diff truncated to the first ${diffLineLimit} lines\\.`));
+      assert.doesNotMatch(printed, /DIFF_TAIL_SENTINEL/);
     }
   } finally {
     rmSync(directory, { recursive: true, force: true });

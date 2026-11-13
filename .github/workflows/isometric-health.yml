@@ -8,7 +8,7 @@ name: Isometric API health
 # paths live in a separate file this workflow never collects.
 # No writes. No noma DB. No app boot.
 # Public Certify spec changes warn if regenerated types still compile; generation
-# errors or code that no longer compiles fail the OpenAPI compatibility check.
+# errors, removed operations or code that no longer compiles fail the check.
 #
 # This workflow intentionally uses its dedicated environment credential pair
 # through getIsometricClientFromEnv; it does not read per-organization DB rows
@@ -108,8 +108,8 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.credentials.outcome == 'success' }}
         run: pnpm isometric:coverage-check -- --source=fixture
 
-      # Regenerate from the public spec without secrets. Changed types must still
-      # compile against our callers; compatible refreshes only need a later commit.
+      # Regenerating from the public spec needs no secrets. Changed types must
+      # preserve operations and compile; compatible refreshes need a later commit.
       - name: Check Certify OpenAPI compatibility
         id: openapi
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
@@ -129,9 +129,34 @@ jobs:
             fi
           fi
 
+          baseline_file=$(mktemp "$RUNNER_TEMP/certify-baseline.XXXXXX")
+          removed_file=$(mktemp "$RUNNER_TEMP/certify-removed.XXXXXX")
+          git show "HEAD:$types_file" > "$baseline_file"
+          breaking=false
+          if node scripts/certify-removed-operations.mjs "$baseline_file" "$types_file" > "$removed_file"; then
+            :
+          else
+            removal_status=$?
+            breaking=true
+            if [ "$removal_status" -eq 1 ]; then
+              while IFS= read -r operation; do
+                echo "::error::Removed Certify operation: $operation"
+              done < "$removed_file"
+            else
+              echo "::error::Could not check Certify operations. Inspect the checker error above and rerun."
+            fi
+          fi
+
           # Mirrors ci.yml's quality-static job: typecheck needs only the install,
           # with no Next.js route generation, app boot, DB or app env preparation.
           if pnpm typecheck; then
+            :
+          else
+            breaking=true
+            echo "::error::Our code no longer compiles against Isometric's current Certify OpenAPI spec. See the tsc errors above."
+          fi
+
+          if [ "$breaking" = false ]; then
             echo "result=compatible" >> "$GITHUB_OUTPUT"
             echo "::warning::Certify OpenAPI spec changed, but our code still compiles. Run 'pnpm regenerate-certify-types' and commit when convenient."
             {
@@ -156,8 +181,11 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "result=breaking" >> "$GITHUB_OUTPUT"
-            echo "::error::Our code no longer compiles against Isometric's current Certify OpenAPI spec. Run 'pnpm regenerate-certify-types' locally, fix callers, run 'pnpm typecheck', and commit the generated types and caller fixes. See the tsc errors above and diff below."
-            cat "$diff_file"
+            echo "::error::Breaking Certify spec change. Run 'pnpm regenerate-certify-types' locally, fix callers, run 'pnpm typecheck', and commit the generated types and caller fixes. See the errors above and diff below."
+            sed -n "1,${diff_line_limit}p" "$diff_file"
+            if [ "$(wc -l < "$diff_file")" -gt "$diff_line_limit" ]; then
+              echo "Diff truncated to the first $diff_line_limit lines."
+            fi
             exit 1
           fi
 
@@ -178,7 +206,7 @@ jobs:
           case "$OPENAPI:$OPENAPI_RESULT" in
             success:compatible) openapi_display="success (spec changed, still compiles)" ;;
             success:unchanged) openapi_display="success (spec unchanged)" ;;
-            failure:breaking) openapi_display="failure (code no longer compiles)" ;;
+            failure:breaking) openapi_display="failure (breaking spec change)" ;;
           esac
           cat >> "$GITHUB_STEP_SUMMARY" <<EOF
           ## Isometric sandbox health
@@ -203,7 +231,7 @@ jobs:
           - Credentials failure: check OP_SERVICE_ACCOUNT_TOKEN and the three Isometric fields in the staging 1Password item; confirm they belong to the sandbox demo project's organization. Never paste credentials into logs.
           - API failure: with sandbox credentials, ISOMETRIC_ENVIRONMENT=sandbox and ISOMETRIC_DEMO_PROJECT_ID configured, run \`pnpm test:isometric-health\`.
           - Coverage failure: with sandbox credentials configured, run \`pnpm isometric:coverage-check -- --source=fixture\`; inspect live template line contracts, fixture reviews and reported input bindings (ADR 0032). Entry-only lines warn; unknown fixture IDs, unsettled contracts, forbidden lines and unmapped inputs fail.
-          - OpenAPI failure: inspect fetch/generation errors first. If regenerated types break compilation, run \`pnpm regenerate-certify-types\` locally, fix callers, run \`pnpm typecheck\`, and commit the generated types and caller fixes. Compatible spec changes only warn and can be committed when convenient.
+          - OpenAPI failure: inspect fetch/generation errors first. If regenerated types remove operations or break compilation, run \`pnpm regenerate-certify-types\` locally, fix callers, run \`pnpm typecheck\`, and commit the generated types and caller fixes. Compatible spec changes only warn and can be committed when convenient.
           - Skipped or cancelled checks are incomplete, never evidence of health. Fix prerequisites and rerun the workflow.
           EOF
 
