@@ -5,6 +5,7 @@ import {
   MONO,
   SANS,
   renderLedgerToBuffer,
+  mastheadWordmark,
   t,
   theme,
   v,
@@ -91,14 +92,9 @@ const mass = (value: number): string =>
 
 function masthead(model: ThousandYearDurabilityLedgerModel): ReactElement {
   const left = v(
+    styles.mastheadLeft,
     {},
-    {},
-    v(
-      styles.wordmarkRow,
-      {},
-      t(styles.wordmark, "noma"),
-      t(styles.wordmarkSub, `dMRV · ${model.organizationName.toUpperCase()}`),
-    ),
+    mastheadWordmark(model.organizationName),
     t(styles.eyebrow, "BIOCHAR IN AGRICULTURAL SOILS · 1000 YEAR"),
     h(Text, { style: styles.title }, "Durability Evidence Ledger"),
   );

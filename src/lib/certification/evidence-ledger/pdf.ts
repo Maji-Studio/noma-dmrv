@@ -15,7 +15,7 @@
 import { createElement as h, type ReactElement } from "react";
 import { Document, Page, StyleSheet, Text } from "@react-pdf/renderer";
 import { FACILITY_NOT_FOUND, formatCount, MISSING_VALUE } from "@/lib/copy-utils";
-import { C, MONO, SANS, renderLedgerToBuffer, t, theme, v } from "./pdf-theme";
+import { C, MONO, SANS, mastheadWordmark, renderLedgerToBuffer, t, theme, v } from "./pdf-theme";
 import type { LedgerCategory, LedgerModel } from "./types";
 
 const CAT_COLOR: Record<LedgerCategory["key"], string> = {
@@ -103,11 +103,8 @@ const styles = {
 };
 
 function masthead(model: LedgerModel): ReactElement {
-  const left = v({}, {},
-    v(styles.wordmarkRow, {},
-      t(styles.wordmark, "noma"),
-      t(styles.wordmarkSub, `dMRV · ${model.organizationName.toUpperCase()}`),
-    ),
+  const left = v(styles.mastheadLeft, {},
+    mastheadWordmark(model.organizationName),
     t(styles.eyebrow, "TRANSPORTATION MODULE V1.1 · DISTANCE BASED · EQUATION 3"),
     h(Text, { style: styles.title }, "Transport Emissions\nEvidence Ledger"),
   );
