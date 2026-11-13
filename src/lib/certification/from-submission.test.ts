@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import {
   deriveSubmissionStatus,
+  hasSubmittedRemovalVersion,
   overlayLiveRemoteStatus,
 } from "./from-submission";
 
@@ -136,4 +137,14 @@ describe("persisted Removal display state", () => {
     expect(deriveSubmissionStatus(latest, false, "removal", window).kind).toBe("interrupted");
     expect(deriveSubmissionStatus(latest, false, "removal", { startedOn: null, completedOn: null }).kind).toBe("interrupted");
   });
+});
+
+
+it("keeps a registry-missing retirement Submitted in list and batch display adapters", () => {
+  const retired = { status: "superseded" as const, externalId: "rmv_old", payloadSnapshot: {},
+    metadata: { registryMissingExternalId: "rmv_old", registryMissingConfirmedAt: "2026-11-13T00:00:00Z" } };
+  const reportingWindow = { startedOn: "2026-06-01", completedOn: "2026-06-30" };
+  expect(deriveSubmissionStatus(retired, false, "removal", reportingWindow).kind).toBe("submitted");
+  expect(hasSubmittedRemovalVersion([retired], reportingWindow)).toBe(true);
+  expect(hasSubmittedRemovalVersion([{ ...retired, externalId: "other" }], reportingWindow)).toBe(false);
 });

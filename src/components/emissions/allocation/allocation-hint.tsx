@@ -10,9 +10,11 @@ import { CircleHalfIcon } from "@phosphor-icons/react/dist/ssr";
 import type { ReactNode } from "react";
 import { ExplanationInfo } from "@/components/ui/explanation-info";
 import { cn } from "@/lib/utils";
+import type { AllocationRecord } from "@/types/emission-allocation";
 import { formatDay, formatKg, formatKgNumber, formatValue } from "./allocation-format";
-import type { FeedstockHint, Owner } from "./allocation-model";
+import type { FeedstockHint, Focus, Owner } from "./allocation-model";
 import { MUTED } from "./allocation-parts";
+import { hintPhrases } from "./allocation-share-summary";
 
 const ICON_PX = 14;
 function escapeRegExp(text: string): string {
@@ -123,6 +125,18 @@ export function CountedOnNote({ hint }: { hint: FeedstockHint }) {
     <span className={cn("flex flex-wrap justify-end gap-x-4 body-caption", MUTED)}>
       <span className="whitespace-nowrap">Counted on</span>
       <span className="whitespace-nowrap font-mono text-[var(--color-text-primary)]">{hint.ownerLabel}</span>
+    </span>
+  );
+}
+
+/** The page's hints over a whole quantity, in one line: "2 partly used, 1 counted on CB-26-002". */
+export function HintSummary({ records, focus, codes, className }: { records: AllocationRecord[]; focus: Focus; codes: ReadonlyMap<string, string>; className?: string }) {
+  const phrases = hintPhrases(records, focus, codes);
+  if (!phrases.length) return null;
+  return (
+    <span className={cn("inline-flex items-center gap-4 body-caption text-[var(--color-text-primary)]", className)}>
+      <CircleHalfIcon size={ICON_PX} aria-hidden className="shrink-0 text-[var(--clr-dark-purple-60)]" />
+      {phrases.join(", ")}
     </span>
   );
 }

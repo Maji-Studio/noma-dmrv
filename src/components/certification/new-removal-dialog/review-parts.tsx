@@ -26,7 +26,7 @@ import type { ReviewItem } from "./review-items";
 
 const MARKER_SIZE = 20;
 export const REVIEW_TITLE_ID = "new-removal-title";
-const MUTED = "text-[var(--color-text-secondary)]";
+export const MUTED = "text-[var(--color-text-secondary)]";
 const TERTIARY = "text-[var(--color-text-tertiary)]";
 const ROW_DIVIDER = "[border-top:var(--row-divider)] first:[border-top:none]";
 const LINK_CLASS = cn(
@@ -197,11 +197,28 @@ export interface ChangedFigure {
   after?: string;
 }
 
-function ValueBlock({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
+export function ValueBlock({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
   return (
     <div className="flex min-w-0 flex-col gap-2 bg-[var(--color-background-light)] px-12 py-10">
       <span className={cn("body-caption", MUTED)}>{label}</span>
       <span className={cn("body-large font-medium tabular-nums", muted && TERTIARY)}>{value}</span>
+    </div>
+  );
+}
+
+/** Two blocks with an arrow: the earlier figure, then today's. */
+export function BeforeAfterRow({ label, beforeLabel, before, afterLabel, after }: {
+  label: string; beforeLabel: string; before: string; afterLabel: string; after: string;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={`${label}: ${before} ${beforeLabel.toLowerCase()}, ${after} ${afterLabel.toLowerCase()}`}
+      className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-8 sm:max-w-[400px]"
+    >
+      <ValueBlock label={beforeLabel} value={before} muted />
+      <ArrowRightIcon size={16} aria-hidden className="text-[var(--color-icon-secondary)]" />
+      <ValueBlock label={afterLabel} value={after} />
     </div>
   );
 }
@@ -230,15 +247,7 @@ export function ChangedGroup({ changes }: { changes: readonly ChangedFigure[] })
               {change.component} <span className={cn("font-mono body-small", MUTED)}>{change.batchCode}</span>
             </span>
             {change.before && change.after && (
-              <div
-                role="group"
-                aria-label={`${change.component}: ${change.before} when submitted, ${change.after} now`}
-                className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-8 sm:max-w-[400px]"
-              >
-                <ValueBlock label="When submitted" value={change.before} muted />
-                <ArrowRightIcon size={16} aria-hidden className="text-[var(--color-icon-secondary)]" />
-                <ValueBlock label="Now" value={change.after} />
-              </div>
+              <BeforeAfterRow label={change.component} beforeLabel="When submitted" before={change.before} afterLabel="Now" after={change.after} />
             )}
           </li>
         ))}

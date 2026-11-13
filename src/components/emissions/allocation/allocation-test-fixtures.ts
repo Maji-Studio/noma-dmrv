@@ -90,3 +90,29 @@ export function allocationFixture(): EmissionAllocation {
     records: [feedstock, untouched, run("run-1", "PR-26-001", BATCH_A, 22), run("run-9", "PR-26-009", BATCH_C, 19), delivery, manual],
   };
 }
+
+export const MANY_DELIVERIES = 40;
+const NOT_YET_DELIVERIES = 3;
+const DELIVERY_TONNE_KM = 100;
+
+/**
+ * A busy batch: many feedstock deliveries CB-26-001 carries whole, a few not
+ * yet allocated, plus the base fixture's split biochar delivery and runs. The
+ * Flow view's reason to exist: forty records, still one row.
+ */
+export function manyDeliveriesFixture(): EmissionAllocation {
+  const base = allocationFixture();
+  const feedstocks: AllocationRecord[] = Array.from({ length: MANY_DELIVERIES }, (_, index) => {
+    const notYet = index >= MANY_DELIVERIES - NOT_YET_DELIVERIES;
+    const code = `FS-27-${String(index + 1).padStart(3, "0")}`;
+    return {
+      ...(notYet ? untouched : feedstock),
+      id: `many-fs-${index}`,
+      code,
+      date: `2026-02-${String((index % 28) + 1).padStart(2, "0")}`,
+      quantities: [{ value: DELIVERY_TONNE_KM, unit: "t·km", label: "Transport" }],
+      feedstock: undefined,
+    };
+  });
+  return { ...base, records: [...feedstocks, ...base.records.filter((record) => record.group !== "feedstockTransport")] };
+}

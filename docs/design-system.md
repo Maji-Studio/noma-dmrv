@@ -596,9 +596,9 @@ Always use `Button`; never a raw `<button>` with manual styling.
   `<button>`: it is a proportional sliver of fill with no label, and `Button`'s
   type, heights and padding would change its width. It keeps the focus ring
   and a 44px tall hit area (`INLINE_HIT_AREA`); segments in a Removal are links.
-  The Allocation flow chart (`allocation-flow-chart.tsx`) is the same case: one
-  transparent raw `<button>` per drawn node sits over the SVG, with the focus
-  ring and at least a 44px tall hit area, because the node's size is the data.
+  The Allocation share bars (`allocation-share-bars.tsx`) are the same case: one
+  raw `<button>` per quantity row (caret, bar, figure) with the focus ring and at
+  least a 44px tall hit area, because the whole row is the click target.
 - **Exception: Used by schematic.** In the read sheets' Used by chart
   (`record-used-by-schematic.tsx`) a stacking column's header and its group
   square are raw `<button>`s: they are absolutely positioned chart cells whose

@@ -1,3 +1,4 @@
+import { isRegistryMissingSubmission } from "@/lib/certification/registry-missing-submission";
 import { env } from "@/config/env";
 import { requireOrgFacility } from "@/data-access/utils";
 import { hasFinalizedSubmission } from "@/data-access/certification-submissions";
@@ -30,7 +31,7 @@ const FANOUT_CONCURRENCY = 8;
 export interface RemovalHubEntry {
   removal: CertifierRemovalRow;
   memberBatches: Pick<MemberCreditBatch, "id" | "code">[];
-  latestSubmission: CertificationSubmissionRow | null;
+  latestSubmission: (CertificationSubmissionRow & { registryMissing?: boolean }) | null;
   /** Date of the latest submission, even when a newer draft version exists. */
   submittedOn: SubmittedOnState;
   hasFinalizedSubmission: boolean;
@@ -85,10 +86,11 @@ export async function loadRemovalsForFacility(
             getCreditBatchesByRemovalId(orgCtx, removal.id),
             hasFinalizedSubmission(orgCtx, key),
           ]);
+          const latestSubmission = submissions.get(removal.id);
           return {
             removal,
             memberBatches: batches.map((b) => ({ id: b.id, code: b.code })),
-            latestSubmission: submissions.get(removal.id) ?? null,
+            latestSubmission: latestSubmission ? { ...latestSubmission, registryMissing: isRegistryMissingSubmission(latestSubmission) } : null,
             submittedOn: submittedOnState(submittedRows.get(removal.id) ?? null),
             hasFinalizedSubmission: finalized,
             deletionInProgress: hasFreshRemovalDeletionLease(removal.metadata),

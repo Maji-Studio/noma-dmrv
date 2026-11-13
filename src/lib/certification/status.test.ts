@@ -397,3 +397,14 @@ describe("deriveStatementStatus", () => {
     }
   });
 });
+
+
+it("keeps a confirmed registry-missing retirement Submitted", () => {
+  const retired = {
+    local: "superseded" as const, lockInFlight: false, externalId: "rmv_old",
+    metadata: { registryMissingExternalId: "rmv_old", registryMissingConfirmedAt: "2026-11-13T00:00:00Z" },
+  };
+  expect(deriveRemovalStatus(retired)).toEqual(deriveRemovalStatus({ local: "submitted", lockInFlight: false }));
+  expect(deriveRemovalWorkflowStatus({ ...retired, enrichmentStatus: "unavailable", readiness: null })).toMatchObject({ kind: "submitted", label: "Submitted" });
+  expect(deriveRemovalStatus({ ...retired, externalId: "different" }).kind).toBe("not-submitted");
+});

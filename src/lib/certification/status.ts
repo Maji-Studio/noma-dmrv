@@ -11,7 +11,8 @@ import { hasPendingStatementTotal } from "@/lib/certification/pending-statement-
  *
  *   - **Removal** → submitted to the **registry**. Single-phase `submitRemoval`.
  *     There is NO remote Removal status in this integration, so the lifecycle
- *     ends at "Submitted". A latest `superseded` row is a retired attempt with
+ *     ends at "Submitted", including a confirmed registry-missing retirement.
+ *     Any other latest `superseded` row is a retired attempt with
  *     no current version and must remain actionable; successful re-versioning
  *     exposes the newer `submitted` row instead.
  *
@@ -24,6 +25,7 @@ import { hasPendingStatementTotal } from "@/lib/certification/pending-statement-
  *     (it meant "created in the registry", not "sent to the verifier").
  */
 
+import { isRegistryMissingSubmission } from "./registry-missing-submission";
 import type { StatusValue } from "@/components/ui/status-badge";
 // Type-only: erased at build time, used only to check the status list below.
 import type { certificationSubmissionStatus } from "@/db/schema/common";
@@ -105,6 +107,9 @@ export interface RemovalStatusInput {
   /** A draft row holding a live submission lock (derive from `lock.ts`). */
   lockInFlight: boolean;
   submissionInterrupted?: boolean;
+  externalId?: string | null;
+  metadata?: unknown;
+  registryMissing?: boolean;
 }
 
 export type RemovalEnrichmentStatus =
@@ -244,7 +249,11 @@ export function deriveRemovalStatus({
   local,
   lockInFlight,
   submissionInterrupted = false,
+  externalId = null,
+  metadata,
+  registryMissing = false,
 }: RemovalStatusInput): DerivedStatus {
+  if ((local === "superseded" && registryMissing) || isRegistryMissingSubmission({ status: local ?? "", externalId, metadata })) local = "submitted";
   if (
     (local === "draft" || local === "submitted") &&
     submissionInterrupted
@@ -323,11 +332,17 @@ export function deriveRemovalWorkflowStatus({
   enrichmentStatus,
   readiness,
   submissionInterrupted = false,
+  externalId = null,
+  metadata,
+  registryMissing,
 }: RemovalWorkflowStatusInput): RemovalWorkflowStatus {
   const lifecycle = deriveRemovalStatus({
     local,
     lockInFlight,
     submissionInterrupted,
+    externalId,
+    metadata,
+    registryMissing,
   });
 
   if (lifecycle.kind === "submitted" || lifecycle.kind === "superseded") {

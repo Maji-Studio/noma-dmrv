@@ -71,6 +71,8 @@ export async function loadRemovalAttentionSources(orgCtx: OrgContext, facilityId
   const kindOf = (removal: Row) => {
     const latest = submissions.get(removal.id) ?? null;
     return deriveRemovalStatus({
+      externalId: latest?.externalId,
+      metadata: latest?.metadata,
       local: (latest?.status ?? null) as LocalSubmissionStatus | null,
       lockInFlight: latest ? isLockedInFlight(latest) : false,
       submissionInterrupted: isRemovalSubmissionInterruptedFromSubmission(latest, {
