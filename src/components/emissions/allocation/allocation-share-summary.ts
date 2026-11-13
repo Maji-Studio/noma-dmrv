@@ -9,8 +9,6 @@ import type { AllocationRecord } from "@/types/emission-allocation";
 import { allOwners, feedstockHint, fractionFor, wholePercents, type Focus, type Owner } from "./allocation-model";
 import type { Stream } from "./allocation-streams";
 
-/** Fraction precision before rounding to whole percents: well below any real share, well above float noise. */
-const SHARE_PRECISION = 1e9;
 
 export interface Slice {
   owner: Owner;
@@ -27,6 +25,8 @@ export interface StreamSummary {
   slices: Slice[];
   mine: number;
   minePercent: number;
+  /** The page carries records in this stream but none has a figure. */
+  mineMissing: boolean;
   /** Records in the stream with no recorded figure. */
   undrawn: number;
 }
@@ -44,13 +44,13 @@ export function streamSummary(stream: Stream, records: AllocationRecord[], focus
   const valued = allOwners(focus)
     .map((owner) => ({ owner, value: items.reduce((sum, item) => sum + item.value * fractionFor(item.record, owner), 0) }))
     .filter((slice) => slice.value > 0);
-  // Multiplying fractions into quantities and back leaves float noise that can flip the
-  // largest-remainder tie-break; rounding it away keeps percents equal to the Table's.
-  const percents = total > 0 ? wholePercents(valued.map((slice) => Math.round((slice.value / total) * SHARE_PRECISION) / SHARE_PRECISION)) : valued.map(() => 0);
+  const percents = total > 0 ? wholePercents(valued.map((slice) => slice.value / total)) : valued.map(() => 0);
   const slices = valued.map((slice, index) => ({ ...slice, percent: percents[index] }));
   const own = slices.find((slice) => slice.owner.key === focus.owner.key);
-  const undrawn = records.filter((record) => stream.has(record) && stream.pick(record) === null).length;
-  return { stream, items, total, slices, mine: own?.value ?? 0, minePercent: own?.percent ?? 0, undrawn };
+  const missing = records.filter((record) => stream.has(record) && stream.pick(record) === null);
+  // The page carries only records with no figure: a missing reading, not a zero.
+  const mineMissing = !own && missing.some((record) => fractionFor(record, focus.owner) > 0);
+  return { stream, items, total, slices, mine: own?.value ?? 0, minePercent: own?.percent ?? 0, mineMissing, undrawn: missing.length };
 }
 
 /** Hint A summed over records for the page: "2 partly used", "1 counted on CB-26-002". */

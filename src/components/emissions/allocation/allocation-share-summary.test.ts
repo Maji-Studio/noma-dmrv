@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NOT_YET } from "@/types/emission-allocation";
-import { buildFocus, batchCodesOf, percentFor } from "./allocation-model";
+import { buildFocus, batchCodesOf, percentFor, sharesOf } from "./allocation-model";
 import { hintPhrases, streamSummary } from "./allocation-share-summary";
 import { STREAMS, visibleStreams } from "./allocation-streams";
 import { BATCH_A, BATCH_B, BATCH_C, MANY_DELIVERIES, REMOVAL_1, allocationFixture, manyDeliveriesFixture } from "./allocation-test-fixtures";
@@ -39,6 +39,30 @@ describe("streamSummary, per-stream owner shares", () => {
     const summary = streamSummary(stream("delivery"), [tiny], focus);
     const owners = [...focus.owners, focus.notYet];
     expect(summary.slices.map((slice) => slice.percent)).toEqual(owners.flatMap((owner) => { const p = percentFor(tiny, owner, owners); return p > 0 ? [p] : []; }));
+  });
+
+  it("ties an even three-way split the same way as the Table", () => {
+    const data = allocationFixture();
+    const delivery = data.records.find((record) => record.group === "deliveryTransport")!;
+    const third = 1 / 3;
+    const even = { ...delivery, parts: [{ ...delivery.parts[0], key: BATCH_A, fraction: third }, { ...delivery.parts[0], key: BATCH_B, fraction: third }, { ...delivery.parts[0], key: NOT_YET, fraction: 1 - 2 * third }] };
+    const { focus } = onBatch(BATCH_A, { ...data, records: [even] });
+    const owners = [...focus.owners, focus.notYet];
+    expect(streamSummary(stream("delivery"), [even], focus).slices.map((slice) => slice.percent)).toEqual(sharesOf(even, owners).map((share) => share.percent));
+  });
+
+  it("reads a batch whose only records have no figure as missing, not zero", () => {
+    const data = allocationFixture();
+    const records = data.records.map((record) =>
+      record.group === "production" && record.parts.some((part) => part.key === BATCH_A)
+        ? { ...record, quantities: record.quantities.map((quantity) => (quantity.unit === "L" ? { ...quantity, value: null } : quantity)) }
+        : record,
+    );
+    const { focus } = onBatch(BATCH_A, { ...data, records });
+    const summary = streamSummary(stream("diesel"), records, focus);
+    expect(summary.slices.length).toBeGreaterThan(0);
+    expect([summary.mine, summary.mineMissing]).toEqual([0, true]);
+    expect(streamSummary(stream("diesel"), records, onBatch(BATCH_C, { ...data, records }).focus).mineMissing).toBe(false);
   });
 
   it("reports zero for a page that carries none of the quantity", () => {

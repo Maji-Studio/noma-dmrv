@@ -85,12 +85,12 @@ describe("EmissionAllocationSection, Flow view (share bars)", () => {
     expect(screen.getByRole("button", { name: (name) => name.startsWith("Manual transport: 90 t·km \u00b7 100%") })).toBeTruthy();
   });
 
-  it("says No figures recorded for a quantity nothing records, without a toggle", () => {
+  it("says what fills a quantity nothing records, without a toggle", () => {
     const data = allocationFixture();
     data.records = data.records.filter((record) => record.group !== "deliveryTransport");
     state.data = data;
     show({ creditBatchId: BATCH_A });
-    expect(within(rowOf("delivery")).getByText("No figures recorded")).toBeTruthy();
+    expect(within(rowOf("delivery")).getByText("Shows once a biochar delivery has its distance and mass recorded.")).toBeTruthy();
     expect(within(rowOf("delivery")).queryByRole("button")).toBeNull();
   });
 });

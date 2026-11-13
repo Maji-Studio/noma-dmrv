@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import type { AllocationRecord } from "@/types/emission-allocation";
 import { formatNumber, recordLine, recordName } from "./allocation-format";
 import { HintMarker } from "./allocation-hint";
-import { allOwners, feedstockHint, sharesOf, type Focus } from "./allocation-model";
+import { NOT_YET_LABEL, allOwners, feedstockHint, sharesOf, type Focus } from "./allocation-model";
 import { MUTED } from "./allocation-parts";
 import type { Stream } from "./allocation-streams";
 
@@ -35,6 +35,8 @@ export function RecordList({ records, stream, focus, codes }: {
   const total = rows.reduce((sum, record) => sum + (stream.pick(record) ?? 0), 0);
   return (
     <div className="flex min-w-0 flex-col gap-4" aria-live="polite">
+      {/* A long credit batch code scrolls inside this box, never the page. */}
+      <div className="min-w-0 overflow-x-auto">
       <table className="w-full border-collapse">
         <thead>
           <tr className="text-left">
@@ -57,7 +59,7 @@ export function RecordList({ records, stream, focus, codes }: {
                   {sharesOf(record, owners).map((share) => (
                     <span key={share.owner.key} className={cn("flex flex-wrap justify-end gap-x-4", share.owner.key === focus.owner.key ? "font-medium" : MUTED)}>
                       <span className="whitespace-nowrap">{share.percent}%</span>
-                      <span className={cn("whitespace-nowrap", !share.owner.notYet && "font-mono")}>{share.owner.notYet ? "not yet allocated" : share.owner.label}</span>
+                      <span className={cn("whitespace-nowrap", !share.owner.notYet && "font-mono")}>{share.owner.notYet ? NOT_YET_LABEL.toLowerCase() : share.owner.label}</span>
                     </span>
                   ))}
                 </td>
@@ -76,6 +78,7 @@ export function RecordList({ records, stream, focus, codes }: {
           </tfoot>
         )}
       </table>
+      </div>
       {!showAll && rows.length > LIST_REST && <TextAction onClick={() => setShowAll(true)}>Show all {rows.length}</TextAction>}
     </div>
   );
