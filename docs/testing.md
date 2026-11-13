@@ -645,7 +645,7 @@ Run the script after changing the Removal compile, comparison or submit checks.
 ## Isometric health workflow
 
 `isometric-health.yml` runs API read health, live template input coverage via
-`pnpm isometric:coverage-check -- --source=fixture`, and public OpenAPI drift
+`pnpm isometric:coverage-check -- --source=fixture`, and public OpenAPI compatibility
 independently after setup. Fixture source selects local project/template IDs and
 optional per-facility `reviewedLineSources` contracts keyed by component ID in
 `tests/fixtures/isometric-coverage.json`; it still fetches live templates. Reviews
@@ -656,6 +656,13 @@ and still runs if credential loading or another health check fails. The coverage
 step needs only the registry credential pair and `ISOMETRIC_ENVIRONMENT`, because
 `client-env.ts` and the logger do not load app config. Registry credentials remain
 mandatory.
+
+The OpenAPI step regenerates Certify types and fails on fetch/generation errors.
+Unchanged types pass immediately. Changed types run `pnpm typecheck`, matching
+CI's static job without app env or route-type generation. Compilation failures
+fail with tsc errors, the diff and repair instructions. Compatible changes warn
+and pass, with a collapsible diff stat and diff (first 300 lines if truncated)
+in the summary. Run `pnpm regenerate-certify-types` and commit when convenient.
 
 The always-run step summary reports setup and check outcomes with repair commands.
 Any required setup or check that fails or is skipped prevents a green result.

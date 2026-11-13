@@ -126,18 +126,23 @@ test("actual summary shell fails for every incomplete required outcome", () => {
   const summaryRun = summary.run;
   assert.equal(summary.if, "${{ always() }}");
   assert.deepEqual(Object.values(summaryEnv).sort(),
-    required.map((id) => `\${{ steps.${id}.outcome }}`).sort());
+    [...required.map((id) => `\${{ steps.${id}.outcome }}`), "${{ steps.openapi.outputs.result }}"].sort());
+  assert.equal(summaryEnv.OPENAPI_RESULT, "${{ steps.openapi.outputs.result }}");
+  const outcomeKeys = required.map((id) => id.toUpperCase());
   const directory = mkdtempSync(join(tmpdir(), "isometric-health-summary-"));
   try {
     const execute = (overrides: Record<string, string> = {}) => execFileSync("bash", ["-e", "-c", summaryRun], {
       cwd: directory,
       env: { NODE_ENV: "test", PATH: process.env.PATH, GITHUB_STEP_SUMMARY: join(directory, "summary.md"),
-        ...Object.fromEntries(Object.keys(summaryEnv).map((key) => [key, "success"])), ...overrides },
+        ...Object.fromEntries(outcomeKeys.map((key) => [key, "success"])), OPENAPI_RESULT: "unchanged", ...overrides },
       stdio: "pipe",
     });
     execute();
     assert.match(readFileSync(join(directory, "summary.md"), "utf8"), /pnpm test:isometric-health/);
-    for (const key of Object.keys(summaryEnv)) {
+    execute({ OPENAPI_RESULT: "compatible" });
+    assert.match(readFileSync(join(directory, "summary.md"), "utf8"),
+      /Public OpenAPI compatibility \| success \(spec changed, still compiles\)/);
+    for (const key of outcomeKeys) {
       for (const outcome of ["failure", "skipped", "cancelled", ""]) {
         assert.throws(() => execute({ [key]: outcome }), `${key}=${outcome} must fail`);
       }

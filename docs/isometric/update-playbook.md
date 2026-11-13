@@ -45,7 +45,13 @@ The historical API-root `/openapi.json` serves another spec; do not substitute i
 ```bash
 pnpm regenerate-certify-types
 git diff src/lib/isometric/generated/certify.d.ts
+pnpm typecheck
 ```
+
+The daily health workflow fails on fetch/generation errors or compilation failures
+against regenerated types. Compatible changes warn with a diff in the summary;
+run `pnpm regenerate-certify-types` and commit when convenient. For compilation
+failures, fix callers and commit them with the regenerated types.
 
 Review operation changes and non-test consumers before updating the
 [API index](./openapi-index.md). Generated operation counts are not a freshness
