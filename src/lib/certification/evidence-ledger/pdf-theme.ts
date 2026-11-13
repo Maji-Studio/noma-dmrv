@@ -82,6 +82,15 @@ export const t = (style: Style, text: ReactNode): ReactElement =>
   h(Text_, { style }, text);
 
 // ── Shared chrome ────────────────────────────────────────────────────────────
+/** Minimum gap (pt) between the masthead's left column and the meta column. */
+const MASTHEAD_COLUMN_GAP = 16;
+
+/**
+ * Offset (pt) that puts the 7.5pt name's baseline on the 16pt wordmark's
+ * baseline when both start at the row top (DM Sans 16 vs DM Mono 7.5).
+ */
+const MASTHEAD_SUB_BASELINE_OFFSET = 11;
+
 export const theme = StyleSheet.create({
   page: {
     backgroundColor: C.paper,
@@ -102,8 +111,20 @@ export const theme = StyleSheet.create({
     borderBottomWidth: 1.5,
     borderBottomColor: C.ink,
   },
-  wordmarkRow: { flexDirection: "row", alignItems: "baseline" },
-  wordmark: { fontFamily: SANS, fontWeight: 700, fontSize: 16, letterSpacing: -0.3 },
+  wordmarkRow: { flexDirection: "row", alignItems: "flex-start" },
+  wordmark: {
+    fontFamily: SANS,
+    fontWeight: 700,
+    fontSize: 16,
+    letterSpacing: -0.3,
+    flexShrink: 0,
+  },
+  // Yoga baseline-aligns a wrapped name to its LAST line, so the row is
+  // top-aligned and the name is offset to sit on the wordmark's baseline.
+  // The organization name wraps inside the left column (flexShrink) and its
+  // continuation lines stay under the first line of the name, not under the
+  // wordmark, because the name is its own box beside it.
+  wordmarkSubBox: { flexShrink: 1, marginTop: MASTHEAD_SUB_BASELINE_OFFSET },
   wordmarkSub: {
     fontFamily: MONO,
     fontSize: 7.5,
@@ -111,6 +132,9 @@ export const theme = StyleSheet.create({
     letterSpacing: 1,
     marginLeft: 7,
   },
+  // Left masthead column: takes the space the meta column leaves, so a long
+  // organization name wraps here and never reaches or moves the meta column.
+  mastheadLeft: { flex: 1, paddingRight: MASTHEAD_COLUMN_GAP },
   eyebrow: {
     fontFamily: MONO,
     fontSize: 8,
@@ -120,7 +144,7 @@ export const theme = StyleSheet.create({
   },
   title: { fontFamily: SANS, fontWeight: 600, fontSize: 21, lineHeight: 1.08, marginTop: 7 },
 
-  metaCol: { alignItems: "flex-end", maxWidth: 210 },
+  metaCol: { alignItems: "flex-end", maxWidth: 210, flexShrink: 0 },
   metaPair: { alignItems: "flex-end", marginBottom: 6 },
   metaLabel: {
     fontFamily: MONO,
@@ -237,6 +261,21 @@ export const theme = StyleSheet.create({
   },
   footerText: { fontFamily: MONO, fontSize: 7, color: C.ink40, letterSpacing: 0.5 },
 });
+
+/** The `noma` wordmark with a subtitle beside it; a long subtitle wraps inside its column. */
+export function wordmarkWithSub(sub: string): ReactElement {
+  return v(
+    theme.wordmarkRow,
+    {},
+    t(theme.wordmark, "noma"),
+    v(theme.wordmarkSubBox, {}, t(theme.wordmarkSub, sub)),
+  );
+}
+
+/** The wordmark with the organization name beside it, shared by every ledger masthead. */
+export function mastheadWordmark(organizationName: string): ReactElement {
+  return wordmarkWithSub(`dMRV · ${organizationName.toUpperCase()}`);
+}
 
 /** Register the bundled fonts, then render a ledger Document to a PDF buffer. */
 export async function renderLedgerToBuffer(doc: ReactElement): Promise<Buffer> {
