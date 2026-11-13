@@ -4,6 +4,7 @@ import { applications, biocharProducts, certifierRemovals, creditBatches, delive
 import type { OrgContext } from "@/lib/auth/server";
 import type { RecordUsedByKind, RecordUsedByNode } from "@/lib/record-used-by-chain";
 import { deletedProductIds } from "./output-stock-active-movements";
+import { productionRunDateExpr } from "./production-runs/date-expr";
 import { requireOrgScope } from "./utils";
 
 // Detail reads retain archived facility history; a reversed product is deleted.
@@ -20,9 +21,9 @@ export async function readUsedByNodes(ctx: OrgContext, kind: RecordUsedByKind, i
       return rows.map(row => ({ kind, id: row.id, code: row.code, name: null, facilityId: row.facilityId, at: iso(row.at), calendarDay: true }));
     }
     case "productionRun": {
-      const rows = await db.select({ id: productionRuns.id, code: productionRuns.code, facilityId: productionRuns.facilityId, start: productionRuns.startTime, end: productionRuns.endTime })
+      const rows = await db.select({ id: productionRuns.id, code: productionRuns.code, facilityId: productionRuns.facilityId, at: productionRunDateExpr(org) })
         .from(productionRuns).where(and(eq(productionRuns.organizationId, org), inArray(productionRuns.id, ids)));
-      return rows.map(row => ({ kind, id: row.id, code: row.code, name: null, facilityId: row.facilityId, at: iso(row.end ?? row.start), calendarDay: false }));
+      return rows.map(row => ({ kind, id: row.id, code: row.code, name: null, facilityId: row.facilityId, at: row.at, calendarDay: true }));
     }
     case "biocharProduct": {
       const rows = await db.select({ id: biocharProducts.id, code: biocharProducts.code, facilityId: biocharProducts.facilityId, at: biocharProducts.productionDate })

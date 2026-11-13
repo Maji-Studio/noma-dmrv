@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   getDashboardBatchScope: vi.fn(),
   getProductionRuns: vi.fn(),
   getProductionRunStats: vi.fn(),
+  getRecordUsedByChain: vi.fn(),
   getCreditBatches: vi.fn(),
   listCreditBatchActivity: vi.fn(),
   getCreditBatchActivitySummary: vi.fn(),
@@ -39,6 +40,7 @@ vi.mock("@/data-access/production-runs", () => ({
   getProductionRuns: mocks.getProductionRuns,
   getProductionRunStats: mocks.getProductionRunStats,
 }));
+vi.mock("@/data-access/record-used-by-chain", () => ({ getRecordUsedByChain: mocks.getRecordUsedByChain }));
 vi.mock("@/data-access/credit-batch-activity", () => ({ listCreditBatchActivity: mocks.listCreditBatchActivity, getCreditBatchActivitySummary: mocks.getCreditBatchActivitySummary }));
 vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatches: mocks.getCreditBatches,
@@ -74,6 +76,7 @@ import { POST as certifierSummaryRoute } from "./facilities/[facilityId]/certifi
 import { POST as facilitiesRoute } from "./facilities/route";
 import { POST as productionRunsRoute } from "./production-runs/route";
 import { POST as productionRunStatsRoute } from "./production-runs/stats/route";
+import { POST as recordUsedByChainRoute } from "./record-used-by-chain/route";
 
 import { POST as facilityRoute } from "./facilities/[facilityId]/route";
 import { POST as activeOrganizationRoute } from "./organizations/active/route";
@@ -138,6 +141,13 @@ interface ReadEndpoint {
 }
 
 const endpoints: Record<string, ReadEndpoint> = {
+  "record used by chain": {
+    ok: () => recordUsedByChainRoute(post("/api/reads/record-used-by-chain", { kind: "productionRun", id: FACILITY_ID })),
+    data: null,
+    badInput: () => recordUsedByChainRoute(post("/api/reads/record-used-by-chain", { kind: "productionRun", id: MALFORMED_ID })),
+    badInputError: "Invalid record: Choose a valid record.",
+    badInputIssues: [{ path: ["id"], code: "invalid_format", message: "Choose a valid record.", meta: { format: "uuid" } }],
+  },
   "credit batch activity summary": {
     ok: () => activitySummaryRoute(post("/api/reads/credit-batches/activity/summary", { creditBatchId: CREDIT_BATCH.id })),
     data: { total: 0, counts: [], latest: null },
@@ -295,6 +305,7 @@ describe.each(Object.entries(endpoints))(
       mocks.getDashboardOverview.mockResolvedValue({ generatedAt: "2026-09-15T10:00:00.000Z" });
       mocks.getProductionRuns.mockResolvedValue(EMPTY_PAGE);
       mocks.getProductionRunStats.mockResolvedValue(RUN_STATS);
+      mocks.getRecordUsedByChain.mockResolvedValue(null);
       mocks.getCreditBatches.mockResolvedValue([CREDIT_BATCH]);
       mocks.getCreditBatchActivitySummary.mockResolvedValue({ total: 0, counts: [], latest: null });
       mocks.listCreditBatchActivity.mockResolvedValue({ items: [], nextCursor: null });
@@ -385,6 +396,32 @@ describe.each(Object.entries(endpoints))(
     );
   },
 );
+
+describe("private read route: record used by chain", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.resolveOrgContext.mockResolvedValue({ ok: true, ctx: ORG_CONTEXT });
+  });
+
+  it("passes only the caller's context and validated record to data access", async () => {
+    mocks.getRecordUsedByChain.mockResolvedValue(null);
+    await recordUsedByChainRoute(post("/api/reads/record-used-by-chain", { kind: "order", id: FACILITY_ID, organizationId: "foreign-org" }));
+    expect(mocks.getRecordUsedByChain).toHaveBeenCalledWith(ORG_CONTEXT, "order", FACILITY_ID);
+  });
+
+  it("uses the chain fallback for an unexpected read failure", async () => {
+    mocks.getRecordUsedByChain.mockRejectedValueOnce(new Error("read failed"));
+    const response = await recordUsedByChainRoute(post("/api/reads/record-used-by-chain", { kind: "order", id: FACILITY_ID }));
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ success: false, error: "These records could not be loaded." });
+  });
+
+  it.each(["unauthenticated", "no-organization"])("does not read on %s denial", async denial => {
+    mocks.resolveOrgContext.mockResolvedValue({ ok: false, denial });
+    await recordUsedByChainRoute(post("/api/reads/record-used-by-chain", { kind: "order", id: FACILITY_ID }));
+    expect(mocks.getRecordUsedByChain).not.toHaveBeenCalled();
+  });
+});
 
 describe("private read route: malformed body", () => {
   beforeEach(() => {

@@ -1,9 +1,9 @@
-import { and, eq, gt, inArray, notInArray, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { binMovements, creditBatchApplications, creditBatchProductionRuns, creditBatches, outputStockAllocations, outputStockRunAllocations, samples } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { RecordUsedByBatch, RecordUsedByNode } from "@/lib/record-used-by-chain";
-import { activeOutputMovement, deletedProductIds } from "./output-stock-active-movements";
+import { liveOutputDraw } from "./output-stock-active-movements";
 import { requireOrgScope } from "./utils";
 
 /**
@@ -23,8 +23,7 @@ export async function readUsedByBatches(ctx: OrgContext, self: RecordUsedByNode,
     const rows = await db.select({ id: outputStockRunAllocations.productionRunId }).from(outputStockRunAllocations)
       .innerJoin(outputStockAllocations, and(eq(outputStockAllocations.organizationId, org), eq(outputStockAllocations.id, outputStockRunAllocations.allocationId)))
       .innerJoin(binMovements, and(eq(binMovements.organizationId, org), eq(binMovements.id, outputStockAllocations.movementId)))
-      .where(and(eq(outputStockRunAllocations.organizationId, org), inArray(outputStockAllocations.deliveryId, deliveryIds), activeOutputMovement(ctx, db),
-        sql`(${outputStockAllocations.biocharProductId} is null or ${notInArray(outputStockAllocations.biocharProductId, deletedProductIds(ctx, db))})`))
+      .where(and(eq(outputStockRunAllocations.organizationId, org), inArray(outputStockAllocations.deliveryId, deliveryIds), liveOutputDraw(ctx, db)))
       .groupBy(outputStockRunAllocations.productionRunId)
       .having(gt(sql`sum(${outputStockRunAllocations.dryMassKg})`, 0));
     for (const row of rows) runIds.add(row.id);

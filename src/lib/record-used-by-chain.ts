@@ -18,7 +18,7 @@ export interface RecordUsedByNode {
   facilityId: string | null;
   /** ISO instant or `YYYY-MM-DD`; null when the record has no date. */
   at: string | null;
-  /** A business date stored as UTC midnight: reads without the facility clock. */
+  /** A calendar date string or UTC midnight: reads without the facility clock. */
   calendarDay: boolean;
 }
 
@@ -45,11 +45,6 @@ export interface RecordUsedByChain {
   downstream: RecordUsedByNode[];
   edges: RecordUsedByEdge[];
   creditBatches: RecordUsedByBatch[];
-  /**
-   * Keyed by node key: what this record gave each direct user. Production runs
-   * also carry their attributed dry share of deliveries reached through products.
-   */
-  took: Record<string, RecordUsedByMass>;
 }
 
 export function usedByNodeKey(kind: string, id: string): string {

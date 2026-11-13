@@ -3,8 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import {
-  biocharProducts, biocharProductSourceAllocations, binMovements, creditBatches, deliveries,
-  organizations, outputStockAllocations,
+  biocharProducts, biocharProductSourceAllocations, binMovements, creditBatches, deliveries, facilities,
+  organizations, outputStockAllocations, productionRuns,
 } from "@/db/schema";
 import { usedByNodeKey, type RecordUsedByChain, type RecordUsedByKind } from "@/lib/record-used-by-chain";
 import { withLineageFixture, type LineageFixture } from "../../tests/helpers/certification-lineage-fixture";
@@ -17,6 +17,11 @@ const PRODUCT_WET_KG = 300;
 const PRODUCT_DRY_KG = 285;
 const APPLICATION_WET_KG = 200;
 const APPLICATION_DRY_KG = 190;
+const RESIDUAL_WET_KG = 0.001;
+const RUN_START = new Date("2026-06-12T23:30:00Z");
+const RUN_END = new Date("2026-06-14T12:00:00Z");
+const RUN_START_DAY = "2026-06-13";
+const FACILITY_TIMEZONE = "Africa/Dar_es_Salaam";
 const UNKNOWN_ID = "00000000-0000-4000-8000-000000000000";
 const ctx = makeTestOrgContext();
 
@@ -38,11 +43,50 @@ function edge(chain: RecordUsedByChain, fromKind: RecordUsedByKind, fromId: stri
 }
 
 describe("getRecordUsedByChain (real database)", () => {
+  it("keeps a product delivery that drew only a wet residual", async () => {
+    await withChainFixture(async f => {
+      const [delivery] = await insertOutputDeliveryFixture(db, {
+        organizationId: TEST_ORG_ID, facilityId: f.facilityId, orderId: f.orderId,
+        biocharProductId: f.productId, code: `DL-RESIDUAL-${randomUUID()}`, status: "delivered",
+        deliveryDate: new Date("2026-06-16T12:00:00Z"), deliveredWetMassKg: RESIDUAL_WET_KG, massDryKg: 0,
+      }, row => row);
+      try {
+        const [allocation] = await db.select().from(outputStockAllocations)
+          .where(and(eq(outputStockAllocations.organizationId, TEST_ORG_ID), eq(outputStockAllocations.deliveryId, delivery.id)));
+        expect(Number(allocation.dryMassKg)).toBe(0);
+        expect(Number(allocation.wetMassKg)).toBe(RESIDUAL_WET_KG);
+        const product = await getRecordUsedByChain(ctx, "biocharProduct", f.productId);
+        expect(product!.downstream).toContainEqual(expect.objectContaining({ kind: "delivery", id: delivery.id }));
+        expect(edge(product!, "biocharProduct", f.productId, "delivery", delivery.id)?.mass).toEqual({ kg: RESIDUAL_WET_KG, basis: "wet" });
+        const chain = await getRecordUsedByChain(ctx, "delivery", delivery.id);
+        expect(chain!.upstream).toContainEqual(expect.objectContaining({ kind: "biocharProduct", id: f.productId }));
+        expect(edge(chain!, "biocharProduct", f.productId, "delivery", delivery.id)?.mass).toEqual({ kg: RESIDUAL_WET_KG, basis: "wet" });
+      } finally {
+        await deleteOutputDeliveryFixtures(db, and(eq(deliveries.organizationId, TEST_ORG_ID), eq(deliveries.id, delivery.id)));
+      }
+    });
+  });
+
+  it("dates run nodes by the facility-local start day, including discovered runs", async () => {
+    await withChainFixture(async f => {
+      await db.update(facilities).set({ timezone: FACILITY_TIMEZONE })
+        .where(and(eq(facilities.organizationId, TEST_ORG_ID), eq(facilities.id, f.facilityId)));
+      await db.update(productionRuns).set({ startTime: RUN_START, endTime: RUN_END })
+        .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, f.productionRunId)));
+      const run = await getRecordUsedByChain(ctx, "productionRun", f.productionRunId);
+      expect(run!.self).toMatchObject({ at: RUN_START_DAY, calendarDay: true });
+      const feedstock = await getRecordUsedByChain(ctx, "feedstock", f.feedstockId);
+      expect(feedstock!.downstream).toContainEqual(expect.objectContaining({
+        kind: "productionRun", id: f.productionRunId, at: RUN_START_DAY, calendarDay: true,
+      }));
+    });
+  });
+
   it("reads a run's full chain with attributed edge masses, cohort Samples and upstream feedstock", async () => {
     await withChainFixture(async f => {
       const chain = await getRecordUsedByChain(ctx, "productionRun", f.productionRunId);
       expect(chain).not.toBeNull();
-      expect(chain!.self).toMatchObject({ kind: "productionRun", id: f.productionRunId, facilityId: f.facilityId, calendarDay: false });
+      expect(chain!.self).toMatchObject({ kind: "productionRun", id: f.productionRunId, facilityId: f.facilityId, at: "2026-06-13", calendarDay: true });
       expect(chain!.upstream).toEqual([expect.objectContaining({ kind: "feedstock", id: f.feedstockId, calendarDay: true })]);
       expect(chain!.downstream.map(node => [node.kind, node.id])).toEqual([
         ["biocharProduct", f.productId], ["order", f.orderId], ["delivery", f.deliveryId],
@@ -57,10 +101,6 @@ describe("getRecordUsedByChain (real database)", () => {
       expect(edge(chain!, "productionRun", f.productionRunId, "creditBatch", f.batchId)?.mass).toBeNull();
       expect(edge(chain!, "sample", f.sampleId, "removal", f.removalId)?.mass).toBeNull();
       expect(chain!.creditBatches).toEqual([expect.objectContaining({ id: f.batchId, facilityId: f.facilityId, startDate: "2026-06-01", endDate: "2026-06-30" })]);
-      expect(chain!.took).toEqual({
-        [usedByNodeKey("biocharProduct", f.productId)]: { kg: PRODUCT_DRY_KG, basis: "dryBiochar" },
-        [usedByNodeKey("delivery", f.deliveryId)]: { kg: PRODUCT_DRY_KG, basis: "dryBiochar" },
-      });
       const keys = chain!.downstream.map(node => usedByNodeKey(node.kind, node.id));
       expect(new Set(keys).size).toBe(keys.length);
       expect(new Set(chain!.edges.map(item => `${item.from}>${item.to}`)).size).toBe(chain!.edges.length);
@@ -74,7 +114,6 @@ describe("getRecordUsedByChain (real database)", () => {
       expect(chain!.downstream.map(node => node.kind)).toEqual([
         "productionRun", "biocharProduct", "order", "delivery", "application", "removal", "sample", "creditBatch",
       ]);
-      expect(chain!.took).toEqual({ [usedByNodeKey("productionRun", f.productionRunId)]: { kg: FEEDSTOCK_WET_KG, basis: "wet" } });
       expect(chain!.creditBatches.map(batch => batch.id)).toEqual([f.batchId]);
     });
   });
@@ -180,7 +219,7 @@ describe("getRecordUsedByChain (real database)", () => {
     });
   });
 
-  it("excludes reversed delivery draws and their run-share readout", async () => {
+  it("excludes reversed delivery draws", async () => {
     await withChainFixture(async f => {
       const [draw] = await db.select().from(outputStockAllocations)
         .where(and(eq(outputStockAllocations.organizationId, TEST_ORG_ID), eq(outputStockAllocations.deliveryId, f.deliveryId)));
@@ -192,7 +231,6 @@ describe("getRecordUsedByChain (real database)", () => {
       try {
         const chain = await getRecordUsedByChain(ctx, "productionRun", f.productionRunId);
         expect(chain!.downstream.some(node => node.kind === "delivery")).toBe(false);
-        expect(chain!.took[usedByNodeKey("delivery", f.deliveryId)]).toBeUndefined();
         const delivery = await getRecordUsedByChain(ctx, "delivery", f.deliveryId);
         expect(delivery!.upstream.map(node => node.kind)).toEqual(["order"]);
       } finally {

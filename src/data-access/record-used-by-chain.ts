@@ -1,10 +1,9 @@
 import type { OrgContext } from "@/lib/auth/server";
-import { RECORD_USED_BY_KINDS, usedByNodeKey, type RecordUsedByChain, type RecordUsedByEdge, type RecordUsedByKind, type RecordUsedByMass, type RecordUsedByNode } from "@/lib/record-used-by-chain";
+import { RECORD_USED_BY_KINDS, usedByNodeKey, type RecordUsedByChain, type RecordUsedByEdge, type RecordUsedByKind, type RecordUsedByNode } from "@/lib/record-used-by-chain";
 import { normalizeUsedByEdges, orderUsedByNodes } from "@/lib/record-used-by-chain-graph";
 import { readUsedByBatches } from "./record-used-by-chain-batches";
 import { readUsedByDownstreamEdges, readUsedByUpstreamEdges } from "./record-used-by-chain-links";
 import { readUsedByNodes } from "./record-used-by-chain-nodes";
-import { readUsedByRunDeliveryShares } from "./record-used-by-chain-stock";
 import { requireOrgScope } from "./utils";
 
 /** Feedstock to Removal is five material hops; one extra covers cohort Samples. */
@@ -54,13 +53,6 @@ export async function getRecordUsedByChain(ctx: OrgContext, kind: RecordUsedByKi
   const onlyDownstream = downstream.filter(node => !upstreamKeys.has(usedByNodeKey(node.kind, node.id)));
   const allNodes = [self, ...upstream, ...onlyDownstream];
   const normalizedEdges = normalizeUsedByEdges([...upstreamEdges, ...edges], allNodes);
-  const took: Record<string, RecordUsedByMass> = {};
-  for (const edge of normalizedEdges) if (edge.from === selfKey && edge.mass) took[edge.to] = edge.mass;
-  // Keep the prototype's useful run-share readout even through a product layer.
-  if (kind === "productionRun") {
-    const shares = await readUsedByRunDeliveryShares(ctx, self.id);
-    for (const [key, mass] of Object.entries(shares)) if (known.has(key)) took[key] = mass;
-  }
   return { self, upstream, downstream: orderUsedByNodes(onlyDownstream), edges: normalizedEdges,
-    creditBatches: await readUsedByBatches(ctx, self, upstream, onlyDownstream), took };
+    creditBatches: await readUsedByBatches(ctx, self, upstream, onlyDownstream) };
 }

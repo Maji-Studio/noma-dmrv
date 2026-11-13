@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getFacilitiesRead, getProductionRunsRead, getFacilityRead, getActiveOrganizationRead, getDashboardBatchScopeRead } from "./client";
+import { getFacilitiesRead, getProductionRunsRead, getFacilityRead, getActiveOrganizationRead, getDashboardBatchScopeRead, getRecordUsedByChainRead } from "./client";
 
 const TRANSPORT_ERROR =
   "The server could not be reached. Refresh the page and try again.";
@@ -25,6 +25,26 @@ function deferredResponse() {
 describe("authenticated read client", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("posts chain input with cancellation and preserves calendar dates", async () => {
+    const chain = { self: { kind: "productionRun", id: RUN_ID, code: "PR-1", name: null,
+      facilityId: FACILITY_ID, at: "2026-06-13", calendarDay: true },
+      upstream: [], downstream: [], edges: [], creditBatches: [] };
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ success: true, data: chain }));
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = new AbortController();
+    const input = { kind: "productionRun" as const, id: RUN_ID };
+    await expect(getRecordUsedByChainRead(input, { signal: controller.signal })).resolves.toEqual({ success: true, data: chain });
+    expect(fetchMock).toHaveBeenCalledWith("/api/reads/record-used-by-chain", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
+      cache: "no-store", signal: controller.signal,
+    });
+  });
+
+  it("preserves a missing chain", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ success: true, data: null })));
+    await expect(getRecordUsedByChainRead({ kind: "order", id: RUN_ID })).resolves.toEqual({ success: true, data: null });
   });
 
   it.each([
