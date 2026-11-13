@@ -12,7 +12,7 @@ import { RecordLockNotice } from "./record-lock-notice";
 import { RecordUsedBy } from "./record-used-by";
 import type { RecordUsedByChain, RecordUsedByNode } from "@/lib/record-used-by-chain";
 
-const chainRead = vi.hoisted(() => ({ result: { data: undefined, isError: false } as { data: unknown; isError: boolean } }));
+const chainRead = vi.hoisted(() => ({ result: { data: undefined, isError: false, isPending: true } as { data: unknown; isError: boolean; isPending: boolean } }));
 vi.mock("@/hooks/use-record-used-by-chain", () => ({ useRecordUsedByChain: () => chainRead.result }));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "UTC", hint: "" }) }));
 
@@ -297,7 +297,7 @@ function chainOf(downstream: RecordUsedByNode[], extra: Partial<RecordUsedByChai
 const RECORD = { kind: "productionRun", id: "run-1" } as const;
 
 describe("RecordUsedBy", () => {
-  afterEach(() => { chainRead.result = { data: undefined, isError: false }; });
+  afterEach(() => { chainRead.result = { data: undefined, isError: false, isPending: true }; });
 
   it("lists every record that uses it when no record is given (storage bins), linking those with a sheet", () => {
     render(<RecordUsedBy lock={view("sent", [REMOVAL], [PRODUCT, LOSS])} />);
@@ -322,6 +322,7 @@ describe("RecordUsedBy", () => {
   it("draws the chain: this record ringed, what used it linked, the credit batch as a band", () => {
     chainRead.result = {
       isError: false,
+      isPending: false,
       data: chainOf([node("biocharProduct", "product-1", "BP-26-021")], {
         creditBatches: [{ id: "cb-1", code: "CB-26-003", name: null, facilityId: FACILITY, startDate: "2026-04-01", endDate: "2026-04-30" }],
       }),
@@ -338,7 +339,7 @@ describe("RecordUsedBy", () => {
 
   it("stacks a column of more than four, opens it, and closes it again from the header and Show less", () => {
     const orders = ["1", "2", "3", "4", "5"].map((n) => node("order", `o-${n}`, `OR-26-00${n}`));
-    chainRead.result = { isError: false, data: chainOf(orders) };
+    chainRead.result = { isError: false, isPending: false, data: chainOf(orders) };
     render(<RecordUsedBy lock={view("inUse", [], [PRODUCT])} record={RECORD} />);
     expect(screen.queryByText("OR-26-001")).toBeNull();
     const group = screen.getByRole("button", { name: "Show all 5 orders" });
@@ -359,16 +360,23 @@ describe("RecordUsedBy", () => {
   });
 
   it("lists samples under the chart and keeps users the chain does not reach", () => {
-    chainRead.result = { isError: false, data: chainOf([node("sample", "s-1", "SAM-26-007")]) };
+    chainRead.result = { isError: false, isPending: false, data: chainOf([node("sample", "s-1", "SAM-26-007")]) };
     render(<RecordUsedBy lock={view("inUse", [], [PRODUCT, LOSS])} record={RECORD} />);
     expect(screen.getByRole("link", { name: "SAM-26-007" }).getAttribute("href")).toContain("sample=s-1");
     expect(screen.getByText("North hopper")).toBeTruthy();
   });
 
   it("falls back to the plain link list when the chain read fails", () => {
-    chainRead.result = { isError: true, data: undefined };
+    chainRead.result = { isError: true, isPending: false, data: undefined };
     render(<RecordUsedBy lock={view("sent", [REMOVAL], [PRODUCT])} record={RECORD} />);
     expect(screen.queryByRole("figure")).toBeNull();
+    expect(screen.getByRole("link", { name: "Biochar product BP-26-021" })).toBeTruthy();
+  });
+
+  it("falls back to the plain link list when the chain read finds no record", () => {
+    chainRead.result = { isError: false, isPending: false, data: null };
+    render(<RecordUsedBy lock={view("sent", [REMOVAL], [PRODUCT])} record={RECORD} />);
+    expect(screen.queryByRole("status")).toBeNull();
     expect(screen.getByRole("link", { name: "Biochar product BP-26-021" })).toBeTruthy();
   });
 

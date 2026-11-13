@@ -37,8 +37,9 @@ export function RecordUsedBy({ lock, record }: { lock: RecordLockView | undefine
 
   let body;
   if (lock.usedBy.length === 0) body = <UsedByNone />;
-  else if (!wantsChain || chain.isError) body = <UsedByLinks usedBy={lock.usedBy} />;
-  else if (!chain.data) body = <div role="status" aria-busy="true" aria-label="Loading records"><Skeleton className={`${CHART_PENDING_HEIGHT} w-full`} /></div>;
+  else if (wantsChain && chain.isPending) body = <div role="status" aria-busy="true" aria-label="Loading records"><Skeleton className={`${CHART_PENDING_HEIGHT} w-full`} /></div>;
+  // A failed read, or a record the chain read cannot find, keeps the plain list.
+  else if (!wantsChain || !chain.data) body = <UsedByLinks usedBy={lock.usedBy} />;
   else body = <UsedBySchematic graph={withUnmatchedUsers(chain.data, lock.usedBy)} timeZone={timeZone} />;
 
   return <DetailSection title="Used by" className={ALIGN_WITH_NUMBERED}>{body}</DetailSection>;
