@@ -262,7 +262,6 @@ export const theme = StyleSheet.create({
   footerText: { fontFamily: MONO, fontSize: 7, color: C.ink40, letterSpacing: 0.5 },
 });
 
-/** Register the bundled fonts, then render a ledger Document to a PDF buffer. */
 /** The `noma` wordmark with the organization name beside it, shared by every ledger masthead. */
 export function mastheadWordmark(organizationName: string): ReactElement {
   return v(
@@ -273,6 +272,7 @@ export function mastheadWordmark(organizationName: string): ReactElement {
   );
 }
 
+/** Register the bundled fonts, then render a ledger Document to a PDF buffer. */
 export async function renderLedgerToBuffer(doc: ReactElement): Promise<Buffer> {
   registerEvidenceLedgerFonts();
   return renderToBuffer(doc as Parameters<typeof renderToBuffer>[0]);
