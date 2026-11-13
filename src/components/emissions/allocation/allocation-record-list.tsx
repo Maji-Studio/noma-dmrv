@@ -36,7 +36,9 @@ export function RecordList({ records, stream, focus, codes }: {
   const owners = allOwners(focus);
   const rows = sortForList(records, focus, codes);
   const shown = showAll ? rows : rows.slice(0, LIST_REST);
-  const total = rows.reduce((sum, record) => sum + (stream.pick(record) ?? 0), 0);
+  // A Total only over recorded figures; with none recorded there is no total, not 0.
+  const figures = rows.flatMap((record) => { const value = stream.pick(record); return value === null ? [] : [value]; });
+  const total = figures.length ? figures.reduce((sum, value) => sum + value, 0) : null;
   return (
     <div className="flex min-w-0 flex-col gap-4" aria-live="polite">
       {/* A long credit batch code scrolls inside this box, never the page. */}
@@ -72,7 +74,7 @@ export function RecordList({ records, stream, focus, codes }: {
             );
           })}
         </tbody>
-        {rows.length > 1 && (
+        {rows.length > 1 && total !== null && (
           <tfoot>
             <tr className="[border-top:var(--hair-2)]">
               <th scope="row" className="py-6 pr-12 text-left body-small font-medium">Total</th>

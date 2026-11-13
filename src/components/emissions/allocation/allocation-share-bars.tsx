@@ -117,7 +117,7 @@ function ShareRow({ stream, streamRecords, summary, focus, codes, wide, width, o
       <span className="body-small font-medium">{stream.label}</span>
     </span>
   );
-  const bar = drawable ? <ShareBar summary={summary} focus={focus} barPx={barPx} /> : <span className={cn("body-small", MUTED)}>{allZero ? "All recorded as 0" : stream.emptyHint}</span>;
+  const bar = drawable ? <ShareBar summary={summary} focus={focus} barPx={barPx} /> : <span className={cn("body-small", MUTED)}>{allZero ? "Every recorded figure is 0" : stream.emptyHint}</span>;
   const figureNode = figure && <span className="whitespace-nowrap text-right body-small font-medium tabular-nums">{figure}</span>;
   const extra = (
     <>

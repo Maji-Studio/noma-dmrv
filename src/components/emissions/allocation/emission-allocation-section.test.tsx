@@ -61,6 +61,16 @@ describe("EmissionAllocationSection, Flow view (share bars)", () => {
     expect(within(rowOf("feedstock")).queryByText("Total")).toBeNull();
   });
 
+  it("gives no Total when no record in the open row has a figure", () => {
+    const data = allocationFixture();
+    data.records = data.records.map((record) => ({ ...record, quantities: record.quantities.map((quantity) => (quantity.unit === "kWh" ? { ...quantity, value: null } : quantity)) }));
+    state.data = data;
+    show({ creditBatchId: BATCH_A });
+    fireEvent.click(screen.getByRole("button", { name: /^Electricity:/ }));
+    expect(within(rowOf("electricity")).getAllByText("Not recorded").length).toBeGreaterThan(1);
+    expect(within(rowOf("electricity")).queryByText("Total")).toBeNull();
+  });
+
   it("lists a record with no figure in its open row as Not recorded", () => {
     show({ creditBatchId: BATCH_A });
     fireEvent.click(screen.getByRole("button", { name: /^Electricity:/ }));
@@ -72,7 +82,7 @@ describe("EmissionAllocationSection, Flow view (share bars)", () => {
     data.records = data.records.map((record) => ({ ...record, quantities: record.quantities.map((quantity) => (quantity.unit === "L" ? { ...quantity, value: 0 } : quantity)) }));
     state.data = data;
     show({ creditBatchId: BATCH_A });
-    expect(within(rowOf("diesel")).getByText("All recorded as 0")).toBeTruthy();
+    expect(within(rowOf("diesel")).getByText("Every recorded figure is 0")).toBeTruthy();
     expect(within(rowOf("diesel")).getByText("0 L")).toBeTruthy();
   });
 
