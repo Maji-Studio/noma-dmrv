@@ -70,6 +70,8 @@ const EXCEPTION: Record<string, string> = {
 };
 
 const NOT_CREATE: Record<string, string> = {
+  "certification/removal-resend#checkRemovalRegistryPresence": "Reads whether Isometric still has a sent Removal; writes nothing.",
+  "certification/removal-resend#prepareRemovalResend": "Retires an existing sent version so the next submit creates its successor; idempotent.",
   "emission-line-files#replaceEmissionLineFilesFn": "Retires an existing versioned file set; the next attach creates its successor.",
   "invitation-bootstrap#resendInvitationSetPasswordAction": "Sends a cooldown-limited setup email for an existing pending user.",
   "profile#changeEmailFn": "Requests confirmation to change the caller’s existing account email.",

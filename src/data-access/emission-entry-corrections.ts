@@ -110,7 +110,9 @@ export async function lockRemovalEntryCorrectionAttempt(ctx: OrgContext, tx: DbT
   // A confirmed missing sent version permits rebuilding, never editing its records.
   const lastSent = prior.filter((row) => row.submittedAt).sort((a, b) => b.version - a.version)[0];
   const missingInRegistry = isRegistryMissingSubmission(lastSent);
-  if (!reconcileExternalMutation && !missingInRegistry && (!removal || !isRemovalCorrectionWindowOpen(removal, facts)))
+  // No batch lineage reads back for a missing Removal without members: its own (retired) state is then all there is.
+  const own = removal ?? (missingInRegistry ? { id: removalId, submissions: [], statements: [] } : undefined);
+  if (!reconcileExternalMutation && (!own || !isRemovalCorrectionWindowOpen(own, facts, { ownReturnedNotRequired: missingInRegistry })))
     throw new SafeError("This Removal is sent. If Isometric sends the GHG Statement back, refresh its status to correct it.");
 }
 

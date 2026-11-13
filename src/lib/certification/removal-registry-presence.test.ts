@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { logger } from "@/lib/log";
 import { IsometricApiError } from "@/lib/isometric/client";
 import { buildBiocharApplicationReference } from "@/lib/isometric/biochar-applications";
 import { decideSubmissionClaim, REMOVAL_SUBMISSION_CLAIM_POLICY } from "@/lib/isometric/utils/submission-claim";
 import { isSentRemoval, recordLocks } from "@/lib/record-lock";
-import { isRegistryMissingSubmission, readRemovalRegistryPresence } from "./removal-registry-presence";
+import { isRegistryMissingSubmission } from "./removal-registry-presence";
+import { readRemovalRegistryPresence } from "./registry-presence-read";
 
 const missing = { id: "v1", status: "superseded" as const, externalId: "rmv_old", version: 1,
   payloadHash: "same", lockedAt: null, submittedAt: "2026-11-01T00:00:00Z",
@@ -20,12 +20,11 @@ describe("missing Removal recovery", () => {
     expect(await readRemovalRegistryPresence(async () => { throw new Error("timeout"); }, "rmv_old")).toBe("unknown");
     expect(await readRemovalRegistryPresence(async () => ({ id: "rmv_old" }), "rmv_old")).toBe("present");
   });
-  it("logs an unknown read with the id and no request body", async () => {
-    const spy = vi.spyOn(logger, "error").mockImplementation(() => undefined);
-    await readRemovalRegistryPresence(async () => { throw new IsometricApiError("failure", 500, { secret: "x" }); }, "rmv_old");
-    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ externalId: "rmv_old" }), "Registry presence read failed");
-    expect(JSON.stringify(spy.mock.calls)).not.toContain("secret");
-    spy.mockRestore();
+  it("hands an unknown read to the caller's logger, never a definitive 404", async () => {
+    const onUnknown = vi.fn();
+    await readRemovalRegistryPresence(async () => { throw new IsometricApiError("failure", 500); }, "rmv_old", onUnknown);
+    await readRemovalRegistryPresence(async () => { throw new IsometricApiError("missing", 404); }, "rmv_old", onUnknown);
+    expect(onUnknown).toHaveBeenCalledTimes(1);
   });
   it("recognizes only the confirmed retired identity", () => {
     expect(isRegistryMissingSubmission(missing)).toBe(true);

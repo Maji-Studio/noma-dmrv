@@ -7,7 +7,8 @@ import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { getRemovalResendProjectId, removalResendKey, retireMissingRemovalSubmission } from "@/data-access/removal-resend";
 import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
-import { isRegistryMissingSubmission, readRemovalRegistryPresence, type RemovalRegistryPresence } from "@/lib/certification/removal-registry-presence";
+import { isRegistryMissingSubmission, type RemovalRegistryPresence } from "@/lib/certification/removal-registry-presence";
+import { readRemovalRegistryPresence } from "@/lib/certification/registry-presence-read";
 import { SafeError } from "@/lib/errors";
 import { getGhgEntry } from "@/lib/isometric/submissions";
 import type { IsometricClient } from "@/lib/isometric/client";
@@ -34,7 +35,7 @@ async function checkRemoteWith(client: IsometricClient, externalId: string, proj
     });
     return "unknown";
   }
-  return readRemovalRegistryPresence(() => getGhgEntry(client, externalId), externalId);
+  return readRemovalRegistryPresence(() => getGhgEntry(client, externalId), externalId, (error) => logActionError(error, { message: "Registry presence read failed", context: { removalId: input.removalId, externalId } }));
 }
 
 export async function checkRemovalRegistryPresenceCore(ctx: OrgContext, input: RemovalResendInput): Promise<RemovalRegistryPresence> {
@@ -57,6 +58,6 @@ export async function prepareRemovalResendCore(ctx: OrgContext, input: RemovalRe
   const client = await resolveIsometricClient(ctx);
   return retireMissingRemovalSubmission(ctx, input,
     (externalId, projectId) => checkRemoteWith(client, externalId, projectId, input),
-    (externalId) => readRemovalRegistryPresence(() => getBiocharApplication(client, externalId), externalId),
+    (externalId) => readRemovalRegistryPresence(() => getBiocharApplication(client, externalId), externalId, (error) => logActionError(error, { message: "Registry presence read failed", context: { removalId: input.removalId, externalId } })),
   );
 }

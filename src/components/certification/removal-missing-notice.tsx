@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui";
 import { Notice } from "@/components/ui/notice";
@@ -24,11 +24,18 @@ function ActiveScope({ facilityId, removalId, reviewHref, children }: { facility
   const router = useRouter();
   const presence = useRemovalRegistryPresence(facilityId, removalId, true);
   const prepare = usePrepareRemovalResend();
+  // The pending attempt outlives the sheet: once the scope is gone (sheet closed) it must not pull the operator
+  // into the review. The cleanup is the one effect here: it tracks the scope's lifetime, which nothing derived can.
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   // mutateAsync, not mutate's callbacks: the refreshed status can unmount the button before they run.
   const send = async () => {
     try {
       await prepare.mutateAsync({ facilityId, removalId });
-      router.push(reviewHref);
+      if (mounted.current) router.push(reviewHref);
     } catch {
       // The refusal shows from prepare.error.
     }
