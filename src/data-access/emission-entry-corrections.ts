@@ -1,3 +1,4 @@
+import { isRegistryMissingSubmission } from "@/lib/certification/removal-registry-presence";
 import { EMISSION_ENTRY_OUTSIDE_CORRECTION_WINDOW } from "@/lib/certification/emission-entry-messages";
 import { SafeError } from "@/lib/errors";
 import { and, eq, inArray } from "drizzle-orm";
@@ -105,7 +106,10 @@ export async function lockRemovalEntryCorrectionAttempt(ctx: OrgContext, tx: DbT
   const lineage = await getLockedCertifiedLineageForBatches(ctx, tx, members.map((row) => row.id), excludeSubmissionId);
   const facts = lineage.map((row) => row.recordLockRemoval);
   const removal = facts.find((fact) => fact.id === removalId);
-  if (!reconcileExternalMutation && (!removal || !isRemovalCorrectionWindowOpen(removal, facts)))
+  // A confirmed missing sent version permits rebuilding, never editing its records.
+  const lastSent = prior.filter((row) => row.submittedAt).sort((a, b) => b.version - a.version)[0];
+  const missingInRegistry = isRegistryMissingSubmission(lastSent);
+  if (!reconcileExternalMutation && !missingInRegistry && (!removal || !isRemovalCorrectionWindowOpen(removal, facts)))
     throw new SafeError("This Removal is sent. If Isometric sends the GHG Statement back, refresh its status to correct it.");
 }
 
