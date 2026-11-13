@@ -597,7 +597,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       title={sideSheetTitle}
       subtitle={sideSheetSubtitle}
       canEdit={fieldsEditable && isRecordEditable(sheetLock)}
-      {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
+      {...recordLockSheetProps({ record: { kind: "application", id: displaySideSheet?.entity?.id }, lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
       editLabel="Edit application"
       readOnly={sheetReadOnly}
       size="wide"

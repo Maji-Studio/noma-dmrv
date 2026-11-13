@@ -36,7 +36,9 @@ test.describe("Record locks on screen", () => {
 
       await expect(sheet.locator('[data-record-lock="inUse"]')).toHaveText("In use");
       await expect(sheet.getByText(`delivery E2E-DEL-${tag} uses its figures`)).toBeVisible();
-      await expect(sheet.getByRole("link", { name: `Delivery E2E-DEL-${tag}`, exact: true })).toBeVisible();
+      // Used by draws the delivery as a box in its chart, labelled with its code and day.
+      const usedBy = sheet.getByRole("figure", { name: "Where this record went" });
+      await expect(usedBy.getByRole("link", { name: new RegExp(`^Delivery E2E-DEL-${tag}(,|$)`) })).toHaveAttribute("href", /\/deliveries\?/);
 
       await sheet.getByRole("button", { name: "Edit order" }).click();
       await expect(sheet.getByRole("link", { name: `delivery E2E-DEL-${tag}`, exact: true })).toHaveAttribute("href", /\/deliveries\?/);

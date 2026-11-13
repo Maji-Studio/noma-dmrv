@@ -482,7 +482,7 @@ export function BiocharProductList() {
       onModeChange={handleModeChange}
       title={displaySideSheet?.mode === "create" ? "Create biochar product" : (displaySideSheet?.entity?.code ?? "")}
       subtitle={displaySideSheet?.mode === "create" ? undefined : (displaySideSheet?.entity ? formatDayString(displaySideSheet.entity.productionDate) : undefined)}
-      {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
+      {...recordLockSheetProps({ record: { kind: "biocharProduct", id: displaySideSheet?.entity?.id }, lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
       canEdit={isRecordEditable(sheetLock)}
       editLabel="Edit product"
       readOnly={sheetReadOnly}

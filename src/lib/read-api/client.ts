@@ -21,6 +21,8 @@ import { missingRecordMessage } from "@/lib/errors";
 import type { FacilityCertifierSummary } from "@/lib/read-models";
 import type { RecordLocksReadInput } from "@/lib/read-models/record-locks";
 import type { RecordLockViews } from "@/lib/record-lock-view";
+import type { RecordUsedByChainReadInput } from "@/lib/read-models/record-used-by-chain";
+import type { RecordUsedByChain } from "@/lib/record-used-by-chain";
 import { facilityIdSchema } from "@/lib/read-models/facility-id";
 import type { FacilityFilterData } from "@/schemas/facilities";
 import type { ProductionRunFilterData } from "@/schemas/production-runs";
@@ -454,4 +456,12 @@ export function getRecordLocksRead(
   options?: ReadRequestOptions,
 ): Promise<ActionResult<RecordLockViews>> {
   return requestRead<RecordLockViews>("/api/reads/record-locks", input, options);
+}
+
+/** Lineage dates are already ISO instants or calendar date strings. */
+export function getRecordUsedByChainRead(
+  input: RecordUsedByChainReadInput,
+  options?: ReadRequestOptions,
+): Promise<ActionResult<RecordUsedByChain | null>> {
+  return requestRead<RecordUsedByChain | null>("/api/reads/record-used-by-chain", input, options);
 }

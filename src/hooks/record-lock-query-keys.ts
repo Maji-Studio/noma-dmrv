@@ -2,10 +2,14 @@ import type { Mutation, QueryClient } from "@tanstack/react-query";
 import { isActionError } from "@/lib/action-error";
 import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import type { RecordLockViewKind } from "@/lib/record-lock-view";
+import type { RecordUsedByKind } from "@/lib/record-used-by-chain";
 
 /** Record locks follow almost every write, so one prefix covers every kind. */
 export const recordLockKeys = {
   all: ["record-locks"] as const,
+  usedByChains: () => [...recordLockKeys.all, "used-by-chain"] as const,
+  usedByChain: (kind: RecordUsedByKind | null | undefined, id: string | null | undefined) =>
+    [...recordLockKeys.usedByChains(), kind ?? null, id?.toLowerCase() ?? null] as const,
   /** Prefix of every feedstock type link-lock read. */
   feedstockTypeLinks: () => [...recordLockKeys.all, "feedstockType"] as const,
   feedstockTypeLink: (id: string) => [...recordLockKeys.feedstockTypeLinks(), id] as const,
@@ -78,5 +82,7 @@ export function invalidateRecordLocksAfter(
     return;
   }
   if (error || failedResult(data)) return;
+  // Chains span kinds: an application write can change a feedstock's chain.
+  void queryClient.invalidateQueries({ queryKey: recordLockKeys.usedByChains() });
   for (const kind of touch) void queryClient.invalidateQueries({ queryKey: recordLockKeys.kind(kind) });
 }
