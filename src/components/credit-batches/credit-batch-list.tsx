@@ -622,7 +622,7 @@ export function CreditBatchList({
             : undefined
         }
         viewModeChildren={
-          sideSheetEntity ? <RecordUsedBy lock={sheetLock} /> : undefined
+          sideSheetEntity ? <RecordUsedBy lock={sheetLock} record={{ kind: "creditBatch", id: sideSheetEntity.id }} /> : undefined
         }
         viewPrimaryAction={
           sideSheetEntity ? (

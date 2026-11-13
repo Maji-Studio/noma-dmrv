@@ -601,7 +601,7 @@ export function SampleList({
       onModeChange={handleModeChange}
       title={displaySideSheet?.mode === "create" ? "Create Sample" : (displaySideSheet?.entity?.sampleCode ?? "")}
       subtitle={displaySideSheet?.mode === "create" ? undefined : viewSubtitle}
-      {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
+      {...recordLockSheetProps({ record: { kind: "sample", id: displaySideSheet?.entity?.id }, lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
       canEdit={isRecordEditable(sheetLock)}
       editLabel="Edit Sample"
       readOnly={sheetReadOnly}

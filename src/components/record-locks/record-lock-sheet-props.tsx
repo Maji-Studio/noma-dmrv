@@ -7,7 +7,7 @@ import { RefusalSlotContext } from "@/components/ui/refusal-slot-context";
 import { RecordLockChip } from "./record-lock-chip";
 import { isInterruptedLockDisplay } from "./record-lock-labels";
 import { RecordLockNotice } from "./record-lock-notice";
-import { RecordUsedBy } from "./record-used-by";
+import { RecordUsedBy, type UsedByRecord } from "./record-used-by";
 
 export interface RecordLockSheetOptions {
   lock: RecordLockView | undefined;
@@ -19,6 +19,8 @@ export interface RecordLockSheetOptions {
   subject?: "record" | "storageBin";
   /** The form disables nothing while In use, so only Sent gets a line. */
   inUseLocksNothing?: boolean;
+  /** PROTOTYPE ONLY (Used by round): the open record, for the variants' chain read. */
+  record?: UsedByRecord;
 }
 
 /** The lock's verdict on an open edit form, with the in-place retry. */
@@ -35,7 +37,7 @@ export function recordLockSubmitBlock({ lock, status, retry, retrying }: RecordL
  * `canEdit` explicit where it combines with other rules.
  */
 export function recordLockSheetProps(options: RecordLockSheetOptions) {
-  const { lock, status, retry, retrying, subject, inUseLocksNothing } = options;
+  const { lock, status, retry, retrying, subject, inUseLocksNothing, record } = options;
   // In use that locks nothing has no line below, so the chip would claim a lock that isn't there.
   const showChip = !!lock && !(lock.level === "inUse" && inUseLocksNothing);
   return {
@@ -45,7 +47,7 @@ export function recordLockSheetProps(options: RecordLockSheetOptions) {
     ),
     // In edit mode the pending and failed states sit beside Save instead.
     editNotice: <RecordLockNotice lock={lock} subject={subject} inUseLocksNothing={inUseLocksNothing} />,
-    viewModeChildren: <RecordUsedBy lock={lock} />,
+    viewModeChildren: <RecordUsedBy lock={lock} record={record} />,
     submitBlock: recordLockSubmitBlock(options),
   };
 }
