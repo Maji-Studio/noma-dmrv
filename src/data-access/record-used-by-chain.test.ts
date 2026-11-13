@@ -106,6 +106,16 @@ describe("getRecordUsedByChain (real database)", () => {
     });
   });
 
+  it("keeps a delivery's own order upstream only, connected to the delivery", async () => {
+    await withChainFixture(async f => {
+      const chain = await getRecordUsedByChain(ctx, "delivery", f.deliveryId);
+      expect(chain!.upstream.some(node => node.kind === "order" && node.id === f.orderId)).toBe(true);
+      expect(chain!.downstream.some(node => node.kind === "order")).toBe(false);
+      expect(edge(chain!, "order", f.orderId, "delivery", f.deliveryId)).toBeTruthy();
+      expect(chain!.downstream.some(node => node.kind === "application" && node.id === f.applicationId)).toBe(true);
+    });
+  });
+
   it("returns null for every kind when the record belongs to another organization", async () => {
     const foreignOrgId = `org_used_by_${randomUUID()}`;
     await db.insert(organizations).values({ id: foreignOrgId, name: "Used by isolation fixture", slug: foreignOrgId });

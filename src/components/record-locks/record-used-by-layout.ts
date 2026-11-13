@@ -70,8 +70,10 @@ export function buildColumns(graph: UsedByGraph): Column[] {
   const byKind = new Map<string, UsedByNode[]>();
   for (const node of graph.downstream) if (CUSTODY_KINDS.includes(node.kind)) byKind.set(node.kind, [...(byKind.get(node.kind) ?? []), node]);
   const downstream = [...byKind].sort(([a], [b]) => kindRank(a) - kindRank(b)).map(([kind, nodes]) => ({ kind, nodes, role: "downstream" as const }));
+  // A credit batch is named by the band, never drawn as a square.
+  const upstream = graph.upstream.filter((node) => node.kind !== "creditBatch");
   return [
-    ...(graph.upstream.length ? [{ kind: graph.upstream[0].kind, nodes: graph.upstream, role: "upstream" as const }] : []),
+    ...(upstream.length ? [{ kind: upstream[0].kind, nodes: upstream, role: "upstream" as const }] : []),
     { kind: graph.self.kind, nodes: [graph.self], role: "self" as const },
     ...downstream,
   ];
@@ -79,11 +81,14 @@ export function buildColumns(graph: UsedByGraph): Column[] {
 
 /** Rows follow their parents' rows, so edges cross as little as they can. */
 function orderColumn(nodes: UsedByNode[], graph: UsedByGraph, rowOf: Map<string, number>): UsedByNode[] {
-  const parentRow = (node: UsedByNode) => {
-    const rows = graph.edges.filter((edge) => edge.to === usedByNodeKey(node.kind, node.id)).map((edge) => rowOf.get(edge.from) ?? 0);
-    return rows.length ? Math.min(...rows) : 0;
-  };
-  return [...nodes].sort((a, b) => parentRow(a) - parentRow(b) || (a.at ?? "").localeCompare(b.at ?? "") || a.code.localeCompare(b.code));
+  // One pass over the edges, so a large credit batch does not rescan them on every comparison.
+  const parentRow = new Map<string, number>();
+  for (const edge of graph.edges) {
+    const row = rowOf.get(edge.from) ?? 0;
+    parentRow.set(edge.to, Math.min(parentRow.get(edge.to) ?? row, row));
+  }
+  const rowFor = (node: UsedByNode) => parentRow.get(usedByNodeKey(node.kind, node.id)) ?? 0;
+  return [...nodes].sort((a, b) => rowFor(a) - rowFor(b) || (a.at ?? "").localeCompare(b.at ?? "") || a.code.localeCompare(b.code));
 }
 
 /** A cubic bezier from one square's right edge to the next one's left edge, like Flow's edges. */

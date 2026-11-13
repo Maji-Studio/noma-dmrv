@@ -359,6 +359,23 @@ describe("RecordUsedBy", () => {
     expect(screen.queryByRole("button", { name: /Show less/ })).toBeNull();
   });
 
+  it("names a Sample's credit batch in the band only, never as a square", () => {
+    const sample = node("sample", "s-1", "SAM-26-007");
+    chainRead.result = {
+      isError: false,
+      isPending: false,
+      data: chainOf([node("removal", "rm-1", "RM-26-003")], {
+        self: sample,
+        upstream: [node("creditBatch", "cb-1", "CB-26-003")],
+        edges: [{ from: "sample:s-1", to: "removal:rm-1", mass: null }],
+        creditBatches: [{ id: "cb-1", code: "CB-26-003", name: null, facilityId: FACILITY, startDate: "2026-04-01", endDate: "2026-04-30" }],
+      }),
+    };
+    render(<RecordUsedBy lock={view("sent", [REMOVAL], [PRODUCT])} record={{ kind: "sample", id: "s-1" }} />);
+    expect(screen.getAllByRole("link", { name: "CB-26-003" })).toHaveLength(1);
+    expect(screen.queryByRole("link", { name: /^Credit batch CB-26-003/ })).toBeNull();
+  });
+
   it("lists samples under the chart and keeps users the chain does not reach", () => {
     chainRead.result = { isError: false, isPending: false, data: chainOf([node("sample", "s-1", "SAM-26-007")]) };
     render(<RecordUsedBy lock={view("inUse", [], [PRODUCT, LOSS])} record={RECORD} />);

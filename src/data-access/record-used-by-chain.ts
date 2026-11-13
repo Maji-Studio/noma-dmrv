@@ -49,7 +49,10 @@ export async function getRecordUsedByChain(ctx: OrgContext, kind: RecordUsedByKi
   const upstreamEdges = await readUsedByUpstreamEdges(ctx, kind, self.id);
   const upstreamNodes = await readEdgeNodes(ctx, upstreamEdges, new Map([[selfKey, self]]));
   const upstream = orderUsedByNodes(upstreamNodes);
-  const allNodes = [self, ...upstream, ...downstream];
+  // A delivery's own order is upstream; its downstream read also names it as context.
+  const upstreamKeys = new Set(upstream.map(node => usedByNodeKey(node.kind, node.id)));
+  const onlyDownstream = downstream.filter(node => !upstreamKeys.has(usedByNodeKey(node.kind, node.id)));
+  const allNodes = [self, ...upstream, ...onlyDownstream];
   const normalizedEdges = normalizeUsedByEdges([...upstreamEdges, ...edges], allNodes);
   const took: Record<string, RecordUsedByMass> = {};
   for (const edge of normalizedEdges) if (edge.from === selfKey && edge.mass) took[edge.to] = edge.mass;
@@ -58,6 +61,6 @@ export async function getRecordUsedByChain(ctx: OrgContext, kind: RecordUsedByKi
     const shares = await readUsedByRunDeliveryShares(ctx, self.id);
     for (const [key, mass] of Object.entries(shares)) if (known.has(key)) took[key] = mass;
   }
-  return { self, upstream, downstream: orderUsedByNodes(downstream), edges: normalizedEdges,
-    creditBatches: await readUsedByBatches(ctx, self, upstream, downstream), took };
+  return { self, upstream, downstream: orderUsedByNodes(onlyDownstream), edges: normalizedEdges,
+    creditBatches: await readUsedByBatches(ctx, self, upstream, onlyDownstream), took };
 }
