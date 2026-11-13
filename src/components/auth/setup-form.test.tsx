@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { FIRST_ADMIN_SETUP_FALLBACK } from "@/schemas/first-run";
 import { SetupForm } from "./setup-form";
 
 const mocks = vi.hoisted(() => ({ action: vi.fn(), push: vi.fn() }));
@@ -48,6 +49,17 @@ describe("SetupForm", () => {
     fill();
     await waitFor(() => expect(document.body.textContent).toContain("already set up"));
     expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it("shows the fallback when the action rejects", async () => {
+    mocks.action.mockRejectedValue(new Error("Network unavailable"));
+    render(<SetupForm />);
+    fill();
+    // ServerError splits the message into a title and a detail line.
+    await waitFor(() => expect(screen.getByRole("alert").textContent?.replace(/\s+/g, " ").trim()).toBe(FIRST_ADMIN_SETUP_FALLBACK));
+    expect(mocks.action).toHaveBeenCalledTimes(1);
+    expect(mocks.push).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Create Platform Admin account" }).hasAttribute("disabled")).toBe(false);
   });
 
   it("shows the warning with a sign-in link when sign-in failed", async () => {
