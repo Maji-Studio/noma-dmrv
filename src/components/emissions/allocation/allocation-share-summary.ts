@@ -48,8 +48,9 @@ export function streamSummary(stream: Stream, records: AllocationRecord[], focus
   const slices = valued.map((slice, index) => ({ ...slice, percent: percents[index] }));
   const own = slices.find((slice) => slice.owner.key === focus.owner.key);
   const missing = records.filter((record) => stream.has(record) && stream.pick(record) === null);
-  // The page carries only records with no figure: a missing reading, not a zero.
-  const mineMissing = !own && missing.some((record) => fractionFor(record, focus.owner) > 0);
+  // Every record the page carries here has no figure: a missing reading. A recorded 0 is a measurement.
+  const owned = records.filter((record) => stream.has(record) && fractionFor(record, focus.owner) > 0);
+  const mineMissing = owned.length > 0 && owned.every((record) => stream.pick(record) === null);
   return { stream, items, total, slices, mine: own?.value ?? 0, minePercent: own?.percent ?? 0, mineMissing, undrawn: missing.length };
 }
 

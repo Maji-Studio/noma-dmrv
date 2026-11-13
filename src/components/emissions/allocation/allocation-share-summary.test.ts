@@ -63,6 +63,10 @@ describe("streamSummary, per-stream owner shares", () => {
     expect(summary.slices.length).toBeGreaterThan(0);
     expect([summary.mine, summary.mineMissing]).toEqual([0, true]);
     expect(streamSummary(stream("diesel"), records, onBatch(BATCH_C, { ...data, records }).focus).mineMissing).toBe(false);
+    // One recorded 0 beside the missing ones is a measurement: "0 L", not "Not recorded".
+    const firstOwn = records.findIndex((record) => record.group === "production" && record.parts.some((part) => part.key === BATCH_A));
+    const withZero = records.map((record, index) => (index === firstOwn ? { ...record, quantities: record.quantities.map((quantity, q) => (quantity.unit === "L" && q === record.quantities.findIndex((x) => x.unit === "L") ? { ...quantity, value: 0 } : quantity)) } : record));
+    expect(streamSummary(stream("diesel"), withZero, focus).mineMissing).toBe(false);
   });
 
   it("reports zero for a page that carries none of the quantity", () => {
