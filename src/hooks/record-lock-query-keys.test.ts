@@ -14,6 +14,7 @@ describe("invalidateRecordLocksAfter", () => {
     const { queryClient, invalidate } = client();
     invalidateRecordLocksAfter(queryClient, { success: true }, null, { meta: recordLockMeta(RECORD_LOCK_TOUCHES.order) });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: recordLockKeys.kind("order") });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: recordLockKeys.usedByChains() });
   });
 
   it("leaves locks alone after a failed ordinary write or an undeclared one", () => {
@@ -30,6 +31,11 @@ describe("invalidateRecordLocksAfter", () => {
     invalidateRecordLocksAfter(queryClient, undefined, new Error("Submission interrupted"), { meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry) });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: recordLockKeys.all });
   });
+});
+
+it("uses canonical chain keys under the record-lock invalidation prefix", () => {
+  expect(recordLockKeys.usedByChain("delivery", "ABC")).toEqual([...recordLockKeys.usedByChains(), "delivery", "abc"]);
+  expect(recordLockKeys.usedByChain(undefined, undefined)).toEqual([...recordLockKeys.usedByChains(), null, null]);
 });
 
 it("refreshes every declared kind after a certification lock refusal", () => {
