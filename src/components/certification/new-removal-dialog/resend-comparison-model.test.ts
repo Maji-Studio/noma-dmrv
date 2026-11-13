@@ -19,10 +19,22 @@ describe("buildResendChangeRows", () => {
       ],
     }, name);
     expect(rows?.map((row) => [row.label, row.before, row.after])).toEqual([
-      ["Diesel", "10 litre", "12 litre"],
+      ["Diesel, amount", "10 litre", "12 litre"],
       ["Heat use", NOT_SENT_BEFORE, "3 litre"],
       ["Gone", "4 litre", NOT_IN_THIS_VERSION],
     ]);
     expect(rows?.map((row) => row.addedOrRemoved)).toEqual([false, true, true]);
+  });
+
+  it("ignores a difference smaller than the figure shows and labels several inputs of one component", () => {
+    const rows = buildResendChangeRows({
+      previousVersion: 1,
+      lines: [
+        { componentId: "rtc_1", inputKey: "amount", previous: { value: 10.0001, unit: "litre" }, current: { value: 10.0002, unit: "litre" } },
+        { componentId: "rtc_1", inputKey: "distance", previous: { value: 1, unit: "km" }, current: { value: 2, unit: "km" } },
+        { componentId: "rtc_1", inputKey: "mass", previous: { value: 1, unit: "t" }, current: { value: 3, unit: "t" } },
+      ],
+    }, name);
+    expect(rows?.map((row) => row.label)).toEqual(["Diesel, distance", "Diesel, mass"]);
   });
 });

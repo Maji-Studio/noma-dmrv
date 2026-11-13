@@ -32,13 +32,23 @@ export function buildResendChangeRows(
   componentName: (componentId: string) => string | undefined,
 ): ResendChangeRow[] | null {
   if (!comparison.lines) return null;
+  const linesPerComponent = new Map<string, number>();
+  for (const line of comparison.lines) linesPerComponent.set(line.componentId, (linesPerComponent.get(line.componentId) ?? 0) + 1);
   return comparison.lines
-    .filter((line) => !(line.previous && line.current && line.previous.value === line.current.value && line.previous.unit === line.current.unit))
-    .map((line) => ({
-      key: `${line.componentId}:${line.inputKey}`,
-      label: componentName(line.componentId) ?? fallbackLabel(line.inputKey),
-      before: figure(line.previous, NOT_SENT_BEFORE),
-      after: figure(line.current, NOT_IN_THIS_VERSION),
-      addedOrRemoved: !line.previous || !line.current,
-    }));
+    .map((line) => {
+      const name = componentName(line.componentId);
+      // One component with several inputs: the input tells the rows apart.
+      const label = name === undefined
+        ? fallbackLabel(line.inputKey)
+        : (linesPerComponent.get(line.componentId) ?? 0) > 1 ? `${name}, ${fallbackLabel(line.inputKey).toLowerCase()}` : name;
+      return {
+        key: `${line.componentId}:${line.inputKey}`,
+        label,
+        before: figure(line.previous, NOT_SENT_BEFORE),
+        after: figure(line.current, NOT_IN_THIS_VERSION),
+        addedOrRemoved: !line.previous || !line.current,
+      };
+    })
+    // Compared as shown: a difference below what the figure displays is not a difference to the operator.
+    .filter((row) => row.before !== row.after);
 }

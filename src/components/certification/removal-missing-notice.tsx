@@ -7,7 +7,7 @@ import { INLINE_HIT_AREA } from "@/components/ui/touch-target";
 import { usePrepareRemovalResend, useRemovalRegistryPresence } from "@/hooks/use-removal-resend";
 
 export const MISSING_IN_ISOMETRIC_TITLE = "Missing in Isometric";
-export const MISSING_IN_ISOMETRIC_BODY = "Isometric no longer has this Removal. It can be sent again from today's records.";
+export const MISSING_IN_ISOMETRIC_BODY = "Send again submits today's records as a new version.";
 export const SEND_AGAIN_LABEL = "Send again";
 
 /**
@@ -30,6 +30,7 @@ export function RemovalMissingNotice({ facilityId, removalId, reviewHref }: { fa
   };
   if (presence.data !== "missing") return null;
   return (
+    <>
     <Notice
       tone="warning"
       title={MISSING_IN_ISOMETRIC_TITLE}
@@ -48,9 +49,8 @@ export function RemovalMissingNotice({ facilityId, removalId, reviewHref }: { fa
       )}
     >
       {MISSING_IN_ISOMETRIC_BODY}
-      {prepare.error instanceof Error && (
-        <span role="alert" className="mt-4 block text-[var(--st-bad)]">{prepare.error.message}</span>
-      )}
     </Notice>
+    {prepare.error instanceof Error && <Notice tone="error">{prepare.error.message}</Notice>}
+    </>
   );
 }

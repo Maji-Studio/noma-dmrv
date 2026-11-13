@@ -1,11 +1,8 @@
-import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
 import type { RemovalResendComparison } from "@/lib/certification/removal-resend-comparison";
 import { pluralize } from "@/lib/copy-utils";
 import { cn } from "@/lib/utils";
 import { buildResendChangeRows } from "./resend-comparison-model";
-import { ValueBlock } from "./review-parts";
-
-const MUTED = "text-[var(--color-text-secondary)]";
+import { BeforeAfterRow, MUTED } from "./review-parts";
 
 /**
  * Review of a Removal sent again: each figure that differs from the version Isometric lost, as the
@@ -45,15 +42,7 @@ export function ResendComparisonGroup({
           {rows.map((row) => (
             <li key={row.key} className="flex flex-col gap-8">
               <span className="body-medium text-[var(--color-text-primary)]">{row.label}</span>
-              <div
-                role="group"
-                aria-label={`${row.label}: ${row.before} before, ${row.after} now`}
-                className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-8 sm:max-w-[400px]"
-              >
-                <ValueBlock label={`Version ${comparison.previousVersion}`} value={row.before} muted />
-                <ArrowRightIcon size={16} aria-hidden className="text-[var(--color-icon-secondary)]" />
-                <ValueBlock label="Now" value={row.after} />
-              </div>
+              <BeforeAfterRow label={row.label} beforeLabel={`Version ${comparison.previousVersion}`} before={row.before} afterLabel="Now" after={row.after} />
             </li>
           ))}
         </ul>

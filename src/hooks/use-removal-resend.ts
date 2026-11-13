@@ -27,6 +27,8 @@ export function usePrepareRemovalResend() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: { facilityId: string; removalId: string }) => unwrap(await prepareRemovalResend(input)),
+    // A refusal that says the Removal is still in Isometric must also clear the notice that offered the action.
+    onError: (_error, input) => queryClient.invalidateQueries({ queryKey: certificationKeys.removalRegistryPresence(input.facilityId, input.removalId) }),
     onSuccess: async (_data, input) => {
       await Promise.all([
         invalidateCertificationReadiness(queryClient),
