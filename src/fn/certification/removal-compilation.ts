@@ -1,5 +1,7 @@
 "use server";
 
+import { getSentRemovalForComparison } from "@/data-access/removal-entry-correction";
+import { buildRemovalResendComparison, type RemovalResendComparison } from "@/lib/certification/removal-resend-comparison";
 import { getCertifierRemovalById } from "@/data-access/certifier-removals";
 import { getCo2eStoredPreviews } from "@/data-access/credit-batch-accounting";
 import { requireOrgFacility } from "@/data-access/utils";
@@ -20,6 +22,7 @@ import { prepareRemovalSubmission } from "@/lib/certification/removal-submission
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 
 export interface RemovalCompilationView {
+  resendComparison?: RemovalResendComparison | null;
   /** Null when preparation is blocked before anything could be compiled. */
   review: RemovalSubmissionReview | null;
   blockers: string[];
@@ -45,6 +48,7 @@ export async function loadRemovalCompilation(
     }
 
     const ctx = await loadRemovalSubmissionContext(orgCtx, removalId, { refreshEnrichment: true });
+    const previous = await getSentRemovalForComparison(orgCtx, removalId);
     const preparation = prepareRemovalSubmission(ctx);
     let removalBlockers: RemovalBlocker[];
     try {
@@ -60,6 +64,7 @@ export async function loadRemovalCompilation(
     const blockers = removalBlockers.map((blocker) => blocker.message);
     if (!preparation.prepared) {
       return {
+        resendComparison: buildRemovalResendComparison(previous, null),
         review: null,
         blockers,
         removalBlockers,
@@ -105,6 +110,7 @@ export async function loadRemovalCompilation(
     ];
 
     return {
+      resendComparison: buildRemovalResendComparison(previous, compiled.snapshot?.semanticPayload),
       review: compiled.review,
       blockers,
       removalBlockers,

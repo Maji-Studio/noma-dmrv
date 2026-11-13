@@ -162,7 +162,7 @@ describe("submitted on list payloads (real DB)", () => {
     expect(entries.get(empty.id)!.submittedOn).toEqual({ kind: "never" });
     expect(entries.get(draft.id)?.latestSubmission?.status).toBe("draft");
     expect(entries.get(draft.id)!.submittedOn).toEqual({ kind: "never" });
-    expect(entries.get(submitted.id)?.latestSubmission).toEqual(latest);
+    expect(entries.get(submitted.id)?.latestSubmission).toEqual({ ...latest, registryMissing: false });
     expect(entries.get(submitted.id)!.submittedOn).toEqual({
       kind: "submitted", at: LATEST_SUBMITTED_AT,
     });
@@ -191,7 +191,7 @@ describe("submitted on list payloads (real DB)", () => {
     expect(result.success).toBe(true);
     if (!result.success) throw new Error(result.error);
     const [entry] = result.data.removals;
-    expect(entry.latestSubmission).toEqual(latest);
+    expect(entry.latestSubmission).toEqual({ ...latest, registryMissing: false });
     // The date is the latest SUBMISSION, not the latest version.
     expect(entry.submittedOn).toEqual({ kind: "submitted", at: FIRST_SUBMITTED_AT });
     expect(entry.hasFinalizedSubmission).toBe(true);

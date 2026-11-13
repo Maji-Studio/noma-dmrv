@@ -631,7 +631,7 @@ confirms support for the current 1,000-year component.
 
 ## Returned Removal screen specs (local only)
 
-`removal-correction-screen`, `removal-comparison-unavailable-screen` and
+`removal-correction-screen`, `removal-comparison-unavailable-screen`, `removal-missing-in-registry-screen` and
 `removal-lineage-correction-screen` need the app server to answer the registry reads with
 `tests/e2e/helpers/returned-removal-registry-stub.cjs`, so PR CI (hermetic, no preload) skips
 them with a reason. Run them with `pnpm test:e2e:returned` (needs `CREDENTIALS_ENCRYPTION_KEY`

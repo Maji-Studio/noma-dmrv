@@ -1,5 +1,7 @@
 "use server";
 
+import { isRegistryMissingSubmission } from "@/lib/certification/registry-missing-submission";
+
 import type { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 
 
@@ -123,6 +125,7 @@ export interface RemovalMissingProductionRuns {
 // submission identity, and the readiness verdict (the same one the table hint
 // and wizard submit step render).
 export interface RemovalPreflightSummary {
+  registryMissing?: boolean;
   correction?: RemovalCorrection;
   removalId: string;
   code: string;
@@ -230,6 +233,7 @@ async function buildRemovalPreflightSummary(
     externalId: ctx.latestSubmission?.externalId ?? null,
     version: ctx.latestSubmission?.version ?? null,
     local: facts.local,
+    registryMissing: isRegistryMissingSubmission(ctx.latestSubmission),
     lockInFlight: facts.lockInFlight,
     submissionInterrupted,
     hasFinalizedSubmission: ctx.hasFinalizedSubmission,

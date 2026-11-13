@@ -28,6 +28,9 @@ vi.mock("@/data-access/certifier-production-batches", () => ({
 vi.mock("@/data-access/certifier-removals", () => ({
   getCertifierRemovalById: vi.fn(),
 }));
+vi.mock("@/data-access/removal-entry-correction", () => ({
+  getSentRemovalForComparison: async () => null,
+}));
 vi.mock("@/lib/certification/certify-context-core", () => ({
   loadRemovalSubmissionContext: vi.fn(),
 }));

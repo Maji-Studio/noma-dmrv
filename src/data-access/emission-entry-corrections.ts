@@ -1,3 +1,4 @@
+import { isRegistryMissingSubmission } from "@/lib/certification/removal-registry-presence";
 import { EMISSION_ENTRY_OUTSIDE_CORRECTION_WINDOW } from "@/lib/certification/emission-entry-messages";
 import { SafeError } from "@/lib/errors";
 import { and, eq, inArray } from "drizzle-orm";
@@ -88,7 +89,8 @@ export function assertSentEntryInCorrectionWindow(
     throw new SafeError(EMISSION_ENTRY_OUTSIDE_CORRECTION_WINDOW);
 }
 
-/** New attempts are allowed only after the registry returned the prior submission.
+/** New attempts are allowed only after the registry returned the prior submission
+ * or its absence was confirmed and the prior version retired for Send again.
  * Recovery of possible remote effects retains the locks without reopening entry writes.
  * Called before the claim's own artifact lock so the union keeps global order.
  */
@@ -105,7 +107,12 @@ export async function lockRemovalEntryCorrectionAttempt(ctx: OrgContext, tx: DbT
   const lineage = await getLockedCertifiedLineageForBatches(ctx, tx, members.map((row) => row.id), excludeSubmissionId);
   const facts = lineage.map((row) => row.recordLockRemoval);
   const removal = facts.find((fact) => fact.id === removalId);
-  if (!reconcileExternalMutation && (!removal || !isRemovalCorrectionWindowOpen(removal, facts)))
+  // A confirmed missing sent version permits rebuilding, never editing its records.
+  const lastSent = prior.filter((row) => row.submittedAt).sort((a, b) => b.version - a.version)[0];
+  const missingInRegistry = isRegistryMissingSubmission(lastSent);
+  // No batch lineage reads back for a missing Removal without members: its own (retired) state is then all there is.
+  const own = removal ?? (missingInRegistry ? { id: removalId, submissions: [], statements: [] } : undefined);
+  if (!reconcileExternalMutation && (!own || !isRemovalCorrectionWindowOpen(own, facts, { ownReturnedNotRequired: missingInRegistry })))
     throw new SafeError("This Removal is sent. If Isometric sends the GHG Statement back, refresh its status to correct it.");
 }
 

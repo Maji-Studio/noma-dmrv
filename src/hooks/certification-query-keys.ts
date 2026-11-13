@@ -3,6 +3,8 @@ import type { StatusHistoryEntityType } from "@/lib/certification/status-history
 export const certificationKeys = {
   removalCarriedEntries: (removalId: string) => ["certification", "removal-carried-entries", removalId] as const,
   removalRecords: (removalId: string) => ["certification", "removal-records", removalId] as const,
+  /** Whether Isometric still has the latest sent version of a Removal (admin sheet check). */
+  removalRegistryPresence: (facilityId: string, removalId: string) => ["certification", "removal-registry-presence", facilityId, removalId] as const,
   removalSheetFacts: (removalId: string) => ["certification", "removal-sheet-facts", removalId] as const,
   removalEmptyLines: (removalId: string) => ["certification", "removal-empty-lines", removalId] as const,
   removalTemplateSetup: (facilityId: string) => ["certification", "removal-template-setup", facilityId] as const,

@@ -67,6 +67,7 @@ import type { SheetReadOnly } from "@/lib/linked-record-read-only";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import { firstReturn, RemovalCorrectionNotice } from "./removal-correction-needed";
 import { RemovalResubmitNotice, ResubmitRemovalAction } from "./removal-resubmit-notice";
+import { RemovalMissingNotice, HiddenWhileMissing, RemovalResendScope, SendAgainButton } from "./removal-missing-notice";
 import { RemovalMissingRunsNotice } from "./removal-missing-runs-notice";
 import { RemovalEvidenceLinksNotice } from "./removal-evidence-links-notice";
 
@@ -314,7 +315,7 @@ export function RemovalDetailSheet({
       : "Set when submitted";
 
   return (
-    <>
+    <RemovalResendScope enabled={open && canManage && !readOnly && summary.hasFinalizedSubmission} facilityId={facilityId} removalId={summary.removalId} reviewHref={reviewHref}>
       <SlideOverPanel.Root open={open} onOpenChange={(o) => !o && onClose()}>
         <SlideOverPanel.Content size="default">
           <SlideOverPanel.Header showClose>
@@ -347,6 +348,7 @@ export function RemovalDetailSheet({
               ) : (
                 <RemovalCorrectionNotice lock={lock} readOnly={!!readOnly} />
               )}
+              <RemovalMissingNotice />
               <RemovalMissingRunsNotice batches={summary.missingProductionRuns} facilityId={facilityId} canManage={canManage && !readOnly} readOnly={!!readOnly} />
               <RemovalEvidenceLinksNotice links={summary.evidenceLinks} readOnly={!!readOnly} />
             </div>
@@ -507,7 +509,8 @@ export function RemovalDetailSheet({
           <SlideOverPanel.Footer
             preview={!readOnly && thingsToFix ? <p className="body-small text-[var(--color-text-secondary)]">{thingsToFix}</p> : undefined}
           >
-            {!readOnly && <ResubmitRemovalAction correction={correction} facilityId={facilityId} />}
+            {!readOnly && <HiddenWhileMissing><ResubmitRemovalAction correction={correction} facilityId={facilityId} /></HiddenWhileMissing>}
+            <SendAgainButton />
             {/* Under a changed-since-review stop, Submit again only refuses again: Delete Removal is the way out (#1114). */}
             <RemovalReviewAction
               isActionable={isActionable && !readOnly && !changedSinceReview}
@@ -556,6 +559,6 @@ export function RemovalDetailSheet({
         }
         confirmLabel={deleteCopy.actionLabel}
       />
-    </>
+    </RemovalResendScope>
   );
 }
