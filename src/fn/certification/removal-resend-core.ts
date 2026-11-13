@@ -7,13 +7,21 @@ import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { isRegistryMissingSubmission, readRemovalRegistryPresence, type RemovalRegistryPresence } from "@/lib/certification/removal-registry-presence";
 import { SafeError } from "@/lib/errors";
 import { getGhgEntry } from "@/lib/isometric/submissions";
+import type { IsometricClient } from "@/lib/isometric/client";
 import type { RemovalResendInput } from "@/schemas/removal-resend";
 
 async function checkRemote(ctx: OrgContext, externalId: string): Promise<RemovalRegistryPresence> {
-  return readRemovalRegistryPresence(async () => {
-    const client = await resolveIsometricClient(ctx);
-    return getGhgEntry(client, externalId);
-  }, externalId);
+  let client: IsometricClient;
+  try {
+    client = await resolveIsometricClient(ctx);
+  } catch {
+    return "unknown";
+  }
+  return checkRemoteWith(client, externalId);
+}
+
+function checkRemoteWith(client: IsometricClient, externalId: string): Promise<RemovalRegistryPresence> {
+  return readRemovalRegistryPresence(() => getGhgEntry(client, externalId), externalId);
 }
 
 export async function checkRemovalRegistryPresenceCore(ctx: OrgContext, input: RemovalResendInput): Promise<RemovalRegistryPresence> {
@@ -31,5 +39,8 @@ export async function checkRemovalRegistryPresenceCore(ctx: OrgContext, input: R
 export async function prepareRemovalResendCore(ctx: OrgContext, input: RemovalResendInput) {
   requireOrgRole(ctx, "admin");
   await requireOrgFacility(ctx, input.facilityId);
-  return retireMissingRemovalSubmission(ctx, input, (externalId) => checkRemote(ctx, externalId));
+  // Resolve credentials before the retirement transaction opens: the lookup
+  // needs its own pool connection, which a pool of one cannot spare.
+  const client = await resolveIsometricClient(ctx);
+  return retireMissingRemovalSubmission(ctx, input, (externalId) => checkRemoteWith(client, externalId));
 }
