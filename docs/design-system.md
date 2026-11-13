@@ -596,9 +596,9 @@ Always use `Button`; never a raw `<button>` with manual styling.
   `<button>`: it is a proportional sliver of fill with no label, and `Button`'s
   type, heights and padding would change its width. It keeps the focus ring
   and a 44px tall hit area (`INLINE_HIT_AREA`); segments in a Removal are links.
-  The Allocation flow chart (`allocation-flow-chart.tsx`) is the same case: one
-  transparent raw `<button>` per drawn node sits over the SVG, with the focus
-  ring and at least a 44px tall hit area, because the node's size is the data.
+  The Allocation share bars (`allocation-share-bars.tsx`) are the same case: one
+  raw `<button>` per quantity row (caret, bar, figure) with the focus ring and at
+  least a 44px tall hit area, because the whole row is the click target.
 - **Exception: Removal sheet Records.** The credit batch row in `removal-records.tsx` is a
   full-width disclosure row (date range, dry mass, caret, 44px tall). `Button` has no row
   layout (fixed heights, `whitespace-nowrap`, `label-button` type), so it stays a raw

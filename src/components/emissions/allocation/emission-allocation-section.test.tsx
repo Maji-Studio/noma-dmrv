@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { NuqsTestingAdapter } from "nuqs/adapters/testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EmissionAllocation } from "@/types/emission-allocation";
-import { BATCH_A, BATCH_B, BATCH_C, REMOVAL_1, allocationFixture } from "./allocation-test-fixtures";
+import { BATCH_A, BATCH_B, MANY_DELIVERIES, REMOVAL_1, allocationFixture, manyDeliveriesFixture } from "./allocation-test-fixtures";
 
 const state = vi.hoisted(() => ({ data: undefined as unknown, error: null as Error | null, refetch: vi.fn() }));
 vi.mock("@/hooks/use-emission-allocation", () => ({
@@ -25,32 +25,98 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe("EmissionAllocationSection, Flow view", () => {
-  it("opens on Flow and lists what the page's batch carries with hint A", () => {
+describe("EmissionAllocationSection, Flow view (share bars)", () => {
+  const rowOf = (key: string) => document.querySelector(`[data-share-row="${key}"]`) as HTMLElement;
+
+  it("opens on Flow with one row per visible quantity, each with this page's figure and share", () => {
     show({ creditBatchId: BATCH_A });
     expect((screen.getByRole("radio", { name: "Flow" }) as HTMLInputElement).checked).toBe(true);
-    expect(screen.getByTestId("allocation-flow")).toBeTruthy();
-    expect(screen.getByText("Used 2,000 of 10,000 kg")).toBeTruthy();
-    expect(screen.getByText("Total")).toBeTruthy();
+    expect(screen.getByTestId("allocation-share-bars")).toBeTruthy();
+    expect(["feedstock", "delivery", "diesel", "electricity"].map((key) => rowOf(key) !== null)).toEqual([true, true, true, true]);
+    expect(rowOf("manual")).toBeNull();
+    expect(screen.getByRole("button", { name: (name) => name.startsWith("Feedstock transport: 1,000 t·km \u00b7 81%") })).toBeTruthy();
+    expect(screen.getByRole("button", { name: (name) => name.startsWith("Biochar delivery transport: 216 t·km \u00b7 60%") })).toBeTruthy();
   });
 
-  it("has no second Open table link beside the Flow | Table switch", () => {
+  it("has no quantity tabs, no second Open table link and keeps the records closed at rest", () => {
     show({ creditBatchId: BATCH_A });
+    expect(screen.queryByRole("radio", { name: "Feedstock" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Open table" })).toBeNull();
+    expect(screen.queryByText("Total")).toBeNull();
   });
 
-  it("keeps a later-touching batch's Counted on row and hint reachable when it carries no transport", () => {
+  it("summarises the hint and the records with no figure under the bar", () => {
+    show({ creditBatchId: BATCH_A });
+    expect(within(rowOf("feedstock")).getByText("1 partly used")).toBeTruthy();
+    expect(within(rowOf("electricity")).getByText("1 with no recorded electricity")).toBeTruthy();
+  });
+
+  it("opens a row's records in place with the hint marker and a Total", () => {
+    show({ creditBatchId: BATCH_A });
+    fireEvent.click(screen.getByRole("button", { name: /^Feedstock transport:/ }));
+    expect(screen.getByText("Used 2,000 of 10,000 kg")).toBeTruthy();
+    expect(within(rowOf("feedstock")).getByText("Total")).toBeTruthy();
+    expect(rowOf("delivery").textContent).not.toContain("DL-26-001 ");
+    fireEvent.click(screen.getByRole("button", { name: /^Feedstock transport:/ }));
+    expect(within(rowOf("feedstock")).queryByText("Total")).toBeNull();
+  });
+
+  it("gives no Total when no record in the open row has a figure", () => {
+    const data = allocationFixture();
+    data.records = data.records.map((record) => ({ ...record, quantities: record.quantities.map((quantity) => (quantity.unit === "kWh" ? { ...quantity, value: null } : quantity)) }));
+    state.data = data;
+    show({ creditBatchId: BATCH_A });
+    fireEvent.click(screen.getByRole("button", { name: /^Electricity:/ }));
+    expect(within(rowOf("electricity")).getAllByText("Not recorded").length).toBeGreaterThan(1);
+    expect(within(rowOf("electricity")).queryByText("Total")).toBeNull();
+  });
+
+  it("lists a record with no figure in its open row as Not recorded", () => {
+    show({ creditBatchId: BATCH_A });
+    fireEvent.click(screen.getByRole("button", { name: /^Electricity:/ }));
+    expect(within(rowOf("electricity")).getByText("Not recorded")).toBeTruthy();
+  });
+
+  it("reads a quantity recorded only as 0 as 0, not as nothing recorded", () => {
+    const data = allocationFixture();
+    data.records = data.records.map((record) => ({ ...record, quantities: record.quantities.map((quantity) => (quantity.unit === "L" ? { ...quantity, value: 0 } : quantity)) }));
+    state.data = data;
+    show({ creditBatchId: BATCH_A });
+    expect(within(rowOf("diesel")).getByText("Every recorded figure is 0")).toBeTruthy();
+    expect(within(rowOf("diesel")).getByText("0 L")).toBeTruthy();
+  });
+
+  it("shows the first 3 records of a busy quantity, then Show all N", () => {
+    state.data = manyDeliveriesFixture();
+    show({ creditBatchId: BATCH_A });
+    fireEvent.click(screen.getByRole("button", { name: /^Feedstock transport:/ }));
+    const row = rowOf("feedstock");
+    expect(within(row).getAllByRole("row")).toHaveLength(1 + 3 + 1);
+    fireEvent.click(within(row).getByRole("button", { name: `Show all ${MANY_DELIVERIES}` }));
+    expect(within(row).getAllByRole("row")).toHaveLength(1 + MANY_DELIVERIES + 1);
+    expect(within(row).queryByRole("button", { name: /Show all/ })).toBeNull();
+  });
+
+  it("keeps a later-touching batch's Counted on summary reachable when it carries no transport", () => {
     show({ creditBatchId: BATCH_B });
-    expect(screen.getByText("Counted on")).toBeTruthy();
-    expect(screen.getByText("Used 3,000 of 10,000 kg").closest("span")).toBeTruthy();
+    expect(within(rowOf("feedstock")).getByText("1 counted on CB-26-001")).toBeTruthy();
   });
 
-  it("lists manual transport as its own quantity", () => {
+  it("lists manual transport as its own row", () => {
     const data = allocationFixture();
     data.records.push({ ...data.records.find((r) => r.id === "me-1")!, id: "me-2", detail: { kind: "manual", creditBatchId: BATCH_A, componentId: "c2", componentName: "Hauling", kindOfEntry: "value", omittedInputKeys: [] }, quantities: [{ value: 90, unit: "t·km", label: "Transport" }] });
     state.data = data;
     show({ creditBatchId: BATCH_A });
-    expect(screen.getByRole("radio", { name: "Manual transport" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: (name) => name.startsWith("Manual transport: 90 t·km \u00b7 100%") })).toBeTruthy();
+  });
+
+  it("says what fills a quantity nothing records, without a toggle", () => {
+    const data = allocationFixture();
+    data.records = data.records.filter((record) => record.group !== "deliveryTransport");
+    state.data = data;
+    show({ creditBatchId: BATCH_A });
+    expect(within(rowOf("delivery")).getByText("Shows once a biochar delivery has its distance and mass recorded.")).toBeTruthy();
+    expect(within(rowOf("delivery")).queryByRole("button")).toBeNull();
   });
 });
 
@@ -135,26 +201,23 @@ describe("EmissionAllocationSection, a second Removal that only counts", () => {
     expect(screen.getAllByText("Batches used 3,000 of 10,000 kg").length).toBeGreaterThan(0);
   });
 
-  it("shows the same in Flow, which opens on the feedstock quantity", () => {
+  it("shows the same in Flow, from the Removal parts", () => {
     show({ removalId: SECOND });
-    expect((screen.getByRole("radio", { name: "Feedstock" }) as HTMLInputElement).checked).toBe(true);
-    expect(screen.getByText("Counted on")).toBeTruthy();
-    expect(screen.getByText("Batches used 3,000 of 10,000 kg")).toBeTruthy();
+    const row = document.querySelector('[data-share-row="feedstock"]') as HTMLElement;
+    expect(within(row).getByText("1 counted on RM-26-001")).toBeTruthy();
+    fireEvent.click(within(row).getByRole("button", { name: /^Feedstock transport:/ }));
+    expect(within(row).getByText("Batches used 3,000 of 10,000 kg")).toBeTruthy();
   });
 });
 
-describe("EmissionAllocationSection, Flow when the page carries nothing in a quantity", () => {
-  it("opens on a quantity the page has a stake in", () => {
-    show({ creditBatchId: BATCH_C });
-    expect((screen.getByRole("radio", { name: "Diesel" }) as HTMLInputElement).checked).toBe(true);
-  });
-
-  it("says what is missing and where to look, never an empty table", () => {
-    show({ creditBatchId: BATCH_C });
-    fireEvent.click(screen.getByRole("radio", { name: "Delivery" }));
-    expect(screen.getByText("CB-26-003 carries no delivery transport")).toBeTruthy();
-    expect(screen.getByText(/Try .*Diesel/)).toBeTruthy();
-    expect(screen.queryByText("Total")).toBeNull();
+describe("EmissionAllocationSection, Flow on a Removal", () => {
+  it("reads Removal parts: half of the split delivery is this Removal's, the rest not yet allocated", () => {
+    show({ removalId: REMOVAL_1 });
+    expect(screen.getByRole("button", { name: (name) => name.startsWith("Biochar delivery transport: 180 t·km \u00b7 50%") })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Biochar delivery transport:/ }));
+    const row = document.querySelector('[data-share-row="delivery"]') as HTMLElement;
+    expect(within(row).getByText("not yet allocated")).toBeTruthy();
+    expect(within(row).getAllByText("RM-26-001").length).toBeGreaterThan(0);
   });
 });
 

@@ -100,8 +100,12 @@ export function basisFor(record: AllocationRecord, owner: Owner): PartBasis[] {
 }
 
 /** Whole percents that always add to 100 (largest remainder), so a row never reads 99% or 101%. */
+/** Precision of a percent before rounding to whole numbers: far finer than any real share, far coarser than float noise. */
+const PERCENT_PRECISION = 1e7;
+
 export function wholePercents(fractions: number[]): number[] {
-  const raw = fractions.map((fraction) => fraction * PERCENT_WHOLE);
+  // Round away float noise first, so the same split ties the same way in every view.
+  const raw = fractions.map((fraction) => Math.round(fraction * PERCENT_WHOLE * PERCENT_PRECISION) / PERCENT_PRECISION);
   const floors = raw.map(Math.floor);
   let left = PERCENT_WHOLE - floors.reduce((sum, value) => sum + value, 0);
   const order = raw.map((value, index) => ({ index, rest: value - Math.floor(value) })).sort((a, b) => b.rest - a.rest);
