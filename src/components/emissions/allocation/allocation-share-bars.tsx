@@ -17,7 +17,7 @@ import { HintSummary } from "./allocation-hint";
 import { batchCodesOf, type Focus } from "./allocation-model";
 import { FAINT, MUTED } from "./allocation-parts";
 import { RecordList } from "./allocation-record-list";
-import { streamSummary, type Slice, type StreamSummary } from "./allocation-share-summary";
+import { hintPhrases, streamSummary, type Slice, type StreamSummary } from "./allocation-share-summary";
 import { visibleStreams, type Stream, type StreamKey } from "./allocation-streams";
 
 const LIT_BG = "color-mix(in srgb, var(--acc-dist) 18%, var(--paper))";
@@ -46,9 +46,10 @@ function ShareBar({ summary, focus, barPx }: { summary: StreamSummary; focus: Fo
         return (
           <span
             key={slice.owner.key}
-            className="flex min-w-[2px] items-center overflow-hidden border px-6"
+            className={cn("flex min-w-[2px] items-center overflow-hidden border", fits && "px-6")}
             style={{
-              flexGrow: slice.value,
+              // Shares, not raw quantities: flex-grow factors summing below 1 leave the bar part empty.
+              flexGrow: slice.value / summary.total,
               flexBasis: 0,
               borderColor: mine ? LIT_FILL : START_STROKE,
               borderWidth: mine ? 1.5 : 1,
@@ -132,7 +133,7 @@ function ShareRow({ stream, summary, focus, codes, wide, width, open, onToggle }
       {empty ? (
         <div className="flex min-h-44 items-center py-12">{content}</div>
       ) : (
-        <button type="button" aria-expanded={open} onClick={onToggle} aria-label={`${stream.label}: ${figure}`} className="flex min-h-44 w-full cursor-pointer items-center py-12 text-left outline-none hover:bg-[var(--row-hover-bg-solid)] focus-visible:outline-[1.5px] focus-visible:outline-offset-2 focus-visible:outline-[var(--color-interaction)]">
+        <button type="button" aria-expanded={open} onClick={onToggle} aria-label={[`${stream.label}: ${figure}`, summary.slices.map(sliceText).join(", "), ...notes.slice(hidden.length ? 1 : 0), ...hintPhrases(records, focus, codes)].join(". ")} className="flex min-h-44 w-full cursor-pointer items-center py-12 text-left outline-none hover:bg-[var(--row-hover-bg-solid)] focus-visible:outline-[1.5px] focus-visible:outline-offset-2 focus-visible:outline-[var(--color-interaction)]">
           {content}
         </button>
       )}

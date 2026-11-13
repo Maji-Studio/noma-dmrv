@@ -34,8 +34,8 @@ describe("EmissionAllocationSection, Flow view (share bars)", () => {
     expect(screen.getByTestId("allocation-share-bars")).toBeTruthy();
     expect(["feedstock", "delivery", "diesel", "electricity"].map((key) => rowOf(key) !== null)).toEqual([true, true, true, true]);
     expect(rowOf("manual")).toBeNull();
-    expect(screen.getByRole("button", { name: "Feedstock transport: 1,000 t·km \u00b7 81%" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Biochar delivery transport: 216 t·km \u00b7 60%" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: (name) => name.startsWith("Feedstock transport: 1,000 t·km \u00b7 81%") })).toBeTruthy();
+    expect(screen.getByRole("button", { name: (name) => name.startsWith("Biochar delivery transport: 216 t·km \u00b7 60%") })).toBeTruthy();
   });
 
   it("has no quantity tabs, no second Open table link and keeps the records closed at rest", () => {
@@ -82,7 +82,7 @@ describe("EmissionAllocationSection, Flow view (share bars)", () => {
     data.records.push({ ...data.records.find((r) => r.id === "me-1")!, id: "me-2", detail: { kind: "manual", creditBatchId: BATCH_A, componentId: "c2", componentName: "Hauling", kindOfEntry: "value", omittedInputKeys: [] }, quantities: [{ value: 90, unit: "t·km", label: "Transport" }] });
     state.data = data;
     show({ creditBatchId: BATCH_A });
-    expect(screen.getByRole("button", { name: "Manual transport: 90 t·km \u00b7 100%" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: (name) => name.startsWith("Manual transport: 90 t·km \u00b7 100%") })).toBeTruthy();
   });
 
   it("says No figures recorded for a quantity nothing records, without a toggle", () => {
@@ -188,7 +188,7 @@ describe("EmissionAllocationSection, a second Removal that only counts", () => {
 describe("EmissionAllocationSection, Flow on a Removal", () => {
   it("reads Removal parts: half of the split delivery is this Removal's, the rest not yet allocated", () => {
     show({ removalId: REMOVAL_1 });
-    expect(screen.getByRole("button", { name: "Biochar delivery transport: 180 t·km \u00b7 50%" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: (name) => name.startsWith("Biochar delivery transport: 180 t·km \u00b7 50%") })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^Biochar delivery transport:/ }));
     const row = document.querySelector('[data-share-row="delivery"]') as HTMLElement;
     expect(within(row).getByText("not yet allocated")).toBeTruthy();

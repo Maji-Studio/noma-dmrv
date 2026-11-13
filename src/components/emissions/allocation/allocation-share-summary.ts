@@ -9,6 +9,9 @@ import type { AllocationRecord } from "@/types/emission-allocation";
 import { allOwners, feedstockHint, fractionFor, wholePercents, type Focus, type Owner } from "./allocation-model";
 import type { Stream } from "./allocation-streams";
 
+/** Fraction precision before rounding to whole percents: well below any real share, well above float noise. */
+const SHARE_PRECISION = 1e9;
+
 export interface Slice {
   owner: Owner;
   value: number;
@@ -41,7 +44,9 @@ export function streamSummary(stream: Stream, records: AllocationRecord[], focus
   const valued = allOwners(focus)
     .map((owner) => ({ owner, value: items.reduce((sum, item) => sum + item.value * fractionFor(item.record, owner), 0) }))
     .filter((slice) => slice.value > 0);
-  const percents = total > 0 ? wholePercents(valued.map((slice) => slice.value / total)) : valued.map(() => 0);
+  // Multiplying fractions into quantities and back leaves float noise that can flip the
+  // largest-remainder tie-break; rounding it away keeps percents equal to the Table's.
+  const percents = total > 0 ? wholePercents(valued.map((slice) => Math.round((slice.value / total) * SHARE_PRECISION) / SHARE_PRECISION)) : valued.map(() => 0);
   const slices = valued.map((slice, index) => ({ ...slice, percent: percents[index] }));
   const own = slices.find((slice) => slice.owner.key === focus.owner.key);
   const undrawn = records.filter((record) => stream.has(record) && stream.pick(record) === null).length;

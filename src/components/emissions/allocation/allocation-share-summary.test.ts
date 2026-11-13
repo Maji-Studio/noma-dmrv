@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NOT_YET } from "@/types/emission-allocation";
-import { buildFocus, batchCodesOf } from "./allocation-model";
+import { buildFocus, batchCodesOf, percentFor } from "./allocation-model";
 import { hintPhrases, streamSummary } from "./allocation-share-summary";
 import { STREAMS, visibleStreams } from "./allocation-streams";
 import { BATCH_A, BATCH_B, BATCH_C, MANY_DELIVERIES, REMOVAL_1, allocationFixture, manyDeliveriesFixture } from "./allocation-test-fixtures";
@@ -29,6 +29,16 @@ describe("streamSummary, per-stream owner shares", () => {
     expect([summary.mine, summary.minePercent]).toEqual([216, 60]);
     expect(summary.slices.map((slice) => [slice.owner.key, slice.percent])).toEqual([[BATCH_A, 60], [BATCH_B, 40]]);
     expect(summary.slices.reduce((sum, slice) => sum + slice.percent, 0)).toBe(100);
+  });
+
+  it("rounds a single record's split like the Table, despite float noise", () => {
+    const data = allocationFixture();
+    const delivery = data.records.find((record) => record.group === "deliveryTransport")!;
+    const tiny = { ...delivery, quantities: [{ value: 0.3, unit: "t·km" as const, label: "Transport" }], parts: [{ ...delivery.parts[0], key: BATCH_A, fraction: 0.125 }, { ...delivery.parts[0], key: BATCH_B, fraction: 0.875 }] };
+    const { focus } = onBatch(BATCH_A, { ...data, records: [tiny] });
+    const summary = streamSummary(stream("delivery"), [tiny], focus);
+    const owners = [...focus.owners, focus.notYet];
+    expect(summary.slices.map((slice) => slice.percent)).toEqual(owners.flatMap((owner) => { const p = percentFor(tiny, owner, owners); return p > 0 ? [p] : []; }));
   });
 
   it("reports zero for a page that carries none of the quantity", () => {
