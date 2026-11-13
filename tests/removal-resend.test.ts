@@ -1,3 +1,4 @@
+import { logActionError } from "@/fn/action-errors";
 /** Real PostgreSQL coverage. Do not run in a sandbox without a test database. */
 import { certifierBiocharApplications, creditBatches, feedstockTypes, productionProcesses } from "@/db/schema";
 import { createBiocharApplicationChain } from "./helpers/biochar-application-chain";
@@ -21,6 +22,8 @@ import { isSentRemoval } from "@/lib/record-lock";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } from "./helpers/test-org";
 import { insertRemovalFixture } from "./helpers/removal-fixture";
 
+vi.mock("@/fn/action-errors", () => ({ logActionError: vi.fn() }));
+
 const remote = vi.hoisted(() => ({ get: vi.fn(), paginateAll: vi.fn() }));
 vi.mock("@/data-access/certifier-credentials", () => ({ resolveIsometricClient: vi.fn(async () => remote) }));
 
@@ -29,6 +32,7 @@ const removalIds: string[] = [];
 const facilityIds: string[] = [];
 const cleanups: (() => Promise<void>)[] = [];
 beforeEach(() => {
+  vi.mocked(logActionError).mockClear();
   remote.get.mockReset().mockRejectedValue(new IsometricApiError("Missing", 404));
   remote.paginateAll.mockReset().mockResolvedValue([]);
 });
@@ -106,6 +110,20 @@ it.each(["present", "unknown"] as const)("refuses %s without changing the ledger
   expect(await db.select().from(certifierSyncEvents).where(eq(certifierSyncEvents.entityId, f.input.removalId))).toHaveLength(0);
 });
 
+it("refuses an archived facility before registry I/O without changing retirement state", async () => {
+  const f = await fixture();
+  await db.update(facilities).set({ archivedAt: new Date() }).where(and(
+    eq(facilities.id, f.input.facilityId), eq(facilities.organizationId, ctx.organizationId),
+  ));
+  const check = vi.fn(async () => "missing" as const);
+  await expect(retireMissingRemovalSubmission(ctx, f.input, check, check)).rejects.toThrow("Facility was not found or is archived.");
+  expect(check).not.toHaveBeenCalled();
+  expect(await getLatestSubmission(ctx, f.key)).toEqual(f.submission);
+  const [removal] = await db.select().from(certifierRemovals).where(eq(certifierRemovals.id, f.input.removalId));
+  expect(removal.ghgStatementId).not.toBeNull();
+  expect(await db.select().from(certifierSyncEvents).where(eq(certifierSyncEvents.entityId, f.input.removalId))).toHaveLength(0);
+});
+
 it("rejects wrong organization, facility and non-admin access before registry I/O", async () => {
   const f = await fixture();
   const check = vi.fn(async () => "missing" as const);
@@ -164,7 +182,7 @@ it.each(["present", "unknown", "missing"] as const)("checks the version's Applic
     expect(deriveSubmissionStatus(retired, false, "removal", "unknown").kind).toBe("submitted");
   } else {
     await expect(prepareRemovalResendCore(ctx, f.input)).rejects.toThrow(presence === "present"
-      ? `Applications AP-${f.tag} are still in Isometric. Remove them there first.` : "could not confirm");
+      ? `Application AP-${f.tag} is still in Isometric. Delete it in Certify, then press Send again.` : "Isometric did not confirm that every Application is gone. Try again.");
     expect(await getLatestSubmission(ctx, f.key)).toEqual(f.submission);
     const [removal] = await db.select().from(certifierRemovals).where(eq(certifierRemovals.id, f.input.removalId));
     expect(removal.ghgStatementId).not.toBeNull();
@@ -185,9 +203,29 @@ it("returns unknown and refuses retirement when the project mapping differs", as
 
 it.each([401, 403, 404, 503])("cannot confirm absence when the project GET fails with %s", async status => {
   const f = await fixture();
-  remote.paginateAll.mockRejectedValue(new IsometricApiError("Project unavailable", status));
+  const error = new IsometricApiError("Project unavailable", status);
+  remote.paginateAll.mockRejectedValue(error);
   expect(await checkRemovalRegistryPresenceCore(ctx, f.input)).toBe("unknown");
   await expect(prepareRemovalResendCore(ctx, f.input)).rejects.toThrow("could not confirm");
   expect(await getLatestSubmission(ctx, f.key)).toEqual(f.submission);
   expect(remote.get).not.toHaveBeenCalled();
+  expect(logActionError).toHaveBeenCalledTimes(2);
+  expect(logActionError).toHaveBeenCalledWith(error, {
+    message: "Removal registry project check failed",
+    context: { removalId: f.input.removalId, facilityId: f.input.facilityId, externalProjectId: f.externalProjectId },
+  });
+});
+
+it("names multiple surviving Applications once and points to Certify", async () => {
+  const first = await fixture();
+  const second = await fixture();
+  await applicationFixture(first);
+  const other = await applicationFixture(second);
+  await db.update(certifierBiocharApplications).set({ removalSubmissionId: first.submission.id }).where(and(
+    eq(certifierBiocharApplications.id, other.id), eq(certifierBiocharApplications.organizationId, ctx.organizationId),
+  ));
+  const codes = [`AP-${first.tag}`, `AP-${second.tag}`].sort();
+  await expect(retireMissingRemovalSubmission(ctx, first.input, async () => "missing", async () => "present"))
+    .rejects.toThrow(`Applications ${codes[0]} and ${codes[1]} are still in Isometric. Delete them in Certify, then press Send again.`);
+  expect(await getLatestSubmission(ctx, first.key)).toEqual(first.submission);
 });

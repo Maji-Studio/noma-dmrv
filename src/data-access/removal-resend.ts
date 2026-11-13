@@ -1,3 +1,5 @@
+import { pluralize } from "@/lib/copy-utils";
+import { lockActiveFacilityReference } from "./facility-reference-guards";
 import { certifierBiocharApplications } from "@/db/schema/certifier-biochar-applications";
 import { applications } from "@/db/schema/application";
 import { ISOMETRIC_PROVIDER, REMOVAL_SUBMISSION_TYPE, REMOVAL_ENTITY_TYPE } from "@/lib/isometric/utils/constants";
@@ -47,6 +49,7 @@ export async function retireMissingRemovalSubmission(
   requireOrgScope(ctx);
   requireOrgRole(ctx, "admin");
   return db.transaction(async (tx) => {
+    await lockActiveFacilityReference(ctx, tx, input.facilityId);
     const key = removalResendKey(input.removalId);
     const [removal] = await tx.select({ id: certifierRemovals.id }).from(certifierRemovals).where(and(
       eq(certifierRemovals.id, input.removalId), eq(certifierRemovals.facilityId, input.facilityId),
@@ -84,8 +87,12 @@ export async function retireMissingRemovalSubmission(
       if (applicationPresence === "present") present.push(registration.code);
       if (applicationPresence === "unknown") unknown = true;
     }
-    if (present.length) throw new SafeError(`Applications ${[...new Set(present)].join(", ")} are still in Isometric. Remove them there first. Send again cannot continue.`);
-    if (unknown) throw new SafeError("Isometric could not confirm whether all Applications are missing. Send again cannot continue. Try again.");
+    if (present.length) {
+      const codes = [...new Set(present)].sort();
+      const labels = new Intl.ListFormat("en", { style: "long", type: "conjunction" }).format(codes);
+      throw new SafeError(`${pluralize(codes.length, "Application")} ${labels} ${pluralize(codes.length, "is", "are")} still in Isometric. Delete ${pluralize(codes.length, "it", "them")} in Certify, then press Send again.`);
+    }
+    if (unknown) throw new SafeError("Isometric did not confirm that every Application is gone. Try again.");
     const metadata = { ...(latest.metadata as Record<string, unknown> | null), [REGISTRY_MISSING_CONFIRMED_AT]: new Date().toISOString(), [REGISTRY_MISSING_EXTERNAL_ID]: latest.externalId };
     await withCertificationStatusActivity(ctx, [latest.id], async (tx) => {
       await tx.update(certificationSubmissions).set({ status: "superseded", metadata, supersededAt: sql`now()`, updatedAt: sql`now()` }).where(and(

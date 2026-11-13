@@ -16,6 +16,7 @@ export interface RemovalEnrichmentState {
 }
 
 export interface RemovalListRow {
+  registryMissing?: boolean;
   correction?: RemovalPreflightSummary["correction"];
   removalId: string;
   code: string;
@@ -74,6 +75,7 @@ export function buildRemovalListRows(
       version: data?.version ?? identity.latestSubmission?.version ?? null,
       submittedOn: identity.submittedOn,
       local,
+      registryMissing: lifecycleData?.registryMissing ?? identity.latestSubmission?.registryMissing ?? false,
       lockInFlight:
         lifecycleData?.lockInFlight ??
         (identity.latestSubmission

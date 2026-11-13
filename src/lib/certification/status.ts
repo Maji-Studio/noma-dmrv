@@ -109,6 +109,7 @@ export interface RemovalStatusInput {
   submissionInterrupted?: boolean;
   externalId?: string | null;
   metadata?: unknown;
+  registryMissing?: boolean;
 }
 
 export type RemovalEnrichmentStatus =
@@ -250,8 +251,9 @@ export function deriveRemovalStatus({
   submissionInterrupted = false,
   externalId = null,
   metadata,
+  registryMissing = false,
 }: RemovalStatusInput): DerivedStatus {
-  if (isRegistryMissingSubmission({ status: local ?? "", externalId, metadata })) local = "submitted";
+  if ((local === "superseded" && registryMissing) || isRegistryMissingSubmission({ status: local ?? "", externalId, metadata })) local = "submitted";
   if (
     (local === "draft" || local === "submitted") &&
     submissionInterrupted
@@ -332,6 +334,7 @@ export function deriveRemovalWorkflowStatus({
   submissionInterrupted = false,
   externalId = null,
   metadata,
+  registryMissing,
 }: RemovalWorkflowStatusInput): RemovalWorkflowStatus {
   const lifecycle = deriveRemovalStatus({
     local,
@@ -339,6 +342,7 @@ export function deriveRemovalWorkflowStatus({
     submissionInterrupted,
     externalId,
     metadata,
+    registryMissing,
   });
 
   if (lifecycle.kind === "submitted" || lifecycle.kind === "superseded") {

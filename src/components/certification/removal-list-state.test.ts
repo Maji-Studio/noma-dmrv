@@ -1,3 +1,5 @@
+import { deriveRemovalShownStatus } from "@/lib/certification/removal-shown-status";
+import { isRegistryMissingSubmission } from "@/lib/certification/registry-missing-submission";
 import { describe, expect, it, vi } from "vitest";
 import type { RemovalHubEntry } from "@/fn/certification/certify-context";
 import type { RemovalPreflightSummary } from "@/fn/certification/overview";
@@ -55,6 +57,45 @@ function enrichment(
 }
 
 describe("buildRemovalListRows", () => {
+  const retired = {
+    status: "superseded", externalId: "rmv-retired", lockedAt: null,
+    metadata: { registryMissingExternalId: "rmv-retired", registryMissingConfirmedAt: "2026-11-13T00:00:00Z" },
+  } as NonNullable<RemovalHubEntry["latestSubmission"]>;
+
+  it.each(["loading", "unavailable"] as const)("keeps retired identity Submitted while enrichment is %s", (status) => {
+    const entry = identity("retired", "CB-RETIRED");
+    entry.latestSubmission = { ...retired, registryMissing: isRegistryMissingSubmission(retired) };
+    const [row] = buildRemovalListRows([entry], {
+      retired: { status, data: { ...enrichment("retired"), registryMissing: false } },
+    });
+    const shown = deriveRemovalShownStatus({ workflow: row });
+    expect(shown.list.label).toBe("Submitted");
+    expect(shown.sheet.label).toBe("Submitted");
+  });
+
+  it("carries the retired preflight summary into the list and sheet status", () => {
+    const summary: RemovalPreflightSummary = {
+      ...enrichment("retired"), local: "superseded", externalId: retired.externalId,
+      registryMissing: isRegistryMissingSubmission(retired),
+    };
+    const [row] = buildRemovalListRows([identity("retired", "CB-RETIRED")], {
+      retired: { status: "available", data: summary },
+    });
+    const shown = deriveRemovalShownStatus({ workflow: row, correction: row.correction });
+    expect(shown.list.label).toBe("Submitted");
+    expect(shown.sheet.label).toBe("Submitted");
+  });
+
+  it("uses a newer preflight draft instead of the retired identity marker", () => {
+    const entry = identity("retired", "CB-RETIRED");
+    entry.latestSubmission = { ...retired, registryMissing: true };
+    const [row] = buildRemovalListRows([entry], {
+      retired: { status: "available", data: { ...enrichment("retired"), local: "draft", registryMissing: false } },
+    });
+    expect(row.registryMissing).toBe(false);
+    expect(deriveRemovalShownStatus({ workflow: row }).sheet.label).toBe("Not submitted");
+  });
+
   it.each(["loading", "unavailable"] as const)(
     "uses the identity deletion lease while enrichment is %s",
     (status) => {

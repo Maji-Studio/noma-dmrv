@@ -21,13 +21,17 @@ async function checkRemote(ctx: OrgContext, input: RemovalResendInput, externalI
     logActionError(error, { message: "Removal registry credential resolution failed", context: { removalId: input.removalId, facilityId: input.facilityId } });
     return "unknown";
   }
-  return checkRemoteWith(client, externalId, projectId);
+  return checkRemoteWith(client, externalId, projectId, input);
 }
 
-async function checkRemoteWith(client: IsometricClient, externalId: string, projectId: string): Promise<RemovalRegistryPresence> {
+async function checkRemoteWith(client: IsometricClient, externalId: string, projectId: string, input: RemovalResendInput): Promise<RemovalRegistryPresence> {
   try {
     await listGhgEntryTemplates(client, projectId);
-  } catch {
+  } catch (error) {
+    logActionError(error, {
+      message: "Removal registry project check failed",
+      context: { removalId: input.removalId, facilityId: input.facilityId, externalProjectId: projectId },
+    });
     return "unknown";
   }
   return readRemovalRegistryPresence(() => getGhgEntry(client, externalId), externalId);
@@ -52,7 +56,7 @@ export async function prepareRemovalResendCore(ctx: OrgContext, input: RemovalRe
   // needs its own pool connection, which a pool of one cannot spare.
   const client = await resolveIsometricClient(ctx);
   return retireMissingRemovalSubmission(ctx, input,
-    (externalId, projectId) => checkRemoteWith(client, externalId, projectId),
+    (externalId, projectId) => checkRemoteWith(client, externalId, projectId, input),
     (externalId) => readRemovalRegistryPresence(() => getBiocharApplication(client, externalId), externalId),
   );
 }
