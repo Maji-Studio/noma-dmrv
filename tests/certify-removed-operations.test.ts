@@ -49,7 +49,14 @@ test.each(["missing", "never"])("reports every operation from a deleted real pat
   const changed = edits.reduce((text, edit) => text.slice(0, edit.start) + edit.text + text.slice(edit.end), baseline);
   const result = compare(baseline, changed);
   assert.equal(result.status, 1, result.stderr);
-  assert.deepEqual(result.stdout.trim().split("\n"), ["GET /ghg_entries", "PATCH /datapoints/{id}", "POST /ghg_entries"]);
+  // Derive the deleted path's operations from the baseline so new upstream methods do not break the test.
+  assert.ok(removedPath.type && ts.isTypeLiteralNode(removedPath.type));
+  const removedPathOperations = removedPath.type.members
+    .filter((member) => ts.isPropertySignature(member) && member.type?.kind !== ts.SyntaxKind.NeverKeyword
+      && ["get", "put", "post", "delete", "options", "head", "patch", "trace"].includes(member.name.getText(source)))
+    .map((member) => `${member.name!.getText(source).toUpperCase()} /ghg_entries`);
+  assert.ok(removedPathOperations.includes("POST /ghg_entries"));
+  assert.deepEqual(result.stdout.trim().split("\n"), [...removedPathOperations, "PATCH /datapoints/{id}"].sort());
 });
 
 const fixture = `export interface paths {
