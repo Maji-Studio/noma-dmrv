@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { TextAction } from "@/components/ui/text-action";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { cn } from "@/lib/utils";
 import type { AllocationRecord } from "@/types/emission-allocation";
 import { formatNumber, recordLine, recordName } from "./allocation-format";
@@ -10,6 +11,9 @@ import { HintMarker } from "./allocation-hint";
 import { NOT_YET_LABEL, allOwners, feedstockHint, sharesOf, type Focus } from "./allocation-model";
 import { MUTED } from "./allocation-parts";
 import type { Stream } from "./allocation-streams";
+
+/** A missing reading stays distinct from a recorded 0. */
+const formatFigure = (value: number | null) => (value === null ? MISSING_VALUE.notRecorded : formatNumber(value));
 
 /** Rest state: the first rows, then "Show all N". */
 export const LIST_REST = 3;
@@ -63,7 +67,7 @@ export function RecordList({ records, stream, focus, codes }: {
                     </span>
                   ))}
                 </td>
-                <td className="py-6 text-right body-small tabular-nums">{formatNumber(stream.pick(record) ?? 0)}</td>
+                <td className={cn("py-6 text-right body-small tabular-nums", stream.pick(record) === null && MUTED)}>{formatFigure(stream.pick(record))}</td>
               </tr>
             );
           })}

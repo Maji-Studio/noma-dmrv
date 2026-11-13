@@ -61,6 +61,21 @@ describe("EmissionAllocationSection, Flow view (share bars)", () => {
     expect(within(rowOf("feedstock")).queryByText("Total")).toBeNull();
   });
 
+  it("lists a record with no figure in its open row as Not recorded", () => {
+    show({ creditBatchId: BATCH_A });
+    fireEvent.click(screen.getByRole("button", { name: /^Electricity:/ }));
+    expect(within(rowOf("electricity")).getByText("Not recorded")).toBeTruthy();
+  });
+
+  it("reads a quantity recorded only as 0 as 0, not as nothing recorded", () => {
+    const data = allocationFixture();
+    data.records = data.records.map((record) => ({ ...record, quantities: record.quantities.map((quantity) => (quantity.unit === "L" ? { ...quantity, value: 0 } : quantity)) }));
+    state.data = data;
+    show({ creditBatchId: BATCH_A });
+    expect(within(rowOf("diesel")).getByText("All recorded as 0")).toBeTruthy();
+    expect(within(rowOf("diesel")).getByText("0 L")).toBeTruthy();
+  });
+
   it("shows the first 3 records of a busy quantity, then Show all N", () => {
     state.data = manyDeliveriesFixture();
     show({ creditBatchId: BATCH_A });

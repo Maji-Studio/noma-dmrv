@@ -101,10 +101,12 @@ function ShareRow({ stream, streamRecords, summary, focus, codes, wide, width, o
   onToggle: () => void;
 }) {
   const barPx = wide ? width - LABEL_COL_PX - FIGURE_COL_PX - 2 * COL_GAP_PX : width;
-  const records = summary.items.map((item) => item.record);
-  const empty = summary.items.length === 0;
-  const hidden = empty ? [] : hiddenLabels(summary, focus, barPx);
-  const figure = empty ? null : summary.mineMissing ? MISSING_VALUE.notRecorded : `${formatValue(summary.mine, stream.unit)} · ${summary.minePercent}%`;
+  // Nothing to open: no record in this quantity at all. Records with no figure or a 0 still open in the list.
+  const empty = streamRecords.length === 0;
+  const drawable = summary.items.length > 0;
+  const allZero = !drawable && streamRecords.some((record) => stream.pick(record) !== null);
+  const hidden = drawable ? hiddenLabels(summary, focus, barPx) : [];
+  const figure = summary.mineMissing ? MISSING_VALUE.notRecorded : drawable ? `${formatValue(summary.mine, stream.unit)} · ${summary.minePercent}%` : allZero ? formatValue(0, stream.unit) : null;
   const notes = [
     ...(hidden.length ? [hidden.join(", ")] : []),
     ...(summary.undrawn ? [`${summary.undrawn} with no recorded ${stream.noun}`] : []),
@@ -115,7 +117,7 @@ function ShareRow({ stream, streamRecords, summary, focus, codes, wide, width, o
       <span className="body-small font-medium">{stream.label}</span>
     </span>
   );
-  const bar = empty ? <span className={cn("body-small", MUTED)}>{stream.emptyHint}</span> : <ShareBar summary={summary} focus={focus} barPx={barPx} />;
+  const bar = drawable ? <ShareBar summary={summary} focus={focus} barPx={barPx} /> : <span className={cn("body-small", MUTED)}>{allZero ? "All recorded as 0" : stream.emptyHint}</span>;
   const figureNode = figure && <span className="whitespace-nowrap text-right body-small font-medium tabular-nums">{figure}</span>;
   const extra = (
     <>
@@ -147,13 +149,13 @@ function ShareRow({ stream, streamRecords, summary, focus, codes, wide, width, o
       {empty ? (
         <div className="flex min-h-44 items-center py-12">{content}</div>
       ) : (
-        <button type="button" aria-expanded={open} onClick={onToggle} aria-label={[`${stream.label}: ${figure}`, summary.slices.map(sliceText).join(", "), ...notes.slice(hidden.length ? 1 : 0), ...hintPhrases(streamRecords, focus, codes)].join(". ")} className="flex min-h-44 w-full cursor-pointer items-center py-12 text-left outline-none hover:bg-[var(--row-hover-bg-solid)] focus-visible:outline-[1.5px] focus-visible:outline-offset-2 focus-visible:outline-[var(--color-interaction)]">
+        <button type="button" aria-expanded={open} onClick={onToggle} aria-label={[`${stream.label}: ${figure ?? stream.emptyHint}`, summary.slices.map(sliceText).join(", "), ...notes.slice(hidden.length ? 1 : 0), ...hintPhrases(streamRecords, focus, codes)].join(". ")} className="flex min-h-44 w-full cursor-pointer items-center py-12 text-left outline-none hover:bg-[var(--row-hover-bg-solid)] focus-visible:outline-[1.5px] focus-visible:outline-offset-2 focus-visible:outline-[var(--color-interaction)]">
           {content}
         </button>
       )}
       {open && !empty && (
         <div className="pb-16" style={wide ? { paddingLeft: LABEL_COL_PX + COL_GAP_PX } : undefined}>
-          <RecordList records={records} stream={stream} focus={focus} codes={codes} />
+          <RecordList records={streamRecords} stream={stream} focus={focus} codes={codes} />
         </div>
       )}
     </div>
