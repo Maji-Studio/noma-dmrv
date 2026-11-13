@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { renderThousandYearDurabilityLedgerPdf } from "./durability-1000-pdf";
+import { theme } from "./pdf-theme";
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 
-// Page frame (pdf-theme paddingHorizontal) and the wordmark's right edge, in pt.
-const PAGE_MARGIN = 34;
+// The wordmark's right edge, in pt.
+const PAGE_MARGIN = Number(theme.page.paddingHorizontal);
 const WORDMARK_RIGHT = 80;
 const GEOMETRY_TOLERANCE = 0.5;
 // Distance from the page top (pt): the name lines end above the eyebrow,

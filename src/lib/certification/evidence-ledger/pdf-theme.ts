@@ -262,14 +262,19 @@ export const theme = StyleSheet.create({
   footerText: { fontFamily: MONO, fontSize: 7, color: C.ink40, letterSpacing: 0.5 },
 });
 
-/** The `noma` wordmark with the organization name beside it, shared by every ledger masthead. */
-export function mastheadWordmark(organizationName: string): ReactElement {
+/** The `noma` wordmark with a subtitle beside it; a long subtitle wraps inside its column. */
+export function wordmarkWithSub(sub: string): ReactElement {
   return v(
     theme.wordmarkRow,
     {},
     t(theme.wordmark, "noma"),
-    v(theme.wordmarkSubBox, {}, t(theme.wordmarkSub, `dMRV · ${organizationName.toUpperCase()}`)),
+    v(theme.wordmarkSubBox, {}, t(theme.wordmarkSub, sub)),
   );
+}
+
+/** The wordmark with the organization name beside it, shared by every ledger masthead. */
+export function mastheadWordmark(organizationName: string): ReactElement {
+  return wordmarkWithSub(`dMRV · ${organizationName.toUpperCase()}`);
 }
 
 /** Register the bundled fonts, then render a ledger Document to a PDF buffer. */
