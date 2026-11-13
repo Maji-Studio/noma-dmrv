@@ -645,7 +645,7 @@ Run the script after changing the Removal compile, comparison or submit checks.
 ## Isometric health workflow
 
 `isometric-health.yml` runs API read health, live template input coverage via
-`pnpm isometric:coverage-check -- --source=fixture`, and public OpenAPI drift
+`pnpm isometric:coverage-check -- --source=fixture`, and public OpenAPI compatibility
 independently after setup. Fixture source selects local project/template IDs and
 optional per-facility `reviewedLineSources` contracts keyed by component ID in
 `tests/fixtures/isometric-coverage.json`; it still fetches live templates. Reviews
@@ -657,6 +657,15 @@ step needs only the registry credential pair and `ISOMETRIC_ENVIRONMENT`, becaus
 `client-env.ts` and the logger do not load app config. Registry credentials remain
 mandatory.
 
+The OpenAPI step regenerates Certify types and fails on fetch/generation errors.
+Unchanged types pass immediately. Changed types check for removed paths or methods
+and run `pnpm typecheck`, matching CI's static job without app env or route-type
+generation. Removed operations or compilation failures fail with operation names
+or tsc errors, a truncated diff when needed and repair instructions. Response-shape
+changes read only through caller-chosen generics are not detected. Compatible
+changes warn and pass, with a collapsible diff stat and diff, truncated when
+needed, in the summary. Run `pnpm regenerate-certify-types` and commit when convenient.
+
 The always-run step summary reports setup and check outcomes with repair commands.
 Any required setup or check that fails or is skipped prevents a green result.
 These are sandbox/read-only signals, not production readiness or write-path coverage.
@@ -666,6 +675,9 @@ Run the hermetic selection regression with
 It also runs in normal Vitest CI. It collects the real health command with Vitest
 and verifies only the health file is selected, a collection-only write sentinel
 is excluded, and missing opted-in credentials fail closed.
+It also runs the OpenAPI step in a temporary git repository with stubbed generation
+and typecheck commands. `tests/certify-removed-operations.test.ts` checks operation
+removals against the committed types and isolated fixtures.
 Collection uses an isolated config and a dotenv stub; no test bodies execute, no
 local env files are read, and placeholders are never sent to the API. A sentinel
 integration suite catches accidental broadening without loading database tests.
