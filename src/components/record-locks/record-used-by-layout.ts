@@ -38,6 +38,8 @@ export interface UsedByLayout {
   columns: Column[];
   selfIndex: number;
   hasBand: boolean;
+  /** Where the column headers start: below the band's label when there is one. */
+  top: number;
   width: number;
   height: number;
   nodes: PlacedNode[];
@@ -70,8 +72,9 @@ export function buildColumns(graph: UsedByGraph): Column[] {
   const byKind = new Map<string, UsedByNode[]>();
   for (const node of graph.downstream) if (CUSTODY_KINDS.includes(node.kind)) byKind.set(node.kind, [...(byKind.get(node.kind) ?? []), node]);
   const downstream = [...byKind].sort(([a], [b]) => kindRank(a) - kindRank(b)).map(([kind, nodes]) => ({ kind, nodes, role: "downstream" as const }));
-  // A credit batch is named by the band, never drawn as a square.
-  const upstream = graph.upstream.filter((node) => node.kind !== "creditBatch");
+  // A credit batch is named by the band, never drawn as a square. On a credit
+  // batch's own sheet its runs are already listed above, so it starts the chart.
+  const upstream = graph.self.kind === "creditBatch" ? [] : graph.upstream.filter((node) => node.kind !== "creditBatch");
   return [
     ...(upstream.length ? [{ kind: upstream[0].kind, nodes: upstream, role: "upstream" as const }] : []),
     { kind: graph.self.kind, nodes: [graph.self], role: "self" as const },
@@ -115,7 +118,8 @@ export function stacks(column: Column): boolean {
 /** Places every column; a stacked column that is not open collapses to one group square. */
 export function layoutUsedBy(graph: UsedByGraph, open: ReadonlySet<string>): UsedByLayout {
   const columns = buildColumns(graph);
-  const hasBand = graph.creditBatches.length > 0;
+  // A credit batch's own sheet is titled with it, so it gets no band of its own.
+  const hasBand = graph.creditBatches.length > 0 && graph.self.kind !== "creditBatch";
   const top = hasBand ? BAND_LABEL_H : 0;
   const placed = new Map<string, Placed>();
   const rowOf = new Map<string, number>();
@@ -161,6 +165,7 @@ export function layoutUsedBy(graph: UsedByGraph, open: ReadonlySet<string>): Use
     columns,
     selfIndex: columns.findIndex((column) => column.role === "self"),
     hasBand,
+    top,
     width: columns.length * COL,
     height: top + HEADER_H + (maxRows - 1) * ROW + NODE_H + BOTTOM_PAD,
     nodes,

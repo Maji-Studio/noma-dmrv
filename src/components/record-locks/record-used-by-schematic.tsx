@@ -20,10 +20,14 @@ const EDGE_WIDTH = 1.25;
 const RING = "1.5px solid var(--ink)";
 const RING_OFFSET = 3;
 const BAND_CARET = 12;
+const BAND_ICON = 14;
+/** Space between a column header and the first row. */
+const HEADER_GAP = 8;
 const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)]";
 /** INLINE_HIT_AREA without its `relative`, which would undo the header's `absolute`. */
 const HEADER_HIT_AREA = "after:absolute after:inset-x-0 after:top-1/2 after:h-44 after:-translate-y-1/2 after:content-[''] ";
-const LABEL_CLASS = "mt-4 block max-w-full truncate text-center font-mono text-[length:var(--text-xxs)] leading-none";
+/** Labels carry the surface colour behind them, so edges into an opened group never cross a code. */
+const LABEL_CLASS = "mt-4 block max-w-full truncate px-2 text-center font-mono text-[length:var(--text-xxs)] leading-none";
 
 /** Where "Open in Traceability" goes for this record; null when no credit batch holds it. */
 function traceabilityHref(graph: UsedByGraph): string | null {
@@ -39,16 +43,17 @@ function traceabilityHref(graph: UsedByGraph): string | null {
 function BandLabel({ batches }: { batches: RecordUsedByBatch[] }) {
   return (
     <span className="flex min-w-0 items-center gap-6 body-caption text-[var(--color-text-secondary)]">
-      <CertificateIcon size={14} aria-hidden className="shrink-0" />
+      <CertificateIcon size={BAND_ICON} aria-hidden className="shrink-0" />
       <span className="shrink-0">{batches.length === 1 ? "Credit batch" : "Credit batches"}</span>
-      <span className="flex min-w-0 gap-8 truncate">
+      {/* No overflow clip here: it would cut each link's 44px hit area down to the text row. */}
+      <span className="flex min-w-0 gap-8">
         {batches.map((batch) => (
           <Link
             key={batch.id}
             href={recordHref("creditBatch", batch.id, { facilityId: batch.facilityId })}
-            className={cn(RECORD_CODE_LINK, batch.name && "font-sans", INLINE_HIT_AREA)}
+            className={cn(RECORD_CODE_LINK, batch.name && "font-sans", INLINE_HIT_AREA, "min-w-0")}
           >
-            {batch.name ?? batch.code}
+            <span className="block truncate">{batch.name ?? batch.code}</span>
           </Link>
         ))}
       </span>
@@ -90,8 +95,8 @@ export function UsedBySchematic({ graph, timeZone }: { graph: UsedByGraph; timeZ
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const scrolledToSelf = useRef(false);
   const layout = layoutUsedBy(graph, open);
-  const { columns, selfIndex, hasBand, width, height, nodes, groups, paths, asides } = layout;
-  const top = hasBand ? BAND_LABEL_H : 0;
+  const { columns, selfIndex, hasBand, top, width, height, nodes, groups, paths, asides } = layout;
+  const bandStart = selfIndex * COL;
   const pct = (px: number) => `${(px / width) * 100}%`;
   const href = traceabilityHref(graph);
 
@@ -134,7 +139,7 @@ export function UsedBySchematic({ graph, timeZone }: { graph: UsedByGraph; timeZ
           )}
           {columns.map((column, index) => {
             const heading = columnHeading(column);
-            const style = { left: pct(index * COL), top, width: pct(COL), height: HEADER_H - 8 };
+            const style = { left: pct(index * COL), top, width: pct(COL), height: HEADER_H - HEADER_GAP };
             const headerClass = "absolute flex items-end justify-center px-2 text-center body-caption leading-tight text-[var(--color-text-secondary)]";
             if (!stacks(column)) return <span key={`${column.role}:${column.kind}`} className={headerClass} style={style}>{heading}</span>;
             // A column that stacks: its header opens and closes it, like the group square.
@@ -160,7 +165,16 @@ export function UsedBySchematic({ graph, timeZone }: { graph: UsedByGraph; timeZ
             return (
               <NodeBox key={at.key} href={self ? null : nodeHref(node)} label={label} style={{ left: pct(at.x - COL / 2), top: at.y, width: pct(COL), height: NODE_H }}>
                 <Square kind={node.kind} ring={self} />
-                <span className={cn(LABEL_CLASS, "group-hover:underline", self ? "font-medium text-[var(--ink)]" : "text-[var(--color-text-secondary)]")}>{name}</span>
+                <span
+                  className={cn(
+                    LABEL_CLASS,
+                    "group-hover:underline",
+                    hasBand && at.x > bandStart ? "bg-[var(--sea)]" : "bg-[var(--paper)]",
+                    self ? "font-medium text-[var(--ink)]" : "text-[var(--color-text-secondary)]",
+                  )}
+                >
+                  {name}
+                </span>
               </NodeBox>
             );
           })}

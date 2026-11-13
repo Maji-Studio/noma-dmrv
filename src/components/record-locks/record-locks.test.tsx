@@ -290,7 +290,7 @@ function chainOf(downstream: RecordUsedByNode[], extra: Partial<RecordUsedByChai
   return {
     self, upstream: [node("feedstock", "fs-1", "FS-26-001")], downstream,
     edges: downstream.map((to) => ({ from: "productionRun:run-1", to: `${to.kind}:${to.id}`, mass: null })),
-    creditBatches: [], took: {}, ...extra,
+    creditBatches: [], ...extra,
   };
 }
 
@@ -374,6 +374,25 @@ describe("RecordUsedBy", () => {
     render(<RecordUsedBy lock={view("sent", [REMOVAL], [PRODUCT])} record={{ kind: "sample", id: "s-1" }} />);
     expect(screen.getAllByRole("link", { name: "CB-26-003" })).toHaveLength(1);
     expect(screen.queryByRole("link", { name: /^Credit batch CB-26-003/ })).toBeNull();
+  });
+
+  it("on a credit batch's own sheet, starts at the batch with no band and no runs column", () => {
+    const batch = node("creditBatch", "cb-1", "CB-26-003");
+    chainRead.result = {
+      isError: false,
+      isPending: false,
+      data: chainOf([node("removal", "rm-1", "RM-26-003")], {
+        self: batch,
+        upstream: [node("productionRun", "run-1", "PR-26-004")],
+        edges: [{ from: "productionRun:run-1", to: "creditBatch:cb-1", mass: null }, { from: "creditBatch:cb-1", to: "removal:rm-1", mass: null }],
+        creditBatches: [{ id: "cb-1", code: "CB-26-003", name: null, facilityId: FACILITY, startDate: "2026-04-01", endDate: "2026-04-30" }],
+      }),
+    };
+    render(<RecordUsedBy lock={view("sent", [REMOVAL], [PRODUCT])} record={{ kind: "creditBatch", id: "cb-1" }} />);
+    // The band's label is the only link to the batch; this record itself is not a link.
+    expect(screen.queryByRole("link", { name: "CB-26-003" })).toBeNull();
+    expect(screen.queryByRole("link", { name: /PR-26-004/ })).toBeNull();
+    expect(screen.getByRole("link", { name: /RM-26-003/ })).toBeTruthy();
   });
 
   it("lists samples under the chart and keeps users the chain does not reach", () => {
