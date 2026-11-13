@@ -15,18 +15,12 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ExplanationInfo } from "@/components/ui/explanation-info";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useEmissionAllocation } from "@/hooks/use-emission-allocation";
-import { cn } from "@/lib/utils";
 import type { EmissionAllocationInput } from "@/types/emission-allocation";
 import { SECTION_TITLE, sectionHint } from "./allocation-copy";
-import { FlowView } from "./allocation-flow-view";
 import { ModeSwitch } from "./allocation-parts";
 import { buildFocus } from "./allocation-model";
+import { ShareBars } from "./allocation-share-bars";
 import { TableView } from "./allocation-table-view";
-import { PROTO_REMOVAL_ID, scenarioAllocation } from "./allocation-prototype-fixtures";
-import { PrototypeSwitcher, useAllocationPrototype } from "./allocation-prototype";
-import { VariantA } from "./allocation-variant-a";
-import { VariantB } from "./allocation-variant-b";
-import { VariantC } from "./allocation-variant-c";
 
 const VIEWS = ["flow", "table"] as const;
 type AllocationViewMode = (typeof VIEWS)[number];
@@ -38,20 +32,13 @@ export const ALLOCATION_VIEW_PARAM = "allocation";
 const QUERY_OPTIONS = { shallow: true, history: "replace", scroll: false } as const;
 const BODY_SKELETON = "h-320 w-full";
 const EMPTY_ICON_PX = 32;
-/** PROTOTYPE ONLY: the Removal sheet's content width (600px sheet less its 24px sides). */
-const PROTO_SHEET_W = "max-w-[552px]";
 
 export function EmissionAllocationSection(props: EmissionAllocationInput) {
   const headingId = useId();
-  const proto = useAllocationPrototype();
-  const fetchInput: EmissionAllocationInput = "creditBatchId" in props ? { creditBatchId: props.creditBatchId } : { removalId: props.removalId };
-  const query = useEmissionAllocation(fetchInput);
+  const input: EmissionAllocationInput = "creditBatchId" in props ? { creditBatchId: props.creditBatchId } : { removalId: props.removalId };
+  const query = useEmissionAllocation(input);
   const [view, setView] = useQueryState(ALLOCATION_VIEW_PARAM, parseAsStringLiteral(VIEWS).withDefault("flow").withOptions(QUERY_OPTIONS));
-  // PROTOTYPE ONLY: a scenario swaps the fetched allocation for a fixture around the page's batch.
-  const pageBatchId = "creditBatchId" in fetchInput ? fetchInput.creditBatchId : null;
-  const fixture = proto.scenario && pageBatchId ? scenarioAllocation(proto.scenario, pageBatchId, query.data?.batches.find((batch) => batch.id === pageBatchId)?.code) : null;
-  const input: EmissionAllocationInput = fixture && proto.asRemoval ? { removalId: PROTO_REMOVAL_ID } : fetchInput;
-  const allocation = fixture ?? query.data;
+  const allocation = query.data;
   const focus = allocation ? buildFocus(allocation, input) : null;
   const surface = "creditBatchId" in input ? "batch" : "removal";
 
@@ -83,18 +70,16 @@ export function EmissionAllocationSection(props: EmissionAllocationInput) {
       />
     );
   } else {
-    const Variant = proto.variant === "a" ? VariantA : proto.variant === "b" ? VariantB : proto.variant === "c" ? VariantC : FlowView;
     body =
       view === "table" ? (
         <TableView key={focus.owner.key} allocation={allocation} focus={focus} />
       ) : (
-        <Variant key={`${proto.variant}-${proto.scenario}-${focus.owner.key}`} allocation={allocation} focus={focus} />
+        <ShareBars key={focus.owner.key} allocation={allocation} focus={focus} />
       );
   }
 
   return (
-    <section aria-labelledby={headingId} data-testid="emission-allocation" className={cn("flex min-w-0 flex-col gap-16", proto.asRemoval && PROTO_SHEET_W)}>
-      <PrototypeSwitcher proto={proto} />
+    <section aria-labelledby={headingId} data-testid="emission-allocation" className="flex min-w-0 flex-col gap-16">
       <div className="flex flex-wrap items-center justify-between gap-12">
         <span className="inline-flex items-center gap-6">
           <h2 id={headingId} className="title-heading-3">{SECTION_TITLE}</h2>

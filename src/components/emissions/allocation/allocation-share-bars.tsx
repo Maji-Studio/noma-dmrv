@@ -1,7 +1,7 @@
 /**
- * PROTOTYPE ONLY. Variant B, "Share bars": no tabs, no Sankey. One row per
- * quantity, all at once: a 100% bar split by who carries it (this page lit,
- * other batches or Removals quiet, Not yet allocated hatched) and this page's
+ * The Allocation Flow view, "Share bars": one row per quantity, all at once.
+ * Each row is a 100% bar split by who carries it (this page lit, other
+ * batches or Removals quiet, Not yet allocated hatched) with this page's
  * figure and share at the right. A row opens its records in place.
  */
 "use client";
@@ -12,12 +12,15 @@ import { HATCH_BACKGROUND, LIT_FILL, LIT_INK, START_FILL, START_STROKE } from "@
 import { useMeasuredWidth } from "@/hooks/use-measured-width";
 import { cn } from "@/lib/utils";
 import type { EmissionAllocation } from "@/types/emission-allocation";
-import { visibleStreams, type Stream, type StreamKey } from "./allocation-flow-graph";
 import { formatValue } from "./allocation-format";
+import { HintSummary } from "./allocation-hint";
 import { batchCodesOf, type Focus } from "./allocation-model";
 import { FAINT, MUTED } from "./allocation-parts";
-import { HintSummary, LIT_BG, ROW_LABEL, RecordList, streamSummary, type Slice, type StreamSummary } from "./allocation-variant-shared";
+import { RecordList } from "./allocation-record-list";
+import { streamSummary, type Slice, type StreamSummary } from "./allocation-share-summary";
+import { visibleStreams, type Stream, type StreamKey } from "./allocation-streams";
 
+const LIT_BG = "color-mix(in srgb, var(--acc-dist) 18%, var(--paper))";
 const WIDE_FROM_PX = 720;
 const LABEL_COL_PX = 176;
 const FIGURE_COL_PX = 176;
@@ -94,7 +97,7 @@ function ShareRow({ stream, summary, focus, codes, wide, width, open, onToggle }
   const label = (
     <span className="inline-flex min-w-0 items-center gap-6">
       {!empty && <CaretRightIcon size={CARET_PX} aria-hidden className={cn("shrink-0 transition-transform", FAINT, open && "rotate-90")} />}
-      <span className="body-small font-medium">{ROW_LABEL[stream.key]}</span>
+      <span className="body-small font-medium">{stream.label}</span>
     </span>
   );
   const bar = empty ? <span className={cn("body-small", MUTED)}>No figures recorded</span> : <ShareBar summary={summary} focus={focus} barPx={barPx} />;
@@ -129,12 +132,12 @@ function ShareRow({ stream, summary, focus, codes, wide, width, open, onToggle }
       {empty ? (
         <div className="flex min-h-44 items-center py-12">{content}</div>
       ) : (
-        <button type="button" aria-expanded={open} onClick={onToggle} aria-label={`${ROW_LABEL[stream.key]}: ${figure}`} className="flex min-h-44 w-full cursor-pointer items-center py-12 text-left outline-none hover:bg-[var(--row-hover-bg-solid)] focus-visible:outline-[1.5px] focus-visible:outline-offset-2 focus-visible:outline-[var(--color-interaction)]">
+        <button type="button" aria-expanded={open} onClick={onToggle} aria-label={`${stream.label}: ${figure}`} className="flex min-h-44 w-full cursor-pointer items-center py-12 text-left outline-none hover:bg-[var(--row-hover-bg-solid)] focus-visible:outline-[1.5px] focus-visible:outline-offset-2 focus-visible:outline-[var(--color-interaction)]">
           {content}
         </button>
       )}
       {open && !empty && (
-        <div className={cn("pb-16", wide && "pl-[192px]")}>
+        <div className="pb-16" style={wide ? { paddingLeft: LABEL_COL_PX + COL_GAP_PX } : undefined}>
           <RecordList records={records} stream={stream} focus={focus} codes={codes} />
         </div>
       )}
@@ -142,7 +145,7 @@ function ShareRow({ stream, summary, focus, codes, wide, width, open, onToggle }
   );
 }
 
-export function VariantB({ allocation, focus }: { allocation: EmissionAllocation; focus: Focus }) {
+export function ShareBars({ allocation, focus }: { allocation: EmissionAllocation; focus: Focus }) {
   const [open, setOpen] = useState<ReadonlySet<StreamKey>>(new Set());
   const [width, measure] = useMeasuredWidth();
   const codes = batchCodesOf(allocation);
@@ -155,7 +158,7 @@ export function VariantB({ allocation, focus }: { allocation: EmissionAllocation
       return next;
     });
   return (
-    <div data-allocation-variant="b" className="flex min-w-0 flex-col border border-[var(--color-border-secondary)] bg-[var(--paper)] px-16 py-4 sm:px-24">
+    <div data-testid="allocation-share-bars" className="flex min-w-0 flex-col border border-[var(--color-border-secondary)] bg-[var(--paper)] px-16 py-4 sm:px-24">
       <div ref={measure} className="flex w-full min-w-0 flex-col">
         {visibleStreams(allocation.records).map((stream) => (
           <ShareRow
