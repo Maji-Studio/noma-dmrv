@@ -3,8 +3,9 @@
 /**
  * The Removals tab: the detailed bar (each Removal split into its
  * applications, then the applied biochar in no Removal), the applications by
- * delivery with matching swatches, and the GHG Statement once one includes the
- * batch. Every Removal mention links to the Removal; nothing here hovers.
+ * delivery with matching swatches (each row opens its application), and the
+ * GHG Statement once one includes the batch. Every Removal mention links to
+ * the Removal; nothing here hovers.
  */
 import { recordHref } from "@/lib/record-links";
 import Link from "next/link";
@@ -41,10 +42,13 @@ function DeliveryList({ model }: { model: CreditBatchPageModel }) {
             className={cn("grid grid-cols-[12px_minmax(0,1fr)_auto] gap-x-12 gap-y-4 py-12 sm:grid-cols-[12px_minmax(0,1fr)_auto_200px] sm:items-center sm:gap-x-16", ROW_RULE)}
           >
             <SegmentSwatch segment={segment} className="mt-4 sm:mt-0" />
-            <span className="flex min-w-0 flex-col">
-              <span className="body-medium font-medium break-words">{sliceLabel(slice)}</span>
+            <Link
+              href={recordHref("application", slice.applicationId, { facilityId: batch.facilityId })}
+              className={cn("group flex min-h-44 min-w-0 flex-col justify-center", FOCUS_RING)}
+            >
+              <span className="body-medium font-medium break-words underline-offset-2 group-hover:underline">{sliceLabel(slice)}</span>
               <span className={cn("body-caption", MUTED_TEXT)}>{sliceMeta(slice)}</span>
-            </span>
+            </Link>
             <span className="body-medium tabular-nums">{tonnesFromKg(slice.dryKg)}</span>
             <span className="col-start-2 col-end-4 sm:col-auto">
               {removal ? (
