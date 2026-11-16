@@ -13,7 +13,7 @@ beforeEach(() => mocks.getRecordUsedByChain.mockReset().mockResolvedValue(null))
 
 describe("readRecordUsedByChain", () => {
   it.each(RECORD_USED_BY_KINDS)("reads %s with the caller's context and a canonical id", async kind => {
-    const chain = { self: { kind, id: UPPER_ID.toLowerCase() }, upstream: [], downstream: [], edges: [], creditBatches: [] };
+    const chain = { self: { kind, id: UPPER_ID.toLowerCase() }, downstream: [], edges: [], creditBatches: [] };
     mocks.getRecordUsedByChain.mockResolvedValue(chain);
     await expect(readRecordUsedByChain(CTX, { kind, id: UPPER_ID })).resolves.toBe(chain);
     expect(mocks.getRecordUsedByChain).toHaveBeenCalledWith(CTX, kind, UPPER_ID.toLowerCase());

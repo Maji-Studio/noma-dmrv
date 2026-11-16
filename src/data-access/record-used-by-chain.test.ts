@@ -12,11 +12,8 @@ import { deleteOutputDeliveryFixtures, deleteOutputProductFixtures, insertOutput
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "../../tests/helpers/test-org";
 import { getRecordUsedByChain } from "./record-used-by-chain";
 
-const FEEDSTOCK_WET_KG = 1_000;
 const PRODUCT_WET_KG = 300;
 const PRODUCT_DRY_KG = 285;
-const APPLICATION_WET_KG = 200;
-const APPLICATION_DRY_KG = 190;
 const RESIDUAL_WET_KG = 0.001;
 const RUN_START = new Date("2026-06-12T23:30:00Z");
 const RUN_END = new Date("2026-06-14T12:00:00Z");
@@ -57,10 +54,11 @@ describe("getRecordUsedByChain (real database)", () => {
         expect(Number(allocation.wetMassKg)).toBe(RESIDUAL_WET_KG);
         const product = await getRecordUsedByChain(ctx, "biocharProduct", f.productId);
         expect(product!.downstream).toContainEqual(expect.objectContaining({ kind: "delivery", id: delivery.id }));
-        expect(edge(product!, "biocharProduct", f.productId, "delivery", delivery.id)?.mass).toEqual({ kg: RESIDUAL_WET_KG, basis: "wet" });
+        expect(edge(product!, "biocharProduct", f.productId, "delivery", delivery.id)).toBeTruthy();
+        expect(product!.creditBatches.map(batch => batch.id)).toEqual([f.batchId]);
         const chain = await getRecordUsedByChain(ctx, "delivery", delivery.id);
-        expect(chain!.upstream).toContainEqual(expect.objectContaining({ kind: "biocharProduct", id: f.productId }));
-        expect(edge(chain!, "biocharProduct", f.productId, "delivery", delivery.id)?.mass).toEqual({ kg: RESIDUAL_WET_KG, basis: "wet" });
+        expect(chain!.self).toMatchObject({ kind: "delivery", id: delivery.id });
+        expect(edge(chain!, "biocharProduct", f.productId, "delivery", delivery.id)).toBeUndefined();
       } finally {
         await deleteOutputDeliveryFixtures(db, and(eq(deliveries.organizationId, TEST_ORG_ID), eq(deliveries.id, delivery.id)));
       }
@@ -82,24 +80,25 @@ describe("getRecordUsedByChain (real database)", () => {
     });
   });
 
-  it("reads a run's full chain with attributed edge masses, cohort Samples and upstream feedstock", async () => {
+  it("reads a run's full downstream chain with cohort Samples and endpoint-only links", async () => {
     await withChainFixture(async f => {
       const chain = await getRecordUsedByChain(ctx, "productionRun", f.productionRunId);
       expect(chain).not.toBeNull();
       expect(chain!.self).toMatchObject({ kind: "productionRun", id: f.productionRunId, facilityId: f.facilityId, at: "2026-06-13", calendarDay: true });
-      expect(chain!.upstream).toEqual([expect.objectContaining({ kind: "feedstock", id: f.feedstockId, calendarDay: true })]);
+      expect(chain).not.toHaveProperty("upstream");
       expect(chain!.downstream.map(node => [node.kind, node.id])).toEqual([
         ["biocharProduct", f.productId], ["order", f.orderId], ["delivery", f.deliveryId],
         ["application", f.applicationId], ["removal", f.removalId], ["sample", f.sampleId], ["creditBatch", f.batchId],
       ]);
-      expect(edge(chain!, "feedstock", f.feedstockId, "productionRun", f.productionRunId)?.mass).toEqual({ kg: FEEDSTOCK_WET_KG, basis: "wet" });
-      expect(edge(chain!, "productionRun", f.productionRunId, "biocharProduct", f.productId)?.mass).toEqual({ kg: PRODUCT_DRY_KG, basis: "dryBiochar" });
-      expect(edge(chain!, "biocharProduct", f.productId, "delivery", f.deliveryId)?.mass).toEqual({ kg: PRODUCT_WET_KG, basis: "wet" });
-      expect(edge(chain!, "order", f.orderId, "delivery", f.deliveryId)?.mass).toEqual({ kg: PRODUCT_WET_KG, basis: "wet" });
-      expect(edge(chain!, "delivery", f.deliveryId, "application", f.applicationId)?.mass).toEqual({ kg: APPLICATION_WET_KG, basis: "wet" });
-      expect(edge(chain!, "application", f.applicationId, "removal", f.removalId)?.mass).toEqual({ kg: APPLICATION_DRY_KG, basis: "dryBiochar" });
-      expect(edge(chain!, "productionRun", f.productionRunId, "creditBatch", f.batchId)?.mass).toBeNull();
-      expect(edge(chain!, "sample", f.sampleId, "removal", f.removalId)?.mass).toBeNull();
+      expect(edge(chain!, "feedstock", f.feedstockId, "productionRun", f.productionRunId)).toBeUndefined();
+      expect(edge(chain!, "productionRun", f.productionRunId, "biocharProduct", f.productId)).toBeTruthy();
+      expect(edge(chain!, "biocharProduct", f.productId, "delivery", f.deliveryId)).toBeTruthy();
+      expect(edge(chain!, "order", f.orderId, "delivery", f.deliveryId)).toBeTruthy();
+      expect(edge(chain!, "delivery", f.deliveryId, "application", f.applicationId)).toBeTruthy();
+      expect(edge(chain!, "application", f.applicationId, "removal", f.removalId)).toBeTruthy();
+      expect(edge(chain!, "productionRun", f.productionRunId, "creditBatch", f.batchId)).toBeTruthy();
+      expect(edge(chain!, "sample", f.sampleId, "removal", f.removalId)).toBeTruthy();
+      for (const link of chain!.edges) expect(Object.keys(link).sort()).toEqual(["from", "to"]);
       expect(chain!.creditBatches).toEqual([expect.objectContaining({ id: f.batchId, facilityId: f.facilityId, startDate: "2026-06-01", endDate: "2026-06-30" })]);
       const keys = chain!.downstream.map(node => usedByNodeKey(node.kind, node.id));
       expect(new Set(keys).size).toBe(keys.length);
@@ -110,7 +109,6 @@ describe("getRecordUsedByChain (real database)", () => {
   it("follows a feedstock through the whole chain in custody order", async () => {
     await withChainFixture(async f => {
       const chain = await getRecordUsedByChain(ctx, "feedstock", f.feedstockId);
-      expect(chain!.upstream).toEqual([]);
       expect(chain!.downstream.map(node => node.kind)).toEqual([
         "productionRun", "biocharProduct", "order", "delivery", "application", "removal", "sample", "creditBatch",
       ]);
@@ -145,13 +143,13 @@ describe("getRecordUsedByChain (real database)", () => {
     });
   });
 
-  it("keeps a delivery's own order upstream only, connected to the delivery", async () => {
+  it("excludes a delivery's own order and upstream links from the returned chain", async () => {
     await withChainFixture(async f => {
       const chain = await getRecordUsedByChain(ctx, "delivery", f.deliveryId);
-      expect(chain!.upstream.some(node => node.kind === "order" && node.id === f.orderId)).toBe(true);
       expect(chain!.downstream.some(node => node.kind === "order")).toBe(false);
-      expect(edge(chain!, "order", f.orderId, "delivery", f.deliveryId)).toBeTruthy();
+      expect(edge(chain!, "order", f.orderId, "delivery", f.deliveryId)).toBeUndefined();
       expect(chain!.downstream.some(node => node.kind === "application" && node.id === f.applicationId)).toBe(true);
+      expect(edge(chain!, "delivery", f.deliveryId, "application", f.applicationId)).toBeTruthy();
     });
   });
 
@@ -177,13 +175,15 @@ describe("getRecordUsedByChain (real database)", () => {
       await db.update(creditBatches).set({ archivedAt: new Date(), name: "Named cohort" })
         .where(and(eq(creditBatches.organizationId, TEST_ORG_ID), eq(creditBatches.id, f.batchId)));
       const sample = await getRecordUsedByChain(ctx, "sample", f.sampleId);
-      expect(sample!.upstream).toEqual([expect.objectContaining({ kind: "creditBatch", id: f.batchId, name: "Named cohort", calendarDay: true })]);
       expect(sample!.creditBatches).toEqual([expect.objectContaining({ id: f.batchId, name: "Named cohort" })]);
       const batch = await getRecordUsedByChain(ctx, "creditBatch", f.batchId);
-      expect(batch!.upstream.map(node => node.id)).toEqual([f.productionRunId]);
+      expect(batch!.self).toMatchObject({ kind: "creditBatch", id: f.batchId, name: "Named cohort", calendarDay: true });
+      expect(batch!.downstream).toContainEqual(expect.objectContaining({ kind: "sample", id: f.sampleId }));
+      expect(edge(batch!, "creditBatch", f.batchId, "sample", f.sampleId)).toBeTruthy();
       expect(batch!.creditBatches.map(row => row.id)).toEqual([f.batchId]);
       const removal = await getRecordUsedByChain(ctx, "removal", f.removalId);
-      expect(removal!.upstream.map(node => node.id)).toEqual([f.applicationId]);
+      expect(removal!.downstream).toEqual([]);
+      expect(removal!.edges).toEqual([]);
       expect(removal!.creditBatches.map(row => row.id)).toEqual([f.batchId]);
     });
   });
@@ -232,7 +232,8 @@ describe("getRecordUsedByChain (real database)", () => {
         const chain = await getRecordUsedByChain(ctx, "productionRun", f.productionRunId);
         expect(chain!.downstream.some(node => node.kind === "delivery")).toBe(false);
         const delivery = await getRecordUsedByChain(ctx, "delivery", f.deliveryId);
-        expect(delivery!.upstream.map(node => node.kind)).toEqual(["order"]);
+        expect(delivery!.downstream.some(node => node.kind === "order")).toBe(false);
+        expect(delivery!.edges.some(item => item.to === usedByNodeKey("delivery", f.deliveryId))).toBe(false);
       } finally {
         await db.delete(binMovements).where(and(eq(binMovements.organizationId, TEST_ORG_ID), eq(binMovements.id, reversal.id)));
       }

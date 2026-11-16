@@ -30,7 +30,7 @@ describe("authenticated read client", () => {
   it("posts chain input with cancellation and preserves calendar dates", async () => {
     const chain = { self: { kind: "productionRun", id: RUN_ID, code: "PR-1", name: null,
       facilityId: FACILITY_ID, at: "2026-06-13", calendarDay: true },
-      upstream: [], downstream: [], edges: [], creditBatches: [] };
+      downstream: [], edges: [], creditBatches: [] };
     const fetchMock = vi.fn().mockResolvedValue(Response.json({ success: true, data: chain }));
     vi.stubGlobal("fetch", fetchMock);
     const controller = new AbortController();

@@ -30,7 +30,7 @@ export function withUnmatchedUsers(chain: RecordUsedByChain, usedBy: RecordLockL
       kind: link.kind, id: link.id, code: link.label ?? recordLockLinkTitle(link), name: null,
       facilityId: link.facilityId, at: link.period?.completedOn ?? null, calendarDay: true,
     }));
-  const edges = extra.map((node) => ({ from: selfKey, to: keyOf(node), mass: null }));
+  const edges = extra.map((node) => ({ from: selfKey, to: keyOf(node) }));
   return {
     self: chain.self,
     downstream: [...chain.downstream, ...extra],

@@ -291,8 +291,8 @@ const BATCH = { id: "cb-1", code: "CB-26-003", name: null, facilityId: FACILITY,
 function chainOf(downstream: RecordUsedByNode[], extra: Partial<RecordUsedByChain> = {}): RecordUsedByChain {
   const self = node("productionRun", "run-1", "PR-26-004");
   return {
-    self, upstream: [], downstream,
-    edges: downstream.map((to) => ({ from: "productionRun:run-1", to: `${to.kind}:${to.id}`, mass: null })),
+    self, downstream,
+    edges: downstream.map((to) => ({ from: "productionRun:run-1", to: `${to.kind}:${to.id}` })),
     creditBatches: [], ...extra,
   };
 }
@@ -331,9 +331,9 @@ describe("RecordUsedBy", () => {
     const removal = node("removal", "rm-1", "RM-26-003");
     answer(chainOf([product, node("delivery", "dl-1", "DL-26-003"), removal], {
       edges: [
-        { from: "productionRun:run-1", to: "biocharProduct:product-1", mass: null },
-        { from: "biocharProduct:product-1", to: "delivery:dl-1", mass: null },
-        { from: "delivery:dl-1", to: "removal:rm-1", mass: null },
+        { from: "productionRun:run-1", to: "biocharProduct:product-1" },
+        { from: "biocharProduct:product-1", to: "delivery:dl-1" },
+        { from: "delivery:dl-1", to: "removal:rm-1" },
       ],
       creditBatches: [BATCH],
     }));
@@ -377,7 +377,7 @@ describe("RecordUsedBy", () => {
   it("names a Sample's credit batch on the line only, and leaves out samples it reached through the batch", () => {
     answer(chainOf([node("removal", "rm-1", "RM-26-003"), node("sample", "s-2", "SAM-26-008")], {
       self: node("sample", "s-1", "SAM-26-007"),
-      edges: [{ from: "sample:s-1", to: "removal:rm-1", mass: null }, { from: "creditBatch:cb-1", to: "sample:s-2", mass: null }],
+      edges: [{ from: "sample:s-1", to: "removal:rm-1" }, { from: "creditBatch:cb-1", to: "sample:s-2" }],
       creditBatches: [BATCH],
     }));
     render(<RecordUsedBy lock={view("sent", [REMOVAL], [PRODUCT])} record={{ kind: "sample", id: "s-1" }} />);
@@ -389,7 +389,7 @@ describe("RecordUsedBy", () => {
   it("on a credit batch's own sheet, shows its samples and Removal and never names the batch again", () => {
     answer(chainOf([node("sample", "s-1", "SAM-26-007"), node("removal", "rm-1", "RM-26-003")], {
       self: node("creditBatch", "cb-1", "CB-26-003"),
-      edges: [{ from: "creditBatch:cb-1", to: "sample:s-1", mass: null }, { from: "creditBatch:cb-1", to: "removal:rm-1", mass: null }],
+      edges: [{ from: "creditBatch:cb-1", to: "sample:s-1" }, { from: "creditBatch:cb-1", to: "removal:rm-1" }],
       creditBatches: [BATCH],
     }));
     render(<RecordUsedBy lock={view("sent", [REMOVAL], [PRODUCT])} record={{ kind: "creditBatch", id: "cb-1" }} />);

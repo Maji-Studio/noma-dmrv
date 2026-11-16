@@ -67,6 +67,7 @@ vi.mock("@/lib/log", () => ({
 }));
 
 import type { DomainIssue } from "@/lib/domain-errors";
+import type { RecordUsedByChain } from "@/lib/record-used-by-chain";
 import { SafeError } from "@/lib/errors";
 import { DomainError } from "@/lib/domain-errors";
 import { POST as activitySummaryRoute } from "./credit-batches/activity/summary/route";
@@ -401,6 +402,20 @@ describe("private read route: record used by chain", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.resolveOrgContext.mockResolvedValue({ ok: true, ctx: ORG_CONTEXT });
+  });
+
+  it("returns the downstream chain with endpoint-only links", async () => {
+    const self = { kind: "order" as const, id: FACILITY_ID, code: "OR-1", name: null,
+      facilityId: FACILITY_ID, at: "2026-06-13", calendarDay: true };
+    const delivery = { ...self, kind: "delivery" as const, id: FOREIGN_FACILITY_ID, code: "DL-1" };
+    const chain: RecordUsedByChain = { self, downstream: [delivery],
+      edges: [{ from: `order:${self.id}`, to: `delivery:${delivery.id}` }], creditBatches: [] };
+    mocks.getRecordUsedByChain.mockResolvedValueOnce(chain);
+
+    const response = await recordUsedByChainRoute(post("/api/reads/record-used-by-chain", { kind: self.kind, id: self.id }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ success: true, data: chain });
   });
 
   it("passes only the caller's context and validated record to data access", async () => {

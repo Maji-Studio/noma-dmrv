@@ -46,13 +46,12 @@ export async function getRecordUsedByChain(ctx: OrgContext, kind: RecordUsedByKi
     frontier = next.filter(node => node.kind !== "order");
   }
   const upstreamEdges = await readUsedByUpstreamEdges(ctx, kind, self.id);
-  const upstreamNodes = await readEdgeNodes(ctx, upstreamEdges, new Map([[selfKey, self]]));
-  const upstream = orderUsedByNodes(upstreamNodes);
+  const upstream = await readEdgeNodes(ctx, upstreamEdges, new Map([[selfKey, self]]));
   // A delivery's own order is upstream; its downstream read also names it as context.
   const upstreamKeys = new Set(upstream.map(node => usedByNodeKey(node.kind, node.id)));
   const onlyDownstream = downstream.filter(node => !upstreamKeys.has(usedByNodeKey(node.kind, node.id)));
-  const allNodes = [self, ...upstream, ...onlyDownstream];
-  const normalizedEdges = normalizeUsedByEdges([...upstreamEdges, ...edges], allNodes);
-  return { self, upstream, downstream: orderUsedByNodes(onlyDownstream), edges: normalizedEdges,
+  // Upstream inputs support batch lookup and filtering only, not the returned graph.
+  const normalizedEdges = normalizeUsedByEdges(edges, [self, ...onlyDownstream]);
+  return { self, downstream: orderUsedByNodes(onlyDownstream), edges: normalizedEdges,
     creditBatches: await readUsedByBatches(ctx, self, upstream, onlyDownstream) };
 }

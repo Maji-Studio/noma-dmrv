@@ -3,12 +3,6 @@ export const RECORD_USED_BY_KINDS = [
 ] as const;
 export type RecordUsedByKind = (typeof RECORD_USED_BY_KINDS)[number];
 
-/** Mass that moved along a link: wet as weighed, or the run's dry biochar. */
-export interface RecordUsedByMass {
-  kg: number;
-  basis: "wet" | "dryBiochar";
-}
-
 export interface RecordUsedByNode {
   kind: RecordUsedByKind;
   id: string;
@@ -25,7 +19,6 @@ export interface RecordUsedByNode {
 export interface RecordUsedByEdge {
   from: string;
   to: string;
-  mass: RecordUsedByMass | null;
 }
 
 export interface RecordUsedByBatch {
@@ -39,8 +32,6 @@ export interface RecordUsedByBatch {
 
 export interface RecordUsedByChain {
   self: RecordUsedByNode;
-  /** What the record came from, one step back. */
-  upstream: RecordUsedByNode[];
   /** Every record its material or numbers reached, in custody order. */
   downstream: RecordUsedByNode[];
   edges: RecordUsedByEdge[];
