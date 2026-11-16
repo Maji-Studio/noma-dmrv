@@ -281,17 +281,24 @@ describe("returned by Isometric", () => {
   });
 });
 
-function node(kind: RecordUsedByNode["kind"], id: string, code: string): RecordUsedByNode {
-  return { kind, id, code, name: null, facilityId: FACILITY, at: "2026-04-20", calendarDay: true };
+function node(kind: RecordUsedByNode["kind"], id: string, code: string, at: string | null = "2026-04-20"): RecordUsedByNode {
+  return { kind, id, code, name: null, facilityId: FACILITY, at, calendarDay: true };
 }
 
+const BATCH = { id: "cb-1", code: "CB-26-003", name: null, facilityId: FACILITY, startDate: "2026-04-01", endDate: "2026-04-30" };
+
+/** A production run's chain; every downstream record links straight from it unless `edges` says otherwise. */
 function chainOf(downstream: RecordUsedByNode[], extra: Partial<RecordUsedByChain> = {}): RecordUsedByChain {
   const self = node("productionRun", "run-1", "PR-26-004");
   return {
-    self, upstream: [node("feedstock", "fs-1", "FS-26-001")], downstream,
+    self, upstream: [], downstream,
     edges: downstream.map((to) => ({ from: "productionRun:run-1", to: `${to.kind}:${to.id}`, mass: null })),
     creditBatches: [], ...extra,
   };
+}
+
+function answer(data: RecordUsedByChain | null) {
+  chainRead.result = { isError: false, isPending: false, data };
 }
 
 const RECORD = { kind: "productionRun", id: "run-1" } as const;
@@ -319,98 +326,96 @@ describe("RecordUsedBy", () => {
     expect(screen.getByText("Feedstock batches (12)")).toBeTruthy();
   });
 
-  it("draws the chain: this record ringed, what used it linked, the credit batch as a band", () => {
-    chainRead.result = {
-      isError: false,
-      isPending: false,
-      data: chainOf([node("biocharProduct", "product-1", "BP-26-021")], {
-        creditBatches: [{ id: "cb-1", code: "CB-26-003", name: null, facilityId: FACILITY, startDate: "2026-04-01", endDate: "2026-04-30" }],
-      }),
-    };
+  it("shows the records that used it directly, then the credit batch and the later Removal on one line", () => {
+    const product = node("biocharProduct", "product-1", "BP-26-021");
+    const removal = node("removal", "rm-1", "RM-26-003");
+    answer(chainOf([product, node("delivery", "dl-1", "DL-26-003"), removal], {
+      edges: [
+        { from: "productionRun:run-1", to: "biocharProduct:product-1", mass: null },
+        { from: "biocharProduct:product-1", to: "delivery:dl-1", mass: null },
+        { from: "delivery:dl-1", to: "removal:rm-1", mass: null },
+      ],
+      creditBatches: [BATCH],
+    }));
     render(<RecordUsedBy lock={view("sent", [REMOVAL], [PRODUCT])} record={RECORD} />);
-    expect(screen.getByRole("figure", { name: "Where this record went" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: /^Biochar product BP-26-021/ }).getAttribute("href"))
+    expect(screen.getByText("Biochar product")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Biochar product BP-26-021, Apr 20" }).getAttribute("href"))
       .toBe(`/biochar-products?facility=${FACILITY}&biocharProduct=product-1`);
-    expect(screen.getByRole("link", { name: "Feedstock intake FS-26-001, Apr 20" }).getAttribute("href")).toContain("feedstock=fs-1");
-    expect(screen.getByLabelText(/Production run PR-26-004.*this record/).getAttribute("href")).toBeNull();
+    // Later steps are not tiles: the delivery is left to Traceability, the Removal sits on the caption line.
+    expect(screen.queryByText("DL-26-003")).toBeNull();
+    expect(screen.getByText("Removal:")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "RM-26-003" })).toBeTruthy();
+    expect(screen.getByText("Credit batch:")).toBeTruthy();
     expect(screen.getByRole("link", { name: "CB-26-003" }).getAttribute("href")).toContain("/credit-batches/cb-1");
-    expect(screen.queryByRole("link", { name: /^Credit batch CB-26-003, / })).toBeNull();
+    const traceability = screen.getByRole("link", { name: "Open in Traceability" }).getAttribute("href");
+    expect(traceability).toContain("cb-1");
+    expect(traceability).toContain("run=run-1");
   });
 
-  it("stacks a column of more than four, opens it, and closes it again from the header and Show less", () => {
-    const orders = ["1", "2", "3", "4", "5"].map((n) => node("order", `o-${n}`, `OR-26-00${n}`));
-    chainRead.result = { isError: false, isPending: false, data: chainOf(orders) };
+  it("shows three of a kind oldest first and folds the rest behind one line that opens and closes", () => {
+    const days = ["2026-04-05", "2026-04-01", "2026-04-03", "2026-04-02", "2026-04-04"];
+    answer(chainOf(days.map((day, index) => node("order", `o-${index}`, `OR-26-00${index}`, day))));
     render(<RecordUsedBy lock={view("inUse", [], [PRODUCT])} record={RECORD} />);
-    expect(screen.queryByText("OR-26-001")).toBeNull();
-    const group = screen.getByRole("button", { name: "Show all 5 orders" });
-    expect(group.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByText("Orders")).toBeTruthy();
+    const tiles = screen.getAllByRole("link", { name: /^Order / }).map((link) => link.getAttribute("aria-label"));
+    expect(tiles).toEqual(["Order OR-26-001, Apr 1", "Order OR-26-003, Apr 2", "Order OR-26-002, Apr 3"]);
+    expect(screen.getByText("and 2 more, Apr 4 to Apr 5")).toBeTruthy();
 
-    fireEvent.click(group);
-    expect(screen.getByText("OR-26-005")).toBeTruthy();
-    const header = screen.getByRole("button", { name: "Orders" });
-    expect(header.getAttribute("aria-expanded")).toBe("true");
+    const toggle = screen.getByRole("button", { name: "Show all" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
+    const list = screen.getByRole("region", { name: "2 more orders" });
+    expect(list.textContent).toContain("OR-26-004");
+    expect(list.textContent).toContain("OR-26-000");
+    expect(screen.getByRole("button", { name: "Show less" }).getAttribute("aria-controls")).toBe(list.id);
 
-    fireEvent.click(header);
-    expect(screen.queryByText("OR-26-001")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Show all 5 orders" }));
-    fireEvent.click(screen.getByRole("button", { name: /Show less/ }));
-    expect(screen.queryByText("OR-26-001")).toBeNull();
-    expect(screen.queryByRole("button", { name: /Show less/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show less" }));
+    expect(screen.queryByRole("region")).toBeNull();
+    expect(screen.queryByText("OR-26-004")).toBeNull();
   });
 
-  it("names a Sample's credit batch in the band only, never as a square", () => {
-    const sample = node("sample", "s-1", "SAM-26-007");
-    chainRead.result = {
-      isError: false,
-      isPending: false,
-      data: chainOf([node("removal", "rm-1", "RM-26-003")], {
-        self: sample,
-        upstream: [node("creditBatch", "cb-1", "CB-26-003")],
-        edges: [{ from: "sample:s-1", to: "removal:rm-1", mass: null }],
-        creditBatches: [{ id: "cb-1", code: "CB-26-003", name: null, facilityId: FACILITY, startDate: "2026-04-01", endDate: "2026-04-30" }],
-      }),
-    };
+  it("names a Sample's credit batch on the line only, and leaves out samples it reached through the batch", () => {
+    answer(chainOf([node("removal", "rm-1", "RM-26-003"), node("sample", "s-2", "SAM-26-008")], {
+      self: node("sample", "s-1", "SAM-26-007"),
+      edges: [{ from: "sample:s-1", to: "removal:rm-1", mass: null }, { from: "creditBatch:cb-1", to: "sample:s-2", mass: null }],
+      creditBatches: [BATCH],
+    }));
     render(<RecordUsedBy lock={view("sent", [REMOVAL], [PRODUCT])} record={{ kind: "sample", id: "s-1" }} />);
     expect(screen.getAllByRole("link", { name: "CB-26-003" })).toHaveLength(1);
-    expect(screen.queryByRole("link", { name: /^Credit batch CB-26-003/ })).toBeNull();
+    expect(screen.getByRole("link", { name: "Removal RM-26-003, Apr 20" })).toBeTruthy();
+    expect(screen.queryByText("SAM-26-008")).toBeNull();
   });
 
-  it("on a credit batch's own sheet, starts at the batch with no band and no runs column", () => {
-    const batch = node("creditBatch", "cb-1", "CB-26-003");
-    chainRead.result = {
-      isError: false,
-      isPending: false,
-      data: chainOf([node("removal", "rm-1", "RM-26-003")], {
-        self: batch,
-        upstream: [node("productionRun", "run-1", "PR-26-004")],
-        edges: [{ from: "productionRun:run-1", to: "creditBatch:cb-1", mass: null }, { from: "creditBatch:cb-1", to: "removal:rm-1", mass: null }],
-        creditBatches: [{ id: "cb-1", code: "CB-26-003", name: null, facilityId: FACILITY, startDate: "2026-04-01", endDate: "2026-04-30" }],
-      }),
-    };
+  it("on a credit batch's own sheet, shows its samples and Removal and never names the batch again", () => {
+    answer(chainOf([node("sample", "s-1", "SAM-26-007"), node("removal", "rm-1", "RM-26-003")], {
+      self: node("creditBatch", "cb-1", "CB-26-003"),
+      edges: [{ from: "creditBatch:cb-1", to: "sample:s-1", mass: null }, { from: "creditBatch:cb-1", to: "removal:rm-1", mass: null }],
+      creditBatches: [BATCH],
+    }));
     render(<RecordUsedBy lock={view("sent", [REMOVAL], [PRODUCT])} record={{ kind: "creditBatch", id: "cb-1" }} />);
-    // The band's label is the only link to the batch; this record itself is not a link.
-    expect(screen.queryByRole("link", { name: "CB-26-003" })).toBeNull();
-    expect(screen.queryByRole("link", { name: /PR-26-004/ })).toBeNull();
-    expect(screen.getByRole("link", { name: /RM-26-003/ })).toBeTruthy();
+    expect(screen.queryByText("Credit batch:")).toBeNull();
+    expect(screen.getByRole("link", { name: "Sample SAM-26-007, Apr 20" }).getAttribute("href")).toContain("sample=s-1");
+    expect(screen.getByRole("link", { name: "Removal RM-26-003, Apr 20" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open in Traceability" }).getAttribute("href")).toContain("cb-1");
   });
 
-  it("lists samples under the chart and keeps users the chain does not reach", () => {
-    chainRead.result = { isError: false, isPending: false, data: chainOf([node("sample", "s-1", "SAM-26-007")]) };
+  it("keeps users the chain does not reach, and drops the Traceability link without a credit batch", () => {
+    answer(chainOf([node("biocharProduct", "product-1", "BP-26-021")]));
     render(<RecordUsedBy lock={view("inUse", [], [PRODUCT, LOSS])} record={RECORD} />);
-    expect(screen.getByRole("link", { name: "SAM-26-007" }).getAttribute("href")).toContain("sample=s-1");
+    expect(screen.getByText("Stock entry")).toBeTruthy();
     expect(screen.getByText("North hopper")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Open in Traceability" })).toBeNull();
   });
 
   it("falls back to the plain link list when the chain read fails", () => {
     chainRead.result = { isError: true, isPending: false, data: undefined };
     render(<RecordUsedBy lock={view("sent", [REMOVAL], [PRODUCT])} record={RECORD} />);
-    expect(screen.queryByRole("figure")).toBeNull();
     expect(screen.getByRole("link", { name: "Biochar product BP-26-021" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Open in Traceability" })).toBeNull();
   });
 
   it("falls back to the plain link list when the chain read finds no record", () => {
-    chainRead.result = { isError: false, isPending: false, data: null };
+    answer(null);
     render(<RecordUsedBy lock={view("sent", [REMOVAL], [PRODUCT])} record={RECORD} />);
     expect(screen.queryByRole("status")).toBeNull();
     expect(screen.getByRole("link", { name: "Biochar product BP-26-021" })).toBeTruthy();

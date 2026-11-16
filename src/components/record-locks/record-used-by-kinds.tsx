@@ -32,8 +32,8 @@ const KIND_META: Record<string, KindMeta> = {
 };
 const OTHER_META: KindMeta = { singular: "Stock entry", plural: "Stock entries", icon: WarehouseIcon, accent: "var(--color-text-tertiary)" };
 
-/** Kinds that hold material or its claim, in custody order; anything else is listed under the chart. */
-export const CUSTODY_KINDS = ["feedstock", "productionRun", "biocharProduct", "order", "delivery", "application", "removal"];
+/** Where the material goes, then what verifies and claims it. Unknown kinds (a stock entry) come last. */
+const STEP_ORDER = ["feedstock", "productionRun", "biocharProduct", "order", "delivery", "application", "sample", "removal"];
 
 export function isKnownKind(kind: string): boolean {
   return kind in KIND_META;
@@ -48,10 +48,10 @@ export function kindHeading(kind: string, count: number): string {
   return count === 1 ? meta.singular : meta.plural;
 }
 
-/** Custody order, then everything else. */
+/** Step order, then everything else. */
 export function kindRank(kind: string): number {
-  const index = CUSTODY_KINDS.indexOf(kind);
-  return index < 0 ? CUSTODY_KINDS.length : index;
+  const index = STEP_ORDER.indexOf(kind);
+  return index < 0 ? STEP_ORDER.length : index;
 }
 
 /** "Oct 22" on the record's facility clock; null when the record has no date. */

@@ -599,12 +599,13 @@ Always use `Button`; never a raw `<button>` with manual styling.
   The Allocation share bars (`allocation-share-bars.tsx`) are the same case: one
   raw `<button>` per quantity row (caret, bar, figure) with the focus ring and at
   least a 44px tall hit area, because the whole row is the click target.
-- **Exception: Used by schematic.** In the read sheets' Used by chart
-  (`record-used-by-schematic.tsx`) a stacking column's header and its group
-  square are raw `<button>`s: they are absolutely positioned chart cells whose
-  size comes from the chart's columns, and `Button`'s type, heights and padding
-  would break the grid. Each keeps the focus ring, `aria-expanded` and a 44px
-  tall hit area. "Show less" under the chart is the shared `TextAction`.
+- **Exception: Used by Show all.** In the read sheets' Used by section
+  (`record-used-by-next-step.tsx`) a kind with more than three records ends in
+  "and 45 more, Apr 8 to Jun 28" with an inline "Show all" / "Show less". It is
+  a raw `<button>` styled as small underlined secondary text, because
+  `TextAction`'s mono uppercase label competed with the section's "Open in
+  Traceability" link (Kenji, 2026-11-16). It keeps the focus ring,
+  `aria-expanded`, `aria-controls` and a 44px tall hit area.
 - **Exception: Removal sheet Records.** The credit batch row in `removal-records.tsx` is a
   full-width disclosure row (date range, dry mass, caret, 44px tall). `Button` has no row
   layout (fixed heights, `whitespace-nowrap`, `label-button` type), so it stays a raw

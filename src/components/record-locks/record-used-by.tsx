@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { SectionLabel } from "@/components/forms/section-label";
 import { DetailSection } from "@/components/ui/detail-panel";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useFacilityClock } from "@/hooks/use-facility-context";
@@ -9,8 +10,8 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 import type { RecordLockLink, RecordLockView } from "@/lib/record-lock-view";
 import type { RecordUsedByKind } from "@/lib/record-used-by-chain";
 import { recordLockLinkHref, recordLockLinkTitle } from "./record-lock-labels";
-import { withUnmatchedUsers } from "./record-used-by-layout";
-import { UsedBySchematic } from "./record-used-by-schematic";
+import { traceabilityHref, withUnmatchedUsers } from "./record-used-by-graph";
+import { TraceabilityLink, UsedByNextStep } from "./record-used-by-next-step";
 
 /** The open record, so "Used by" can read the chain it went into. */
 export interface UsedByRecord {
@@ -18,13 +19,17 @@ export interface UsedByRecord {
   id: string | null | undefined;
 }
 
-/** Lines the section up with the numbered sections' content (24px rail + 12px gap) and drops the hairline they do not have. */
-const ALIGN_WITH_NUMBERED = "[div:has(>section)+&]:pl-36 [div:has(>section)+&]:border-t-0";
-const CHART_PENDING_HEIGHT = "h-96";
+/**
+ * Used by is not a step, so its hairline runs from the rail across the step
+ * numbers and closes them; title and records still start at the numbered
+ * sections' content (24px rail + 12px gap) so the reading line holds.
+ */
+const DIVIDED_AFTER_NUMBERED = "[div:has(>section)+&]:pl-36 pt-24 pb-16";
+const PENDING_HEIGHT = "h-96";
 
 /**
- * "Used by": what the record came from and everything it went into, as a
- * small Flow schematic, each box opening its own sheet. Shown on every read
+ * "Used by": the records that used this one directly, with the credit batch
+ * and Removal it reached, each opening its own sheet. Shown on every read
  * sheet after the record's own sections; nothing renders until the lock read
  * answers. Without a `record` (a storage bin, whose users are bin references)
  * or when the chain read fails, the lock's plain link list stands in.
@@ -35,14 +40,25 @@ export function RecordUsedBy({ lock, record }: { lock: RecordLockView | undefine
   const { timeZone } = useFacilityClock(chain.data?.self.facilityId);
   if (!lock) return null;
 
+  const graph = wantsChain && chain.data ? withUnmatchedUsers(chain.data, lock.usedBy) : null;
+  const href = graph ? traceabilityHref(graph) : null;
+
   let body;
   if (lock.usedBy.length === 0) body = <UsedByNone />;
-  else if (wantsChain && chain.isPending) body = <div role="status" aria-busy="true" aria-label="Loading records"><Skeleton className={`${CHART_PENDING_HEIGHT} w-full`} /></div>;
+  else if (wantsChain && chain.isPending) body = <div role="status" aria-busy="true" aria-label="Loading records"><Skeleton className={`${PENDING_HEIGHT} w-full`} /></div>;
   // A failed read, or a record the chain read cannot find, keeps the plain list.
-  else if (!wantsChain || !chain.data) body = <UsedByLinks usedBy={lock.usedBy} />;
-  else body = <UsedBySchematic graph={withUnmatchedUsers(chain.data, lock.usedBy)} timeZone={timeZone} />;
+  else if (!graph) body = <UsedByLinks usedBy={lock.usedBy} />;
+  else body = <UsedByNextStep graph={graph} timeZone={timeZone} />;
 
-  return <DetailSection title="Used by" className={ALIGN_WITH_NUMBERED}>{body}</DetailSection>;
+  return (
+    <DetailSection className={DIVIDED_AFTER_NUMBERED}>
+      <div className="flex flex-wrap items-center justify-between gap-x-16 gap-y-4">
+        <SectionLabel>Used by</SectionLabel>
+        {href && <TraceabilityLink href={href} />}
+      </div>
+      {body}
+    </DetailSection>
+  );
 }
 
 function UsedByNone() {
