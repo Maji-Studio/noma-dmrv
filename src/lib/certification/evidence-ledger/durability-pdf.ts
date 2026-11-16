@@ -21,7 +21,7 @@
 import { createElement as h, type ReactElement } from "react";
 import { Document, Page, StyleSheet, Text } from "@react-pdf/renderer";
 import { FACILITY_NOT_FOUND, formatCount, MISSING_VALUE, NO_USABLE_REPLICATE, pluralize } from "@/lib/copy-utils";
-import { C, MONO, SANS, Text_, renderLedgerToBuffer, t, theme, v } from "./pdf-theme";
+import { C, MONO, SANS, Text_, mastheadWordmark, renderLedgerToBuffer, t, theme, v } from "./pdf-theme";
 import type {
   DurabilityLedgerModel,
   LedgerBatch,
@@ -155,11 +155,8 @@ function verdict(eligible: boolean | null): {
 }
 
 function masthead(model: DurabilityLedgerModel): ReactElement {
-  const left = v({}, {},
-    v(styles.wordmarkRow, {},
-      t(styles.wordmark, "noma"),
-      t(styles.wordmarkSub, `dMRV · ${model.organizationName.toUpperCase()}`),
-    ),
+  const left = v(styles.mastheadLeft, {},
+    mastheadWordmark(model.organizationName),
     t(styles.eyebrow, "BIOCHAR IN SOIL · MODULE 1.2 · §3 T2 · §8.3.1"),
     h(Text, { style: styles.title }, "200-Year Durability\nEvidence Ledger"),
   );

@@ -45,10 +45,16 @@ export function SetupForm() {
 
   async function onSubmit(data: FirstAdminFormData) {
     setServerError("");
-    const result = await createFirstAdminAction({
-      email: data.email,
-      password: data.password,
-    });
+    let result;
+    try {
+      result = await createFirstAdminAction({
+        email: data.email,
+        password: data.password,
+      });
+    } catch {
+      setServerError(FIRST_ADMIN_SETUP_FALLBACK);
+      return;
+    }
 
     if (!result.success) {
       setServerError(

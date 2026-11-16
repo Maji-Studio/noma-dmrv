@@ -1,12 +1,22 @@
 import { describe, expect, it } from "vitest";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { renderThousandYearDurabilityLedgerPdf } from "./durability-1000-pdf";
+import { theme } from "./pdf-theme";
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 
-describe("renderThousandYearDurabilityLedgerPdf", () => {
-  it("renders the submitted replicate values and product mass into a readable PDF", async () => {
-    const bytes = await renderThousandYearDurabilityLedgerPdf({
-      organizationName: "Example Carbon",
+const PAGE_MARGIN = Number(theme.page.paddingHorizontal);
+// Width of the `noma` wordmark in pt, with a little slack for the gap.
+const WORDMARK_WIDTH = 46;
+const WORDMARK_RIGHT = PAGE_MARGIN + WORDMARK_WIDTH;
+const GEOMETRY_TOLERANCE = 0.5;
+// Distance from the page top (pt): the name lines end above the eyebrow,
+// and the meta column ends above the claim band.
+const MASTHEAD_NAME_BOTTOM = 66;
+const META_COLUMN_BOTTOM = 160;
+
+const buildModel = (organizationName: string) =>
+    ({
+      organizationName,
       memberBatchCodes: "CB-26-001",
       facilityName: "Dark Earth Hub",
       externalProjectId: "prj_TEST",
@@ -66,7 +76,13 @@ describe("renderThousandYearDurabilityLedgerPdf", () => {
           ],
         },
       ],
-    });
+    }) satisfies Parameters<typeof renderThousandYearDurabilityLedgerPdf>[0];
+
+describe("renderThousandYearDurabilityLedgerPdf", () => {
+  it("renders the submitted replicate values and product mass into a readable PDF", async () => {
+    const bytes = await renderThousandYearDurabilityLedgerPdf(
+      buildModel("Example Carbon"),
+    );
 
     expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
     const loadingTask = getDocument({
@@ -109,6 +125,82 @@ describe("renderThousandYearDurabilityLedgerPdf", () => {
       expect(text).toContain("0.010");
       expect(text).toContain("0.775");
       expect(text).toContain("0.790");
+    } finally {
+      await loadingTask.destroy();
+    }
+  });
+
+  it("wraps a 100-character organization name inside the masthead's left column", async () => {
+    const organizationName = "Northern Highlands Biochar and Regenerative Soil Carbon Removal Cooperative of Southern Tanzania Ltd".slice(0, 100);
+    expect(organizationName).toHaveLength(100);
+    const bytes = await renderThousandYearDurabilityLedgerPdf(
+      buildModel(organizationName),
+    );
+    const loadingTask = getDocument({
+      data: new Uint8Array(bytes),
+      verbosity: 0,
+    });
+    const pdf = await loadingTask.promise;
+    try {
+      const page = await pdf.getPage(1);
+      const [, , pageWidth, pageHeight] = page.view;
+      const content = await page.getTextContent();
+      const items = content.items.flatMap((item) =>
+        "str" in item && item.str.trim() !== ""
+          ? [
+              {
+                str: item.str.trim(),
+                x: item.transform[4],
+                right: item.transform[4] + item.width,
+                fromTop: pageHeight - item.transform[5],
+              },
+            ]
+          : [],
+      );
+      const squash = (value: string) => value.replace(/\s+/g, "");
+      const expectedName = squash(`dMRV · ${organizationName.toUpperCase()}`);
+      const mastheadItems = items.filter(
+        (item) => item.fromTop < MASTHEAD_NAME_BOTTOM,
+      );
+      expect(squash(mastheadItems.map((item) => item.str).join(""))).toContain(
+        expectedName,
+      );
+
+      // pdfjs reports the meta column word by word; these are the exact
+      // strings of the four label/value pairs for this fixture.
+      const metaStrings = new Set([
+        "MEMBER", "BATCHES", "CB-26-001", "FACILITY", "Dark Earth Hub",
+        "REGISTRY", "PROJECT", "prj_TEST", "EVIDENCE", "SET", "1",
+        "batches ·", "3", "replicates",
+      ]);
+      const metaItems = items.filter(
+        (item) => item.fromTop < META_COLUMN_BOTTOM && metaStrings.has(item.str),
+      );
+      expect(metaItems.length).toBeGreaterThanOrEqual(metaStrings.size);
+      // Left edge of the meta column beside the name lines (the widest row,
+      // "Evidence set", sits lower and is not next to them).
+      const metaLeft = Math.min(
+        ...metaItems
+          .filter((item) => item.fromTop < MASTHEAD_NAME_BOTTOM)
+          .map((item) => item.x),
+      );
+      for (const item of metaItems) {
+        expect(item.right).toBeLessThanOrEqual(
+          pageWidth - PAGE_MARGIN + GEOMETRY_TOLERANCE,
+        );
+      }
+
+      // Everything else in the masthead's top band is the wordmark and the
+      // wrapped name: none of it may reach the meta column.
+      const nameItems = mastheadItems.filter(
+        (item) => !metaStrings.has(item.str) && item.x > WORDMARK_RIGHT,
+      );
+      expect(nameItems.length).toBeGreaterThan(1);
+      for (const item of nameItems) {
+        expect(item.right).toBeLessThanOrEqual(metaLeft);
+      }
+      // It wrapped: more than one line of name items.
+      expect(new Set(nameItems.map((item) => Math.round(item.fromTop))).size).toBeGreaterThan(1);
     } finally {
       await loadingTask.destroy();
     }
