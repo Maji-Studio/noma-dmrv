@@ -190,7 +190,15 @@ export async function submitRemoval(
     // Preserve the thrown value for safe copy and server-side handling.
     if (typeof error === "object" && error !== null) {
       try {
-        Object.assign(error, failure);
+        for (const [key, value] of Object.entries(failure)) {
+          if (value === undefined) continue;
+          Object.defineProperty(error, key, {
+            value,
+            enumerable: false,
+            configurable: true,
+            writable: true,
+          });
+        }
       } catch {
         // Failure details must not replace the original error.
       }

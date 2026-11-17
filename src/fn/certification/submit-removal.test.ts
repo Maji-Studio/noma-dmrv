@@ -80,6 +80,8 @@ describe("submitRemoval failure details", () => {
       attemptId: expect.any(String),
       failureKind: changed ? CHANGED_SINCE_REVIEW_FAILURE_KIND : null,
     });
+    expect(Object.keys(error as object)).not.toContain("attemptId");
+    expect(Object.keys(error as object)).not.toContain("failureKind");
     expect(error).toBeInstanceOf(SafeError);
     if (changed) expect(error).toBeInstanceOf(InterruptedRemovalChangedError);
     const summary = vi.mocked(appendSyncEvent).mock.calls.find(([, event]) =>
