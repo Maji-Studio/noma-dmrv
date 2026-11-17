@@ -20,7 +20,7 @@ export function deriveRemovalBatchEmissionLines(
   return deriveBatchEmissionLines(facts).map((line) => {
     if (line.blocker?.code === "lineMissingEvidence" && batchId) line = { ...line, blocker: { ...line.blocker, creditBatchId: batchId } };
     const contributionBlocker = contributions?.blockers.find((blocker) => blocker.creditBatchId === batchId && blocker.lineRef?.componentId === line.componentId);
-    if (contributionBlocker) return { ...line, ...(["singleLineMultipleEntries", "lineNeedsReview"].includes(contributionBlocker.code) ? { state: "needsReview" as const } : {}), blocker: { ...contributionBlocker, lineRef: { ...contributionBlocker.lineRef!, displayName: line.displayName } } };
+    if (contributionBlocker) return { ...line, ...(["singleLineMultipleEntries", "lineNeedsReview"].includes(contributionBlocker.code) ? { state: "needsReview" as const } : {}), blocker: contributionBlocker };
     if (line.contract?.scope === "operating" && line.contract.entryPolicy !== "none" && batch?.entries.some((entry) => entry.componentId === line.componentId && batch.entriesWithoutRemoval?.includes(entry.id))) {
       return { ...line, blocker: { code: "entryHasNoRemoval" as const, message: ENTRY_HAS_NO_REMOVAL,
         fixTarget: "emissions" as const, lineRef: { componentId: line.componentId, displayName: line.displayName } } };

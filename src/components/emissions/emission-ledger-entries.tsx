@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { REENTER_EMISSION_ENTRY } from "@/lib/certification/emission-entry-messages";
 import { useState } from "react";
 import { DotsThreeVerticalIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, DropdownMenu } from "@/components/ui";
@@ -42,7 +43,7 @@ export function entryDateText(line: EmissionLine, entry: EmissionEntry): string 
 export function stoppedEntryMessage(entry: EmissionEntry, canEnterAgain: boolean, readOnly = false): string {
   if (readOnly) return "Stopped counting after a template change.";
   if (entry.canConfirm) return "Stopped counting after a template change. It counts again once you confirm it.";
-  if (canEnterAgain) return "Stopped counting after a template change. Enter the values again for the current component.";
+  if (canEnterAgain) return `Stopped counting after a template change. ${REENTER_EMISSION_ENTRY}`;
   return "Stopped counting after a template change. This component takes no manual entries now, so delete the entry.";
 }
 

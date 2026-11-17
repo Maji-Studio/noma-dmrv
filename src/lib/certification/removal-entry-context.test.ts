@@ -1,3 +1,6 @@
+import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
+import { lineFileEvidenceFacts } from "../../../tests/helpers/line-file-evidence-facts";
+import { deriveRemovalEmissionLines } from "./removal-emission-lines";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 import { emissionEntrySourceCandidates } from "@/lib/certification/emission-entry-source-bindings";
@@ -181,4 +184,34 @@ it("requires proof on the claiming Removal even when batch-level proof is locked
   expect(loaded.b2.recordsFileLocked).toBe(true);
   // With the lock cleared and the figure kept, the line requires the file (emission-line-file-evidence.test.ts).
   expect(result!.batchFacts.b2.automaticFigures["run-electricity"]).toEqual({ magnitude: "10", unit: "kWh" });
+});
+
+it.each(["current", "renamed", "removed"])("builds named contribution blockers from the %s line definition", async (state) => {
+  const { observation, batch, template } = lineFileEvidenceFacts();
+  const previous = { ...facility.templatesById.t1!.observation!, ...observation };
+  const current = structuredClone(previous);
+  const expectedName = state === "renamed" ? "Renamed energy" : "Energy";
+  if (state === "renamed") template.groups[0].components[0].display_name = expectedName;
+  if (state === "removed") {
+    current.definition.groups = [];
+    template.groups = [];
+  }
+  const stored = {
+    ...facts().b1.entries[0], componentId: "component", observationId: "earlier-observation", counts: false,
+  };
+  const batchFacts = {
+    b1: { ...batch, entries: [stored], contenders: facts().b1.contenders,
+      previousObservations: new Map([["earlier-observation", previous]]) },
+  };
+  const result = await loadRemovalEntryContext(makeTestOrgContext(), scope, { batchFacts }, {
+    templatesById: { t1: { observation: current, template } },
+  } as unknown as FacilityCertifierFacts);
+  expect(result?.contributions.blockers).toEqual([expect.objectContaining({
+    code: "lineNeedsReview", creditBatchId: "b1", fixTarget: "emissions",
+    lineRef: { componentId: "component", displayName: expectedName },
+  })]);
+  const { emissionLinesByBatchId } = deriveRemovalEmissionLines({
+    b1: { ...current, definition: normalizeTemplateDefinition(template), ...batchFacts.b1, problems: [], enrichmentComplete: true },
+  });
+  expect(emissionLinesByBatchId.b1[0].displayName).toBe(result?.contributions.blockers[0].lineRef?.displayName);
 });

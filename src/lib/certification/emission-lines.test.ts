@@ -1,3 +1,4 @@
+import { ENTRY_FILE_MISSING_INSTRUCTION } from "@/lib/certification/emission-entry-messages";
 import { deriveEmissionEntryFacts } from "./emission-entry-facts";
 import { ENTRY_FILE_CASES } from "./emission-entry-evidence-test-fixtures";
 import { buildCreditBatchOpenItems, openItemText } from "@/lib/credit-batches/open-items";
@@ -103,7 +104,7 @@ it.each(["single-with-automatic-source", "foreign-automatic-source", "disallowed
 
 it.each([
   "Confirm this entry for the changed template component.",
-  "Enter the values again for the current template component.",
+  "Enter the values again for the current component.",
 ])("keeps stale entries visible with the action: %s", (reason) => {
   const f = facts();
   f.entries = [entry(f, { counts: false, reason })];
@@ -256,7 +257,7 @@ it("separates missing-file instructions without changing the blocker message", (
   const f = facts();
   f.entries = [entry(f, { hasEvidence: false })];
   const [line] = deriveBatchEmissionLines(f);
-  expect(line.blocker).toMatchObject({ code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", copy: { instruction: "Add a file for each emissions entry with a value." } });
+  expect(line.blocker).toMatchObject({ code: "entryMissingEvidence", message: ENTRY_FILE_MISSING_INSTRUCTION, copy: { instruction: ENTRY_FILE_MISSING_INSTRUCTION } });
   // Open items also accept a reviewed line carrying this evidence blocker.
   const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true,
     emissionLines: [{ ...line, state: "needsReview" }],
@@ -286,7 +287,7 @@ it("splits the stale-entry fallback instruction when no reason is supplied", () 
   const f = facts();
   f.entries = [entry(f, { counts: false })];
   const [line] = deriveBatchEmissionLines(f);
-  expect(line.blocker?.message).toBe("Enter the values again for the current template component.");
+  expect(line.blocker?.message).toBe("Enter the values again for the current component.");
   expect(line.blocker?.copy).toEqual({ instruction: line.blocker?.message });
 });
 

@@ -1,3 +1,4 @@
+import { ENTRY_FILE_MISSING_INSTRUCTION } from "@/lib/certification/emission-entry-messages";
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import { getSentRemovalForComparison, loadRemovalCorrectionFacts, listStatementRemovalIdentities } from "@/data-access/removal-entry-correction";
@@ -94,7 +95,7 @@ it("reuses the notice facts and hydrates historical names only for its changed p
 });
 
 it("carries compile blocker messages and reason through both notice projections and fails closed", async () => {
-  const messages = ["Add a file for each emissions entry with a value.", "Review this component's entry policy. Paired inputs require a single entry."];
+  const messages = [ENTRY_FILE_MISSING_INSTRUCTION, "Review this component's entry policy. Paired inputs require a single entry."];
   vi.mocked(compileRemovalCorrectionContent).mockRejectedValue(new RemovalComparisonBlockedError(messages));
   expect(await compareRemovalCurrentContent(ctx, "removal")).toMatchObject({
     kind: "unavailable", reason: "compile_refused", unavailableMessages: messages,

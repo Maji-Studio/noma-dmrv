@@ -21,6 +21,8 @@ export function deriveRemovalEntryInputs(args: Omit<Parameters<typeof deriveRemo
       return { ...entry, reservedByRemovalId: owner?.live ? owner.removalId : args.frozen && !entry.heldForRemovalId ? args.removalId : null,
         reservationKnownInactive: !owner?.live };
     }),
+    componentDisplayName: (componentId, creditBatchId) => args.componentDisplayName?.(componentId, creditBatchId)
+      ?? args.observation.definition.groups.flatMap((group) => group.components).find((component) => component.id === componentId)?.displayName,
     lineSources: args.observation.lineSources,
     monitoredInputs: args.observation.definition.groups.flatMap((group) => group.components.flatMap((component) => component.inputs.flatMap((input) => {
       if (input.type !== "monitored") return [];

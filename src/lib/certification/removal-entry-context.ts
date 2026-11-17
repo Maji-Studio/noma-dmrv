@@ -1,3 +1,5 @@
+import { removalEntryComponentDisplayName } from "./emission-line-definition";
+import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
 import { deriveLineFileEvidence } from "./emission-line-file-evidence";
 import { selectRemovalEntries } from "@/lib/certification/removal-entry-selection";
 import { omittedProductionSources } from "@/lib/certification/removal-emission-lines";
@@ -19,7 +21,6 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
   });
   const { frozen, belongsToFrozenView } = selection;
   const reservations = await loadEmissionEntryReservations(ctx, selection.reservationIds);
-  const contributions = selection.derive(reservations, Date.now());
   const batchFacts: BatchEmissionContext = Object.fromEntries(Object.entries(facts).map(([id, batch]) => {
     const member = scope.memberBatches.find((item) => item.id === id);
     const omittedAutomaticSources = omittedProductionSources(member?.productionEmissionsClaimedByRemovalId, scope.removalId!);
@@ -27,6 +28,12 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
       Object.entries(batch.automaticFigures).filter(([source]) => !omittedAutomaticSources.some((id) => id === source)),
     ) }];
   }));
+  const componentDisplayName = removalEntryComponentDisplayName(Object.fromEntries(Object.entries(batchFacts).map(([id, batch]) => {
+    const member = scope.memberBatches.find((item) => item.id === id);
+    const template = facility.templatesById[member?.removalTemplateId ?? ""];
+    return [id, { ...batch, definition: template?.template ? normalizeTemplateDefinition(template.template) : template?.observation?.definition ?? observation.definition }];
+  })));
+  const contributions = selection.derive(reservations, Date.now(), componentDisplayName);
   return { contributions, lineFileEvidence: deriveLineFileEvidence(batchFacts, observation), batchFacts, observationId: observation.id, semanticFingerprint: observation.semanticFingerprint };
 }
 

@@ -1,3 +1,5 @@
+import { deriveRemovalEntryInputs } from "@/lib/certification/removal-entry-inputs";
+import { lineFileEvidenceFacts } from "../../../tests/helpers/line-file-evidence-facts";
 import { describe, expect, it, vi } from "vitest";
 import { makeContext, REMOVAL_ID, setDurabilityMeasurementSamplesEnabled } from "../../../tests/fixtures/submit-removal-orchestrator";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
@@ -262,4 +264,28 @@ it("deduplicates the same contribution and line blocker but keeps distinct batch
   ctx.emissionLinesByBatchId = { batch: [{ componentId: "line", blocker }, { componentId: "other", blocker: { ...blocker, lineRef: { componentId: "other", displayName: "Other" } } }],
     second: [{ componentId: "line", blocker }] } as unknown as NonNullable<typeof ctx.emissionLinesByBatchId>;
   expect(collectContextRemovalBlockers(ctx)).toHaveLength(3);
+});
+
+it("keeps the contribution's component display name in the gate without a line projection", () => {
+  const ctx = makeContext();
+  const { observation } = lineFileEvidenceFacts();
+  const window = { start: "2026-01-01", end: "2026-02-01" };
+  const batchId = ctx.memberBatches[0].id;
+  const contributions = deriveRemovalEntryInputs({
+    removalId: REMOVAL_ID, memberBatchIds: [batchId], observation, window,
+    contenders: [{ contenderKind: "draft", removalId: REMOVAL_ID, creditBatchIds: [batchId], createdAt: window.start, window }],
+    entries: [{ id: "entry", creditBatchId: batchId, componentId: "component", contentRevision: 1,
+      kind: "value", lineRule: "additive", occurredOn: "2026-01-10", deletedAt: null,
+      sentByRemovalId: null, confirmedForRemovalId: null, sendReservedBySubmissionId: null,
+      counts: false, values: [], evidenceDocumentIds: [] }],
+    reservations: [], nowMs: 0,
+  });
+  ctx.removalEntryContext = { lineFileEvidence: [], observationId: "observation", semanticFingerprint: "fingerprint", contributions };
+  ctx.emissionLines = [];
+  ctx.emissionLinesByBatchId = {};
+  const blockers = collectContextRemovalBlockers(ctx);
+  expect(blockers).toEqual([expect.objectContaining({
+    code: "lineNeedsReview", fixTarget: "emissions", creditBatchId: batchId,
+    lineRef: { componentId: "component", displayName: "Energy" },
+  })]);
 });

@@ -249,7 +249,7 @@ it.each([false, true])("keeps removed-entry blockers in Removal readiness (group
   };
   expect(deriveRemovalReadiness(readiness).state).toBe("blocked");
   expect(buildRemovalRequirementsChecklist(readiness).find(check => check.key === "emissions"))
-    .toMatchObject({ status: "unmet", detail: "Enter the values again for the current template component." });
+    .toMatchObject({ status: "unmet", detail: "Enter the values again for the current component." });
   // Retained review lines never become live compilation components.
   expect(resolveTemplateInputs({ template: resolved.removalTemplate!, lineSources: resolved.lineSources,
     emissionLines: resolved.emissionLines, blueprintsByKey: new Map(),
