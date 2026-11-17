@@ -1,3 +1,4 @@
+import { REENTER_EMISSION_ENTRY } from "@/lib/certification/emission-entry-messages";
 import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { assert, afterAll, beforeAll, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
@@ -402,10 +403,10 @@ it("refuses unit-change confirmation and reads the re-entry state", async () => 
   const lines = linesResult.lines;
   expect(lines.find(line => line.componentId === "energy")).toMatchObject({
     state: "needsReview", total: null,
-    blocker: { message: "Enter the values again for the current template component." },
+    blocker: { message: REENTER_EMISSION_ENTRY },
     entries: expect.arrayContaining([expect.objectContaining({
       id: entry.id, counts: false, canConfirm: false,
-      reason: "Enter the values again for the current template component.",
+      reason: REENTER_EMISSION_ENTRY,
     })]),
   });
   await db

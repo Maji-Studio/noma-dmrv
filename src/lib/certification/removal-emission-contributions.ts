@@ -152,11 +152,12 @@ export function deriveRemovalEntryContributions(args: {
     // A carried entry only needs to stay on or before the period end.
     if (entry.kind === "value" && entry.sentByRemovalId === args.removalId &&
       (!args.window || (carried ? entry.occurredOn > args.window.end : !inWindow(entry, args.window)))) {
+      const ref = lineRef(entry);
       result.blockers.push({ code: "sentEntryOutsideWindow", message: sentEntryOutsideRemovalPeriod(formatEmissionEntryMessageLabel({
-          componentDisplayName: args.monitoredInputs.find((input) => input.componentId === entry.componentId)?.componentDisplayName,
+          componentDisplayName: ref.displayName !== ref.componentId ? ref.displayName : undefined,
           occurredOn: entry.occurredOn, creditBatchCode: args.creditBatchCodes?.[entry.creditBatchId] })),
         fixTarget: "emissions", creditBatchId: entry.creditBatchId,
-        lineRef: lineRef(entry),
+        lineRef: ref,
       });
     }
     if (!owner && entry.kind === "value" && (args.entriesWithoutRemoval?.includes(entry.id) ?? true)) result.blockers.push({

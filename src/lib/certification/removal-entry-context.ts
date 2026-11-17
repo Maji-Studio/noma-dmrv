@@ -1,4 +1,5 @@
-import { withRemovedEntryComponents } from "./emission-line-definition";
+import { removalEntryComponentDisplayName } from "./emission-line-definition";
+import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
 import { deriveLineFileEvidence } from "./emission-line-file-evidence";
 import { selectRemovalEntries } from "@/lib/certification/removal-entry-selection";
 import { omittedProductionSources } from "@/lib/certification/removal-emission-lines";
@@ -12,12 +13,8 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
   if (!scope.removalId) return undefined;
   const observation = facility.templatesById[scope.memberBatches[0]?.removalTemplateId ?? ""]?.observation;
   if (!observation) return undefined;
-  const componentNames = new Map(Object.entries(facts).map(([batchId, batch]) => [batchId, new Map(
-    withRemovedEntryComponents(observation.definition, batch.entries, batch.previousObservations)
-      .groups.flatMap((group) => group.components.map((component) => [component.id, component.displayName] as const)),
-  )]));
   const selection = selectRemovalEntries({ removalId: scope.removalId, memberBatches: scope.memberBatches,
-    componentDisplayName: (componentId, batchId) => componentNames.get(batchId)?.get(componentId),
+    componentDisplayName: (componentId, batchId) => componentDisplayName(componentId, batchId),
     applicationDates: scope.lineages.map(lineage => lineage.application.applicationDate), observation,
     ownEntries: Object.values(facts).flatMap(batch => batch.entries), carryEntries: carryContext?.entries ?? [],
     frozenEntrySet, contenders: Object.values(facts)[0]?.contenders ?? [],
@@ -25,7 +22,6 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
   });
   const { frozen, belongsToFrozenView } = selection;
   const reservations = await loadEmissionEntryReservations(ctx, selection.reservationIds);
-  const contributions = selection.derive(reservations, Date.now());
   const batchFacts: BatchEmissionContext = Object.fromEntries(Object.entries(facts).map(([id, batch]) => {
     const member = scope.memberBatches.find((item) => item.id === id);
     const omittedAutomaticSources = omittedProductionSources(member?.productionEmissionsClaimedByRemovalId, scope.removalId!);
@@ -33,6 +29,12 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
       Object.entries(batch.automaticFigures).filter(([source]) => !omittedAutomaticSources.some((id) => id === source)),
     ) }];
   }));
+  const componentDisplayName = removalEntryComponentDisplayName(Object.fromEntries(Object.entries(batchFacts).map(([id, batch]) => {
+    const member = scope.memberBatches.find((item) => item.id === id);
+    const template = facility.templatesById[member?.removalTemplateId ?? ""];
+    return [id, { ...batch, definition: template?.template ? normalizeTemplateDefinition(template.template) : template?.observation?.definition ?? observation.definition }];
+  })));
+  const contributions = selection.derive(reservations, Date.now());
   return { contributions, lineFileEvidence: deriveLineFileEvidence(batchFacts, observation), batchFacts, observationId: observation.id, semanticFingerprint: observation.semanticFingerprint };
 }
 

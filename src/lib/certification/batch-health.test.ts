@@ -1,3 +1,4 @@
+import { ENTRY_FILE_MISSING_INSTRUCTION } from "@/lib/certification/emission-entry-messages";
 import { buildCreditBatchOpenItems, openItemText } from "@/lib/credit-batches/open-items";
 import { readOnlyOpenItems } from "@/lib/credit-batches/batch-page";
 import { describe, expect, it } from "vitest";
@@ -461,7 +462,7 @@ it("evidence gaps fail emissions; template review and setup gaps stay in Removal
     contract: { scope: "operating" as const, entryPolicy: "additive" as const, origin: "reviewed" as const },
     automaticFigure: null, entries: [], total: null };
   const missingEvidence = { ...line, state: "missingEvidence" as const,
-    blocker: { code: "entryMissingEvidence" as const, message: "Add a file for each emissions entry with a value.", fixTarget: "emissions" as const } };
+    blocker: { code: "entryMissingEvidence" as const, message: ENTRY_FILE_MISSING_INSTRUCTION, fixTarget: "emissions" as const } };
   const health = deriveBatchHealth(facts({ emissionLines: [missingEvidence, missingEvidence, { ...line, state: "needsSetup", blocker: { code: "lineNeedsSetup", message: "Do not include this copy.", fixTarget: "templateLineReview" } }] }));
   expect(health.issueCount).toBe(1);
   expect(health.checks.find((check) => check.key === "emissions")).toMatchObject({ status: "unmet", fixTarget: "emissions", detail: "Add a file for Line." });

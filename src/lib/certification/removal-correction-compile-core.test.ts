@@ -5,7 +5,7 @@ import { prepareRemovalSubmission } from "./removal-submission-prepare";
 import { buildRemovalSubmissionBuild } from "./removal-submission-build";
 import { compileRemovalCorrectionContent } from "./removal-correction-compile-core";
 import { RemovalComparisonBlockedError } from "./removal-comparison-blocked-error";
-import { ENTRY_HAS_NO_REMOVAL } from "@/lib/certification/emission-entry-messages";
+import { ENTRY_HAS_NO_REMOVAL, ENTRY_FILE_MISSING_INSTRUCTION } from "@/lib/certification/emission-entry-messages";
 
 vi.mock("./removal-scope", () => ({ resolveScopeForRemoval: vi.fn(async () => ({ facilityId: "facility" })) }));
 vi.mock("@/data-access/facilities", () => ({ getFacilityById: vi.fn(async () => ({ timezone: "UTC" })) }));
@@ -19,7 +19,7 @@ beforeEach(() => vi.resetAllMocks());
 
 it.each([
   { preparation: [], contributions: [{ code: "entryHasNoRemoval", message: ENTRY_HAS_NO_REMOVAL }] },
-  { preparation: [], contributions: [{ code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value." }] },
+  { preparation: [], contributions: [{ code: "entryMissingEvidence", message: ENTRY_FILE_MISSING_INSTRUCTION }] },
   { preparation: [{ code: "templateOutOfDate", message: "The registry template is out of date. Refresh the facility link in settings before submitting." }], contributions: [] },
   { preparation: [{ code: "noProject", message: "Link a facility to an Isometric project first." }],
     contributions: [{ code: "entryHasNoRemoval", message: ENTRY_HAS_NO_REMOVAL }] },

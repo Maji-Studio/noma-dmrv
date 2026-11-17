@@ -1,3 +1,4 @@
+import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
 import { lineFileEvidenceFacts } from "../../../tests/helpers/line-file-evidence-facts";
 import { deriveRemovalEmissionLines } from "./removal-emission-lines";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
@@ -185,11 +186,16 @@ it("requires proof on the claiming Removal even when batch-level proof is locked
   expect(result!.batchFacts.b2.automaticFigures["run-electricity"]).toEqual({ magnitude: "10", unit: "kWh" });
 });
 
-it.each([false, true])("builds named contribution blockers for a component removed from the current template: %s", async (removed) => {
-  const { observation, batch } = lineFileEvidenceFacts();
+it.each(["current", "renamed", "removed"])("builds named contribution blockers from the %s line definition", async (state) => {
+  const { observation, batch, template } = lineFileEvidenceFacts();
   const previous = { ...facility.templatesById.t1!.observation!, ...observation };
   const current = structuredClone(previous);
-  if (removed) current.definition.groups = [];
+  const expectedName = state === "renamed" ? "Renamed energy" : "Energy";
+  if (state === "renamed") template.groups[0].components[0].display_name = expectedName;
+  if (state === "removed") {
+    current.definition.groups = [];
+    template.groups = [];
+  }
   const stored = {
     ...facts().b1.entries[0], componentId: "component", observationId: "earlier-observation", counts: false,
   };
@@ -198,14 +204,14 @@ it.each([false, true])("builds named contribution blockers for a component remov
       previousObservations: new Map([["earlier-observation", previous]]) },
   };
   const result = await loadRemovalEntryContext(makeTestOrgContext(), scope, { batchFacts }, {
-    templatesById: { t1: { observation: current } },
+    templatesById: { t1: { observation: current, template } },
   } as unknown as FacilityCertifierFacts);
   expect(result?.contributions.blockers).toEqual([expect.objectContaining({
     code: "lineNeedsReview", creditBatchId: "b1", fixTarget: "emissions",
-    lineRef: { componentId: "component", displayName: "Energy" },
+    lineRef: { componentId: "component", displayName: expectedName },
   })]);
   const { emissionLinesByBatchId } = deriveRemovalEmissionLines({
-    b1: { ...current, ...batchFacts.b1, problems: [], enrichmentComplete: true },
+    b1: { ...current, definition: normalizeTemplateDefinition(template), ...batchFacts.b1, problems: [], enrichmentComplete: true },
   });
   expect(emissionLinesByBatchId.b1[0].displayName).toBe(result?.contributions.blockers[0].lineRef?.displayName);
 });

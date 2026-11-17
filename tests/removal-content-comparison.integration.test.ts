@@ -1,3 +1,4 @@
+import { ENTRY_FILE_MISSING_INSTRUCTION } from "@/lib/certification/emission-entry-messages";
 import { normalizeCarriedEntriesForHash } from "@/lib/certification/removal-entry-hash";
 import * as contextBuilder from "@/lib/certification/removal-context-build";
 import { generatedEvidenceFacts } from "@/lib/certification/generated-evidence-facts";
@@ -181,10 +182,10 @@ it("says unavailable everywhere when a blocker stops the compile, and the guard 
 
   const comparison = await compareRemovalCurrentContent(org, f.removalId);
   expect(comparison).toMatchObject({ kind: "unavailable", reason: "compile_refused",
-    unavailableMessages: ["Add a file for each emissions entry with a value."],
+    unavailableMessages: [ENTRY_FILE_MISSING_INSTRUCTION],
     state: { comparison: "unavailable", message: NOTICE_UNAVAILABLE } });
   expect(await loadRemovalEntryCorrection(org, f.removalId)).toMatchObject({ comparison: "unavailable", message: NOTICE_UNAVAILABLE,
-    unavailableMessages: ["Add a file for each emissions entry with a value."] });
+    unavailableMessages: [ENTRY_FILE_MISSING_INSTRUCTION] });
   await expect(guard()).rejects.toThrow(/noma could not compare Removal .* with what it sent/);
 });
 

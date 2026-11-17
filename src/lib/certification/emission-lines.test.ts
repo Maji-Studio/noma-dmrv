@@ -1,3 +1,4 @@
+import { ENTRY_FILE_MISSING_INSTRUCTION } from "@/lib/certification/emission-entry-messages";
 import { deriveEmissionEntryFacts } from "./emission-entry-facts";
 import { ENTRY_FILE_CASES } from "./emission-entry-evidence-test-fixtures";
 import { buildCreditBatchOpenItems, openItemText } from "@/lib/credit-batches/open-items";
@@ -256,7 +257,7 @@ it("separates missing-file instructions without changing the blocker message", (
   const f = facts();
   f.entries = [entry(f, { hasEvidence: false })];
   const [line] = deriveBatchEmissionLines(f);
-  expect(line.blocker).toMatchObject({ code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", copy: { instruction: "Add a file for each emissions entry with a value." } });
+  expect(line.blocker).toMatchObject({ code: "entryMissingEvidence", message: ENTRY_FILE_MISSING_INSTRUCTION, copy: { instruction: ENTRY_FILE_MISSING_INSTRUCTION } });
   // Open items also accept a reviewed line carrying this evidence blocker.
   const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true,
     emissionLines: [{ ...line, state: "needsReview" }],

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { ENTRY_FILE_MISSING_INSTRUCTION } from "@/lib/certification/emission-entry-messages";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MemberCreditBatch } from "@/fn/certification/certify-context";
@@ -22,7 +23,7 @@ import {
 
 const BATCH_A = { id: "batch-a", code: "CB-26-001", startDate: "2026-07-01", endDate: "2026-07-31", appliedDryWeightTons: 12.4 } as MemberCreditBatch;
 const BATCH_B = { id: "batch-b", code: "CB-26-002", startDate: "2026-08-01", endDate: "2026-08-31", appliedDryWeightTons: 9.8 } as MemberCreditBatch;
-const BLOCK_MESSAGE = "Add a file for each emissions entry with a value.";
+const BLOCK_MESSAGE = ENTRY_FILE_MISSING_INSTRUCTION;
 
 function entry(overrides: Record<string, unknown>) {
   return { id: "e1", kind: "value", counts: true, documentCount: 0, hasEvidence: false, total: null, componentId: "x", ...overrides };

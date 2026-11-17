@@ -24,3 +24,16 @@ export function withRemovedEntryComponents(
   }
   return definition;
 }
+
+/** Resolve names from the same per-batch definitions used to project entry lines. */
+export function removalEntryComponentDisplayName(batches: Readonly<Record<string, {
+  definition: TemplateDefinition;
+  entries: Parameters<typeof withRemovedEntryComponents>[1];
+  previousObservations?: Parameters<typeof withRemovedEntryComponents>[2];
+}>>): (componentId: string, batchId: string) => string | undefined {
+  const names = new Map(Object.entries(batches).map(([batchId, facts]) => [batchId, new Map(
+    withRemovedEntryComponents(facts.definition, facts.entries, facts.previousObservations ?? new Map())
+      .groups.flatMap((group) => group.components.map((component) => [component.id, component.displayName] as const)),
+  )]));
+  return (componentId, batchId) => names.get(batchId)?.get(componentId);
+}
