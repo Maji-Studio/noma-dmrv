@@ -1,8 +1,8 @@
 /**
  * Pure: turns the
- * batch's mass balance (`buildBatchSankey`) and the loaded lineages into a
+ * batch's mass balance and shared lineage facts (`buildBatchSankey`) into a
  * waterfall in kg. Every figure is the lib's own column or exit, or a sum of
- * masses already on the lineages; nothing is estimated.
+ * resolved lineage masses; nothing is estimated.
  *
  * Start column: the feedstock that went in, wet when every member run's draws
  * carry a wet mass (then "Water driven off" is the first step: wet less the
@@ -12,9 +12,7 @@
  * display-rounded inputs, like the lib's exits. Start and end stay raw;
  * the balance check uses raw masses, independently of the displayed levels.
  */
-import { sourceBiocharMassFlowKg } from "@/lib/biochar-product-mass";
-import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
-import { tonnesToKg } from "@/lib/calculations/unit-conversions";
+import { sumOrNull, type LineageRunFacts } from "@/lib/chain-of-custody/lineage-facts";
 import { displayedDifferenceKg } from "@/lib/mass-precision";
 import {
   EXIT_EPSILON_KG,
@@ -148,116 +146,11 @@ const NOTES: Record<WaterfallItemKey, string> = {
   applied: "Dry biochar in the product applied on the fields.",
 };
 
-export type WaterfallLineage = Pick<
-  ChainOfCustodyData,
-  "application" | "biocharProduct" | "productionRun" | "feedstocks" | "sources"
->;
-
-interface RunFacts {
-  id: string;
-  code: string;
-  dryInKg: number | null;
-  dryOutKg: number | null;
-  wetInKg: number | null;
-  allocatedKg: number | null;
-}
-
-function sourcesOf(lineage: WaterfallLineage) {
-  if (lineage.sources && lineage.sources.length > 0) return lineage.sources;
-  return lineage.productionRun
-    ? [{ productionRun: lineage.productionRun, feedstocks: lineage.feedstocks, allocatedDryMassKg: null }]
-    : [];
-}
-
-function sumOrNull(values: (number | null | undefined)[]): number | null {
-  if (values.length === 0 || values.some((value) => value == null)) return null;
-  return values.reduce<number>((sum, value) => sum + (value ?? 0), 0);
-}
-
-/** Runs, feedstocks, products and applications behind the lineages, deduped. */
-function collect(lineages: readonly WaterfallLineage[]) {
-  const runs = new Map<string, RunFacts>();
-  const runAllocations = new Map<string, (number | null)[]>();
-  const feedstocks = new Map<string, WaterfallRecord>();
-  const products = new Map<
-    string,
-    { record: WaterfallRecord; appliedKg: number; allocatedKg: number | null; product: NonNullable<WaterfallLineage["biocharProduct"]> }
-  >();
-  const applications = new Map<string, WaterfallRecord>();
-  for (const lineage of lineages) {
-    const app = lineage.application;
-    const dryKg = tonnesToKg(app.biocharAppliedDryTons ?? 0);
-    // A lineage is one application slice per product, so an application
-    // that drew from two products arrives twice: sum its slices.
-    const existingApplication = applications.get(app.id);
-    applications.set(app.id, {
-      id: app.id,
-      kind: "application",
-      code: app.code,
-      name: app.fieldIdentifier ?? null,
-      massKg: sumOrNull([existingApplication ? existingApplication.massKg : 0, app.biocharAppliedDryTons == null ? null : dryKg]),
-      wetKg: sumOrNull([
-        existingApplication ? existingApplication.wetKg : 0,
-        app.biocharAppliedTons == null ? null : tonnesToKg(app.biocharAppliedTons),
-      ]),
-    });
-    for (const source of sourcesOf(lineage)) {
-      const run = source.productionRun;
-      runAllocations.set(run.id, [...(runAllocations.get(run.id) ?? []), source.allocatedDryMassKg ?? null]);
-      if (!runs.has(run.id)) {
-        runs.set(run.id, {
-          id: run.id,
-          code: run.code,
-          dryInKg: run.feedstockMassDryKg,
-          dryOutKg: run.biocharDryMassKg,
-          wetInKg: source.feedstocks.length > 0 ? sumOrNull(source.feedstocks.map((feedstock) => feedstock.wetMassUsedKg)) : null,
-          allocatedKg: null,
-        });
-        for (const feedstock of source.feedstocks) {
-          const existing = feedstocks.get(feedstock.id);
-          feedstocks.set(feedstock.id, {
-            id: feedstock.id,
-            kind: "feedstock",
-            code: feedstock.code,
-            name: feedstock.feedstockTypeName,
-            massKg: null,
-            wetKg: sumOrNull([existing ? existing.wetKg : 0, feedstock.wetMassUsedKg]),
-          });
-        }
-      }
-    }
-    const product = lineage.biocharProduct;
-    if (product) {
-      const entry = products.get(product.id) ?? {
-        record: { id: product.id, kind: "biocharProduct" as const, code: product.code, name: product.formulationName, massKg: null },
-        appliedKg: 0,
-        allocatedKg: null as number | null,
-        product,
-      };
-      entry.appliedKg += dryKg;
-      // Sum the product's source allocations before applying the shared mass rule.
-      if (lineage.sources?.every((source) => source.allocatedDryMassKg != null)) {
-        entry.allocatedKg =
-          (entry.allocatedKg ?? 0) + lineage.sources.reduce((sum, source) => sum + (source.allocatedDryMassKg ?? 0), 0);
-      }
-      products.set(product.id, entry);
-    }
-  }
-  for (const [runId, allocations] of runAllocations) {
-    const run = runs.get(runId);
-    if (run) run.allocatedKg = sumOrNull(allocations);
-  }
-  return { runs: [...runs.values()], feedstocks: [...feedstocks.values()], products: [...products.values()], applications: [...applications.values()] };
-}
-
 const byCode = (left: WaterfallRecord, right: WaterfallRecord) =>
   left.code.localeCompare(right.code, undefined, { numeric: true });
 
-export function buildWaterfall(
-  sankey: CreditBatchSankeyData,
-  lineages: readonly WaterfallLineage[],
-): WaterfallModel {
-  const facts = collect(lineages);
+export function buildWaterfall(sankey: CreditBatchSankeyData): WaterfallModel {
+  const facts = sankey.facts;
   const column = (key: SankeyColumnKey) => sankey.columns.find((entry) => entry.key === key)?.massKg ?? 0;
   const dryFeedstockKg = column("feedstock");
   const wetFeedstockKg = sumOrNull(facts.runs.map((run) => run.wetInKg));
@@ -279,7 +172,7 @@ export function buildWaterfall(
   const hasWater = startsWet && waterKg != null && waterKg > 0;
   const startKg = startsWet ? (wetFeedstockKg ?? dryFeedstockKg) : dryFeedstockKg;
 
-  const runRecord = (run: RunFacts, massKg: number | null): WaterfallRecord => ({
+  const runRecord = (run: LineageRunFacts, massKg: number | null): WaterfallRecord => ({
     id: run.id, kind: "productionRun", code: run.code, name: null, massKg,
   });
   const warnings = [...sankey.warnings];
@@ -300,18 +193,12 @@ export function buildWaterfall(
     // Below the threshold it is rounding noise, not a negative figure.
     return { ...record, massKg: Math.max(0, massKg) };
   };
-  const runRecords = (figures: (run: RunFacts) => [number | null, number | null], words: RowWords) =>
+  const runRecords = (figures: (run: LineageRunFacts) => [number | null, number | null], words: RowWords) =>
     facts.runs.map((run) => withNote(runRecord(run, null), ...figures(run), words)).sort(byCode);
   const productRecords = facts.products
-    .map(({ record, appliedKg, allocatedKg, product }) => {
-      // A product with neither a measured mass nor an allocation has no stored figure.
-      const stored = product.massKg == null && allocatedKg == null ? null : sourceBiocharMassFlowKg({
-        ...product,
-        composition: product.composition,
-        sourceAllocatedDryMassKg: allocatedKg,
-      });
-      return withNote(record, stored, appliedKg, ROW_WORDS.in_storage);
-    })
+    .map(({ id, code, name, appliedKg, storedKg }) => withNote(
+      { id, code, name, kind: "biocharProduct", massKg: null }, storedKg, appliedKg, ROW_WORDS.in_storage,
+    ))
     .sort(byCode);
 
   const items: WaterfallItem[] = [];
@@ -320,7 +207,9 @@ export function buildWaterfall(
   items.push({
     key: "feedstock", kind: "start", label: "Feedstock in", massKg: startKg, top: startKg, bottom: 0,
     basis: startBasis, stage: null, recordKind: "feedstock",
-    records: [...facts.feedstocks].sort(byCode),
+    records: facts.feedstocks.map(({ id, code, name, wetKg }) => ({
+      id, code, name, kind: "feedstock" as const, massKg: null, wetKg,
+    })).sort(byCode),
     note: NOTES.feedstock,
     figureMissing: !dryInputKnown,
   });
@@ -352,7 +241,7 @@ export function buildWaterfall(
   const endKg = column("applied");
   items.push({
     key: "applied", kind: "end", label: "Applied", massKg: endKg, top: endKg, bottom: 0, basis: "dry",
-    stage: null, recordKind: "application", records: [...facts.applications].sort(byCode), note: NOTES.applied,
+    stage: null, recordKind: "application", records: facts.applications.map((record) => ({ ...record, kind: "application" as const })).sort(byCode), note: NOTES.applied,
   });
 
   // Hidden residuals keep their signs; their sum can exceed one tolerance.

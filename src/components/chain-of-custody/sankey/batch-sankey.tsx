@@ -14,7 +14,7 @@ import { SANKEY_EMPTY_DESCRIPTION, SANKEY_NO_DRY_MASS_DESCRIPTION, SANKEY_RUN_EM
 import type { CreditBatchSankeyData } from "@/lib/chain-of-custody/sankey";
 import { RecordRows, RecordsPanel, RecordsSummaryLine } from "./records-panel";
 import { WaterfallChart } from "./waterfall-chart";
-import { buildWaterfall, DEFAULT_COLUMN, type WaterfallLineage } from "./waterfall-model";
+import { buildWaterfall, DEFAULT_COLUMN } from "./waterfall-model";
 import { HeadlineFigure, MassWarnings, ROWS_BELOW_PX, UnbalancedNotice, useColumnFocus, useMeasuredWidth } from "./waterfall-parts";
 import { WaterfallRows } from "./waterfall-rows";
 
@@ -22,13 +22,12 @@ const PLOT_HEIGHT_PX = 168;
 
 export interface BatchSankeyProps {
   sankey: CreditBatchSankeyData;
-  lineages: readonly WaterfallLineage[];
   batchCode: string;
 }
 
-export function BatchSankey({ sankey, lineages, batchCode }: BatchSankeyProps) {
+export function BatchSankey({ sankey, batchCode }: BatchSankeyProps) {
   const facilityId = useSearchParams().get("facility");
-  const model = buildWaterfall(sankey, lineages);
+  const model = buildWaterfall(sankey);
   const focus = useColumnFocus(DEFAULT_COLUMN);
   const [width, measure] = useMeasuredWidth();
   const [chartWidth, measureChart] = useMeasuredWidth();
