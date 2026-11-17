@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
+import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { formatMassKg } from "@/lib/format-utils";
 import { buildBatchSankey, EXIT_EPSILON_KG, type SankeyLineage } from "@/lib/chain-of-custody/sankey";
 import { kgToTonnes, tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { signedKg, summarySentence, valueLabel } from "./waterfall-parts";
-import { buildWaterfall, chartMaxKg, DEFAULT_COLUMN, levelAfter, type WaterfallLineage } from "./waterfall-model";
+import { buildWaterfall, chartMaxKg, DEFAULT_COLUMN, levelAfter } from "./waterfall-model";
 
 const RUN_DRY_IN_KG = 4_000;
 const RUN_DRY_OUT_KG = 1_500;
@@ -30,7 +31,7 @@ const COMPOSITION = {
 function lineage(
   wetKg: (number | null)[],
   application: { id: string; code: string; dryT: number; wetT: number },
-): WaterfallLineage & SankeyLineage {
+): ChainOfCustodyData & SankeyLineage {
   return {
     application: {
       id: application.id,
@@ -58,15 +59,25 @@ function lineage(
       feedstockTypeName: "Wood chips",
       wetMassUsedKg: mass,
     })),
-  } as unknown as WaterfallLineage & SankeyLineage;
+  } as unknown as ChainOfCustodyData & SankeyLineage;
 }
 
 function build(wetKg: (number | null)[]) {
   const lineages = [lineage(wetKg, { id: "app-1", code: "AP-26-001", dryT: APPLIED_DRY_T, wetT: APPLIED_WET_T })];
-  return buildWaterfall(buildBatchSankey(lineages), lineages);
+  return buildWaterfall(buildBatchSankey(lineages));
 }
 
 describe("buildWaterfall", () => {
+  it("produces an equal waterfall after a JSON round trip", () => {
+    const entry = lineage([RUN_DRY_IN_KG], {
+      id: "app-1", code: "AP-26-001", dryT: APPLIED_DRY_T, wetT: APPLIED_WET_T,
+    });
+    const sankey = buildBatchSankey([entry]);
+    const transported = JSON.parse(JSON.stringify(sankey)) as typeof sankey;
+
+    expect(buildWaterfall(transported)).toEqual(buildWaterfall(sankey));
+  });
+
   it.each([
     { wetKg: 120.04, displayedWater: "19.9 kg" },
     { wetKg: 100.36, displayedWater: "0.3 kg" },
@@ -80,7 +91,7 @@ describe("buildWaterfall", () => {
       productionRun: entry.productionRun!, reactor: null, feedstocks: entry.feedstocks,
       allocatedWetMassKg: 40.06, allocatedDryMassKg: 40.06,
     }];
-    const model = buildWaterfall(buildBatchSankey([entry]), [entry]);
+    const model = buildWaterfall(buildBatchSankey([entry]));
     const displayedTenths = (kg: number) => Math.round(Number(formatMassKg(kg).replace(/[^\d.-]/g, "")) * 10);
     const steps = model.items.filter((item) => item.kind === "step");
 
@@ -110,7 +121,7 @@ describe("buildWaterfall", () => {
         allocatedWetMassKg: BLEND_KG - INGREDIENT_KG, allocatedDryMassKg: allocated,
       }];
     }
-    const model = buildWaterfall(buildBatchSankey([entry]), [entry]);
+    const model = buildWaterfall(buildBatchSankey([entry]));
     const storedKg = expectedKg - tonnesToKg(APPLIED_DRY_T);
     const storage = model.items.find((item) => item.key === "in_storage");
 
@@ -190,7 +201,7 @@ describe("buildWaterfall", () => {
       lineage([3_000, 2_000], { id: "app-1", code: "AP-26-001", dryT: 0.4, wetT: 0.5 }),
       lineage([3_000, 2_000], { id: "app-1", code: "AP-26-001", dryT: 0.6, wetT: 0.7 }),
     ];
-    const model = buildWaterfall(buildBatchSankey(slices), slices);
+    const model = buildWaterfall(buildBatchSankey(slices));
     const applied = model.items[model.items.length - 1];
 
     expect(applied.records).toHaveLength(1);
@@ -201,7 +212,7 @@ describe("buildWaterfall", () => {
   it("does not invent water when a run has no recorded dry input", () => {
     const lineages = [lineage([2_000], { id: "app-1", code: "AP-26-001", dryT: 0.25, wetT: 0.3 })];
     (lineages[0].productionRun as { feedstockMassDryKg: number | null }).feedstockMassDryKg = null;
-    const model = buildWaterfall(buildBatchSankey(lineages), lineages);
+    const model = buildWaterfall(buildBatchSankey(lineages));
 
     expect(model.startBasis).toBe("dry");
     expect(model.dryStartReason).toBe("dry-input-missing");
@@ -227,7 +238,7 @@ describe("buildWaterfall", () => {
     const missing = lineage([2_000], { id: "app-2", code: "AP-26-002", dryT: APPLIED_DRY_T, wetT: APPLIED_WET_T });
     missing.productionRun = { ...missing.productionRun!, id: "run-2", feedstockMassDryKg: null };
     const lineages = [known, missing];
-    const model = buildWaterfall(buildBatchSankey(lineages), lineages);
+    const model = buildWaterfall(buildBatchSankey(lineages));
 
     expect(model.startKg).toBe(RUN_DRY_IN_KG);
     expect(model.startBasis).toBe("dry");
@@ -260,7 +271,7 @@ describe("buildWaterfall", () => {
       entry.productionRun = { ...entry.productionRun!, biocharDryMassKg: runOutputKg };
       entry.biocharProduct = { ...entry.biocharProduct!, massKg: lotKg };
       const lineages = [entry];
-      const model = buildWaterfall(buildBatchSankey(lineages), lineages);
+      const model = buildWaterfall(buildBatchSankey(lineages));
 
       expect(model.startKg - model.endKg).toBeGreaterThan(EXIT_EPSILON_KG);
       expect(model.items.map((item) => item.key)).toEqual([
@@ -282,7 +293,7 @@ describe("buildWaterfall", () => {
     entry.productionRun = { ...entry.productionRun!, biocharDryMassKg: runOutputKg };
     entry.biocharProduct = { ...entry.biocharProduct!, massKg: lotKg };
     const lineages = [entry];
-    const model = buildWaterfall(buildBatchSankey(lineages), lineages);
+    const model = buildWaterfall(buildBatchSankey(lineages));
 
     expect(model.startBasis).toBe("wet");
     expect(model.items.map((item) => item.key)).toEqual(["feedstock", "conversion_loss", "applied"]);
@@ -299,7 +310,7 @@ describe("buildWaterfall", () => {
     entry.productionRun = { ...entry.productionRun!, biocharDryMassKg: RUN_DRY_IN_KG - residualKg };
     entry.biocharProduct = { ...entry.biocharProduct!, massKg: lotKg };
     const lineages = [entry];
-    const model = buildWaterfall(buildBatchSankey(lineages), lineages);
+    const model = buildWaterfall(buildBatchSankey(lineages));
 
     expect(model.items.map((item) => item.key)).toEqual(["feedstock", "water_driven_off", "conversion_loss", "in_storage", "applied"]);
     expect(model.warnings).not.toEqual([]);
@@ -315,7 +326,7 @@ describe("buildWaterfall", () => {
     entry.productionRun = { ...entry.productionRun!, feedstockMassDryKg: dryInKg };
     entry.biocharProduct = { ...entry.biocharProduct!, massKg: RUN_DRY_OUT_KG + gapKg };
     const sankey = buildBatchSankey([entry]);
-    const model = buildWaterfall(sankey, [entry]);
+    const model = buildWaterfall(sankey);
     const steps = model.items.filter((item) => item.kind === "step");
 
     expect(gapKg).toBeGreaterThan(EXIT_EPSILON_KG);
@@ -338,7 +349,7 @@ describe("buildWaterfall", () => {
       id: "app-1", code: "AP-26-001", dryT: kgToTonnes(RUN_DRY_OUT_KG - residualKg), wetT: APPLIED_WET_T,
     });
     const lineages = [entry];
-    const model = buildWaterfall(buildBatchSankey(lineages), lineages);
+    const model = buildWaterfall(buildBatchSankey(lineages));
 
     expect(model.items.map((item) => item.key)).toEqual(["feedstock", "water_driven_off", "conversion_loss", "in_storage", "applied"]);
     expect(model.startKg - model.removedKg - model.endKg).toBeCloseTo(-0.05);
@@ -348,7 +359,7 @@ describe("buildWaterfall", () => {
   it("says a figure cannot be derived instead of calling it unrecorded", () => {
     const lineages = [lineage([3_000, 2_000], { id: "app-1", code: "AP-26-001", dryT: 1, wetT: 1.2 })];
     (lineages[0].productionRun as { biocharDryMassKg: number | null }).biocharDryMassKg = null;
-    const model = buildWaterfall(buildBatchSankey(lineages), lineages);
+    const model = buildWaterfall(buildBatchSankey(lineages));
     const row = model.items.flatMap((item) => item.records).find((record) => record.kind === "productionRun" && record.massKg == null);
 
     expect(row?.note).toBeTruthy();
@@ -368,8 +379,8 @@ describe("buildWaterfall", () => {
         feedstocks: [],
         sources: [run("run-a", "PR-A", 1_100), run("run-b", "PR-B", 300)],
       },
-    ] as unknown as (WaterfallLineage & SankeyLineage)[];
-    const model = buildWaterfall(buildBatchSankey(lineages), lineages);
+    ] as unknown as (ChainOfCustodyData & SankeyLineage)[];
+    const model = buildWaterfall(buildBatchSankey(lineages));
     const loss = model.items.find((item) => item.key === "conversion_loss");
 
     expect(loss?.massKg).toBe(600);
@@ -389,7 +400,7 @@ describe("buildWaterfall", () => {
   it("sizes the plot to the highest column even when applied exceeds the input", () => {
     const lineages = [lineage([null], { id: "app-1", code: "AP-26-001", dryT: 0.25, wetT: 0.3 })];
     (lineages[0].productionRun as { feedstockMassDryKg: number | null }).feedstockMassDryKg = null;
-    const model = buildWaterfall(buildBatchSankey(lineages), lineages);
+    const model = buildWaterfall(buildBatchSankey(lineages));
 
     expect(model.startKg).toBe(0);
     expect(model.endKg).toBe(250);

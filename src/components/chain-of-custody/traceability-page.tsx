@@ -595,7 +595,6 @@ export function TraceabilityPage() {
     return (
       <BatchSankey
         sankey={sankeyData}
-        lineages={batchLineages ?? []}
         batchCode={batchData.batch.code}
       />
     );
