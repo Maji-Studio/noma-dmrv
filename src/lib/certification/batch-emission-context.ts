@@ -21,7 +21,7 @@ import type { BatchEmissionLineFacts } from "@/lib/certification/emission-lines"
 import type { RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 
-/** Entry derivation only needs persisted observations, never registry facts. */
+/** Entry derivation uses persisted observations. When the registry template is supplied, blocker names follow its definition so they match the projected lines. */
 export interface EntryTemplateContext {
   templatesById: Partial<Record<string, { observation: RemovalTemplateObservation | null; template?: IsometricGhgEntryTemplate }>>;
 }

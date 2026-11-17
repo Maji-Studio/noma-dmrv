@@ -14,7 +14,6 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
   const observation = facility.templatesById[scope.memberBatches[0]?.removalTemplateId ?? ""]?.observation;
   if (!observation) return undefined;
   const selection = selectRemovalEntries({ removalId: scope.removalId, memberBatches: scope.memberBatches,
-    componentDisplayName: (componentId, batchId) => componentDisplayName(componentId, batchId),
     applicationDates: scope.lineages.map(lineage => lineage.application.applicationDate), observation,
     ownEntries: Object.values(facts).flatMap(batch => batch.entries), carryEntries: carryContext?.entries ?? [],
     frozenEntrySet, contenders: Object.values(facts)[0]?.contenders ?? [],
@@ -34,7 +33,7 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
     const template = facility.templatesById[member?.removalTemplateId ?? ""];
     return [id, { ...batch, definition: template?.template ? normalizeTemplateDefinition(template.template) : template?.observation?.definition ?? observation.definition }];
   })));
-  const contributions = selection.derive(reservations, Date.now());
+  const contributions = selection.derive(reservations, Date.now(), componentDisplayName);
   return { contributions, lineFileEvidence: deriveLineFileEvidence(batchFacts, observation), batchFacts, observationId: observation.id, semanticFingerprint: observation.semanticFingerprint };
 }
 
