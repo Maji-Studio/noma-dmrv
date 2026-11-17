@@ -57,6 +57,7 @@ const GENERATED_PAYLOAD_GLOBS = [
 ];
 const MAX_COMMENT_CHARS = 60_000;
 const INTERRUPT_EXIT_CODE = 130;
+const ARCHIVE_FAILURE_EXIT_CODE = 1;
 const SKILL_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PRACTICE_REFERENCE_PATH =
   ".agents/skills/pr-review-suite/references/practices.md";
@@ -566,6 +567,7 @@ async function main() {
     for (const path of options.archive) {
       const archived = await archiveReport(path);
       if (archived) process.stdout.write(`Archive: ${archived}\n`);
+      else if (process.env.PR_REVIEW_SUITE_ARCHIVE_DIR !== "") process.exitCode = ARCHIVE_FAILURE_EXIT_CODE;
     }
     return;
   }

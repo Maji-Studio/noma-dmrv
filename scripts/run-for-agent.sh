@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
-# Run a prepared main-checkout command with live output and a persistent log.
-# Before handing over the command, remove the old log and start a background wait:
-#   until grep -q '^exit=' <main>/.scratchpad/runs/<name>.log; do sleep 1; done
+# Run a prepared, non-interactive main-checkout command with live output and a persistent log.
+# Before handing over the command, remove the old status file and start a background wait:
+#   until [ -s "<main>/.scratchpad/runs/<name>.exit" ]; do sleep 1; done
 # Then hand the human one line: <checkout>/scripts/run-for-agent.sh <name> [args...]
 # RUN_FOR_AGENT_ROOT overrides discovery for isolated tests only.
 set -euo pipefail
 
+EXIT_SUCCESS=0
 EXIT_USAGE=2
 EXIT_MISSING=127
+EXIT_INTERRUPT=130
+EXIT_TERMINATE=143
+EXIT_HANGUP=129
 NAME_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]*$'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -34,13 +38,40 @@ fi
 PREPARED="$MAIN_CHECKOUT/.scratchpad/$NAME.sh"
 RUNS_DIR="$MAIN_CHECKOUT/.scratchpad/runs"
 LOG="$RUNS_DIR/$NAME.log"
+STATUS="$RUNS_DIR/$NAME.exit"
+PIPELINE_PID=''
 mkdir -p "$RUNS_DIR"
+rm -f "$STATUS"
+
+finish() {
+  # Publishing is terminal: a second signal must not interrupt or duplicate it.
+  trap '' INT TERM HUP
+  printf '\nexit=%s\n' "$1" | tee -a "$LOG"
+  local temporary_status="$STATUS.$$.tmp"
+  printf '%s\n' "$1" > "$temporary_status"
+  mv -f "$temporary_status" "$STATUS"
+  exit "$1"
+}
+
+interrupt() {
+  trap '' INT TERM HUP
+  if [ -n "$PIPELINE_PID" ]; then
+    # The background job owns its process group, including the prepared script
+    # and tee. Stop all of it before appending the final log line.
+    kill -TERM -- "-$PIPELINE_PID" 2>/dev/null || true
+    wait "$PIPELINE_PID" 2>/dev/null || true
+  fi
+  finish "$1"
+}
+trap 'interrupt "$EXIT_INTERRUPT"' INT
+trap 'interrupt "$EXIT_TERMINATE"' TERM
+trap 'interrupt "$EXIT_HANGUP"' HUP
+
 printf 'start=%s name=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$NAME" | tee "$LOG"
 
 if [ ! -f "$PREPARED" ]; then
   printf 'run-for-agent: prepared script not found: %s\n' "$PREPARED" | tee -a "$LOG" >&2
-  printf 'exit=%s\n' "$EXIT_MISSING" | tee -a "$LOG"
-  exit "$EXIT_MISSING"
+  finish "$EXIT_MISSING"
 fi
 
 run_prepared() {
@@ -60,11 +91,20 @@ run_prepared() {
   fi
 }
 
-# Capture the command status before another command replaces PIPESTATUS.
-set +e
-run_prepared "$@" 2>&1 | tee -a "$LOG"
-RESULT="${PIPESTATUS[0]}"
-set -e
-# A preceding newline keeps the sentinel separate even for output without one.
-printf '\nexit=%s\n' "$RESULT" | tee -a "$LOG"
-exit "$RESULT"
+# A background job lets wait handle signals immediately on Bash 3.2. Monitor
+# mode gives this job its own group; disable it inside so the pipeline shares it.
+# The job is outside the terminal's foreground group, so a prompt would stop it:
+# stdin is /dev/null and a prepared script that reads input fails at once.
+set -m
+(
+  set +m
+  set +e
+  run_prepared "$@" 2>&1 | tee -a "$LOG"
+  exit "${PIPESTATUS[0]}"
+) < /dev/null &
+PIPELINE_PID=$!
+set +m
+RESULT="$EXIT_SUCCESS"
+wait "$PIPELINE_PID" || RESULT=$?
+# A preceding newline in finish separates status from unterminated output.
+finish "$RESULT"

@@ -111,11 +111,13 @@ const SAVED = "Saved for this head";
       const choice = card.querySelector("input:checked").value;
       const out = card.querySelector(".saved");
       const sha = PRS.find(p => String(p.num) === card.dataset.pr).sha;
+      btn.disabled = true; out.textContent = "Saving…"; out.className = "saved wait";
       try { await ref.set({choice, sha, note: card.querySelector("textarea").value, savedAt: Date.now()}); out.textContent = SAVED; out.className = "saved"; }
-      catch { out.textContent = "Save failed, try again"; out.className = "saved bad"; return; }
+      catch { out.textContent = "Save failed, try again"; out.className = "saved bad"; btn.disabled = false; return; }
       const told = await tellSession(card, card.dataset.pr, `Merge card saved: #${card.dataset.pr} ${choice} for head ${sha}. Read answers/merge-${card.dataset.pr}.`);
-      out.textContent = told ? `${SAVED}. The session was told.` : `${SAVED}. Tell the session.`;
+      out.textContent = told ? `${SAVED}. The session was told.` : `${SAVED}. Type "saved" in the session's chat.`;
       out.className = told ? "saved" : "saved wait";
+      btn.disabled = false;
     };
   });
 })();

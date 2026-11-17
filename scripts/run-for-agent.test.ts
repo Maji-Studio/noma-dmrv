@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +11,13 @@ const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 7;
 const EXIT_USAGE = 2;
 const EXIT_MISSING = 127;
+const EXIT_INTERRUPT = 130;
+const EXIT_TERMINATE = 143;
+const EXIT_HANGUP = 129;
+const SCRIPT_SLEEP_SECONDS = 30;
+const POLL_INTERVAL_SECONDS = 0.01;
+const PROCESS_TIMEOUT_MS = 5_000;
+const READY_MARKER = "script-ready\n";
 let directory: string;
 let root: string;
 
@@ -32,6 +39,44 @@ function run(args = ["task"], cwd = directory) {
 function log() {
   return readFileSync(join(root, ".scratchpad/runs/task.log"), "utf8");
 }
+function statusPath() {
+  return join(root, ".scratchpad/runs/task.exit");
+}
+function start() {
+  const child = spawn(SCRIPT, ["task"], {
+    cwd: directory, env: { ...process.env, RUN_FOR_AGENT_ROOT: root },
+    timeout: PROCESS_TIMEOUT_MS,
+  });
+  const completed = new Promise<number | null>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", resolve);
+  });
+  return { child, completed };
+}
+async function waitForMarker(child: ChildProcess) {
+  await new Promise<void>((resolve, reject) => {
+    let output = "";
+    const timeout = setTimeout(() => finish(new Error("Timed out waiting for script marker")), PROCESS_TIMEOUT_MS);
+    function finish(error?: Error) {
+      clearTimeout(timeout);
+      child.stdout!.off("data", onData);
+      child.off("close", onClose);
+      child.off("error", finish);
+      if (error) reject(error);
+      else resolve();
+    }
+    function onData(chunk: Buffer) {
+      output += chunk.toString();
+      if (output.includes(READY_MARKER)) finish();
+    }
+    function onClose() {
+      finish(new Error("Runner closed before script marker"));
+    }
+    child.stdout!.on("data", onData);
+    child.once("close", onClose);
+    child.once("error", finish);
+  });
+}
 
 describe("run-for-agent", () => {
   it("logs live output and ends with the success sentinel", () => {
@@ -41,14 +86,59 @@ describe("run-for-agent", () => {
     expect(result.stdout).toBe(log());
     expect(log()).toMatch(/^start=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z name=task\n/);
     expect(log()).toContain("progress\n");
-    expect(log()).toMatch(/\nexit=0\n$/);
+    expect(log().endsWith(`\nexit=${EXIT_SUCCESS}\n`)).toBe(true);
+    expect(readFileSync(statusPath(), "utf8")).toBe(`${EXIT_SUCCESS}\n`);
   });
 
   it("propagates a failing script status and logs it after unterminated output", () => {
     prepare(`#!/bin/bash\nprintf 'failure'\nexit ${EXIT_FAILURE}\n`);
     const result = run();
     expect(result.status).toBe(EXIT_FAILURE);
-    expect(log()).toMatch(/failure\nexit=7\n$/);
+    expect(log().endsWith(`failure\nexit=${EXIT_FAILURE}\n`)).toBe(true);
+    expect(readFileSync(statusPath(), "utf8")).toBe(`${EXIT_FAILURE}\n`);
+  });
+
+  it("removes stale status before script output and ignores a forged log sentinel", async () => {
+    mkdirSync(join(root, ".scratchpad/runs"));
+    writeFileSync(statusPath(), `${EXIT_FAILURE}\n`);
+    prepare(`#!/bin/bash
+[ ! -e .scratchpad/runs/task.exit ] || exit ${EXIT_FAILURE}
+printf 'exit=${EXIT_SUCCESS}\\n${READY_MARKER}'
+while [ ! -f .scratchpad/release ]; do sleep ${POLL_INTERVAL_SECONDS}; done
+`);
+    const { child, completed } = start();
+    try {
+      await waitForMarker(child);
+      expect(log()).toContain(`exit=${EXIT_SUCCESS}\n`);
+      expect(existsSync(statusPath())).toBe(false);
+      writeFileSync(join(root, ".scratchpad/release"), "");
+      expect(await completed).toBe(EXIT_SUCCESS);
+      expect(readFileSync(statusPath(), "utf8")).toBe(`${EXIT_SUCCESS}\n`);
+    } finally {
+      if (child.exitCode === null) child.kill("SIGTERM");
+      await completed;
+    }
+  });
+
+  it.each([
+    ["SIGINT", EXIT_INTERRUPT],
+    ["SIGTERM", EXIT_TERMINATE],
+    ["SIGHUP", EXIT_HANGUP],
+  ] as const)("publishes exactly one terminal status after %s", async (signal, code) => {
+    prepare(`#!/bin/bash\nprintf '${READY_MARKER}'\nsleep ${SCRIPT_SLEEP_SECONDS}\n`);
+    const { child, completed } = start();
+    try {
+      await waitForMarker(child);
+      expect(existsSync(statusPath())).toBe(false);
+      expect(child.kill(signal)).toBe(true);
+      expect(await completed).toBe(code);
+      expect(readFileSync(statusPath(), "utf8")).toBe(`${code}\n`);
+      expect(log().endsWith(`\nexit=${code}\n`)).toBe(true);
+      expect(log().split("\n").filter((line) => line.startsWith("exit="))).toEqual([`exit=${code}`]);
+    } finally {
+      if (child.exitCode === null) child.kill("SIGTERM");
+      await completed;
+    }
   });
 
   it("captures stdout and stderr in order", () => {
@@ -95,7 +185,8 @@ printf '%s\\n' '${root}/.git'
     const result = run();
     expect(result.status).toBe(EXIT_MISSING);
     expect(result.stderr).toContain("prepared script not found");
-    expect(log()).toMatch(/\nexit=127\n$/);
+    expect(log().endsWith(`\nexit=${EXIT_MISSING}\n`)).toBe(true);
+    expect(readFileSync(statusPath(), "utf8")).toBe(`${EXIT_MISSING}\n`);
   });
 
   it.each(["", "..", "../task", "a/b", "a b", "-task"])("refuses invalid name %j without creating logs", (name) => {
@@ -137,6 +228,6 @@ printf '%s\\n' '${root}/.git'
     expect(run().status).toBe(EXIT_SUCCESS);
     expect(log()).not.toContain("old output");
     expect(log()).toContain("new output\n");
-    expect(log()).toMatch(/\nexit=0\n$/);
+    expect(log().endsWith(`\nexit=${EXIT_SUCCESS}\n`)).toBe(true);
   });
 });

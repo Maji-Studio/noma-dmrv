@@ -13,6 +13,7 @@ const PR_NUMBER = 42;
 const START_LINE = 7;
 const WARNING_COUNT = 1;
 const EXIT_SUCCESS = 0;
+const EXIT_FAILURE = 1;
 const EXIT_USAGE = 2;
 const SUITE = join(dirname(fileURLToPath(import.meta.url)), "run-pr-review-suite.mjs");
 
@@ -98,14 +99,27 @@ async function testArchive(root) {
   equal(await archiveReport(source, { ...options, cwd: skippedRoot, env: { PR_REVIEW_SUITE_ARCHIVE_DIR: "" } }), undefined);
   equal(existsSync(skippedRoot), false);
 
-  // Root errors and file errors warn once without changing the CLI exit code.
+  // Explicit archive requests fail on errors; review-time copies stay advisory.
   const failure = await run(process.execPath, [SUITE, "--archive", source], {
     env: { ...env, PR_REVIEW_SUITE_ARCHIVE_DIR: source },
+    allowFailure: true,
   });
-  equal(failure.code, EXIT_SUCCESS);
+  equal(failure.code, EXIT_FAILURE);
   equal(failure.stderr.trim().split("\n").length, WARNING_COUNT);
   match(failure.stderr, /Warning: could not archive/);
+  const missing = join(root, "missing.json");
+  const mixed = await run(process.execPath, [SUITE, "--archive", missing, "--archive", source], {
+    env, allowFailure: true,
+  });
+  equal(mixed.code, EXIT_FAILURE);
+  match(mixed.stdout, /pr-42-round-3\.json/);
+  equal(mixed.stderr.trim().split("\n").length, WARNING_COUNT);
   writeFileSync(source, "invalid json");
+  const invalidJson = await run(process.execPath, [SUITE, "--archive", source], {
+    env, allowFailure: true,
+  });
+  equal(invalidJson.code, EXIT_FAILURE);
+  match(invalidJson.stderr, /Warning: could not archive/);
   equal(await archiveReport(source, options), undefined);
   equal(warnings.length, WARNING_COUNT);
   warnings.length = 0;
