@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { todoRows } from "./shared";
+import { recordHref } from "@/lib/record-links";
 import { BATCH_TODOS_FAILED_TITLE, batchTodoRows } from "./batch-todo-rows";
 
 const batches = [
@@ -18,8 +20,23 @@ describe("batchTodoRows", () => {
   it("counts blocking plus check, like the batch page badge", () => {
     const [row] = batchTodoRows(batches, summaries, null);
     expect(row.title).toBe("6 open to-dos");
-    expect(row.meta).toBe("CB-26-001 · 2 blocking");
+    expect(row.entityCode).toBe("CB-26-001 · 2 blocking");
     expect(row.href).toContain("b1");
+  });
+
+  it("renders the same titles, metadata and links through the shared attention renderer", () => {
+    expect(todoRows(batchTodoRows(batches, summaries, "b1", { facilityId: "f1" }), [])).toEqual([
+      { id: "batch-todos-b1", title: "6 open to-dos", meta: "CB-26-001 · 2 blocking", href: recordHref("creditBatch", "b1", { facilityId: "f1" }) },
+      { id: "batch-todos-failed", title: BATCH_TODOS_FAILED_TITLE, meta: "Credit batches", href: "/credit-batches?facility=f1" },
+    ]);
+  });
+
+  it("carries the same typed fields as overview attention rows", () => {
+    for (const row of batchTodoRows(batches, summaries, null)) {
+      expect(row).toMatchObject({ stage: "production", recordKind: "creditBatch" });
+      expect(row.recordIds).toEqual([row.id.replace("batch-todos-", "")]);
+      expect(row.date).toBeNull();
+    }
   });
 
   it("orders blocking batches first, then by code, and skips zero counts", () => {
@@ -32,7 +49,7 @@ describe("batchTodoRows", () => {
 
   it("shows no blocking meta and a singular label when only checks remain", () => {
     const [row] = batchTodoRows(batches, summaries, "b2");
-    expect(row).toMatchObject({ title: "1 open to-do", meta: "CB-26-002" });
+    expect(row).toMatchObject({ title: "1 open to-do", entityCode: "CB-26-002" });
   });
 
   it("shows only the selected batch", () => {
@@ -47,7 +64,10 @@ describe("batchTodoRows", () => {
   it("adds a failed-check row after the loaded rows, so a failed read never reads as all clear", () => {
     const rows = batchTodoRows(batches, summaries, "b2", { facilityId: "f1" });
     expect(rows.map((row) => row.title)).toEqual(["1 open to-do", BATCH_TODOS_FAILED_TITLE]);
-    expect(rows[1]).toMatchObject({ meta: "Credit batches", href: "/credit-batches?facility=f1" });
+    expect(rows[1]).toMatchObject({
+      stage: "production", recordKind: "creditBatch", recordIds: [],
+      entityCode: "Credit batches", href: "/credit-batches?facility=f1",
+    });
     expect(batchTodoRows([], {}, null, { facilityId: "f1" })).toHaveLength(1);
   });
 });

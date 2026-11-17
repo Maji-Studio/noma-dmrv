@@ -55,6 +55,8 @@ export const NO_REMOVAL_ATTENTION: RemovalAttentionRows = { drafts: [], rejected
 function rowFor(removal: RemovalAttentionBase, title: string, facilityId: string): DashboardAttentionItem {
   return {
     id: `removal-draft-${removal.removalId}`,
+    stage: "production",
+    recordKind: "removal",
     recordIds: [removal.removalId],
     entityCode: removal.code,
     date: removal.createdAt,

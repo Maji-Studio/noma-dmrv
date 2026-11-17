@@ -5,6 +5,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { getDashboardAttentionItems, getDashboardOverview, KPI_HINTS } from "./dashboard-overview";
 import { ATTENTION_PER_CHECK } from "./dashboard-attention";
 import { EXACT_ID_FILTER_MAX } from "@/lib/exact-id-filter";
+import { attentionRow } from "../../tests/helpers/dashboard-attention";
 import type { RemovalAttentionRows } from "@/lib/certification/removal-attention";
 import { REMOVAL_INTERRUPTED_ATTENTION_TITLE } from "@/lib/certification/removal-attention";
 import { CHANGED_SINCE_REVIEW_LABEL } from "@/lib/certification/interrupted-removal-copy";
@@ -204,6 +205,25 @@ describe("needs attention rows", () => {
     total: n, allIds: [], removals: [],
   }));
 
+  it.each([
+    { kind: "run-mass", stage: "production", recordKind: "productionRun" },
+    { kind: "feedstock-missing", stage: "feedstock", recordKind: "feedstock" },
+    { kind: "application-evidence", stage: "applications", recordKind: "application" },
+    { kind: "batch-pending", stage: "production", recordKind: "creditBatch" },
+  ])("types single and grouped $kind records", async ({ kind, stage, recordKind }) => {
+    const singleIds = ["record-1"];
+    mocks.union.mockResolvedValue(runRows(singleIds).map((row) => ({ ...row, kind })));
+    const single = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
+    expect(single.items[0]).toMatchObject({ stage, recordKind, recordIds: singleIds });
+
+    const ids = idsOf(ATTENTION_PER_CHECK + 1);
+    const source = kind === "batch-pending" ? batchRows(ids.length) : runRows(ids);
+    mocks.union.mockResolvedValue(source.map((row) => ({ ...row, kind })));
+    const grouped = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
+    expect(grouped.items[0]).toMatchObject({ stage, recordKind, count: ids.length });
+    expect(grouped.items[0].recordItems?.every((item) => item.stage === stage && item.recordKind === recordKind && item.recordIds?.length === 1)).toBe(true);
+  });
+
   it("groups an over-cap check into one row linking to its filtered list", async () => {
     const runIds = idsOf(ATTENTION_PER_CHECK + 1);
     mocks.union.mockResolvedValue([...runRows(runIds), ...feedstockRows, ...batchRows(ATTENTION_PER_CHECK + 1)]);
@@ -251,6 +271,8 @@ describe("needs attention rows", () => {
     mocks.returned.mockResolvedValue(new Set(returned.map((row) => row.removals[0].id)));
     const { items } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
     expect(mocks.changedAttempts).toHaveBeenCalledExactlyOnceWith(CTX, interrupted.map((row) => row.removals[0].id));
+    expect(items.find((item) => item.id === "removal-interrupted-group")).toMatchObject({ stage: "production", recordKind: "removal" });
+    expect(items.find((item) => item.id === "batch-returned-group")).toMatchObject({ stage: "production", recordKind: "creditBatch" });
     expect(items.find((item) => item.id === "removal-interrupted-group")?.recordIds).toEqual(interrupted.map((row) => row.removals[0].id));
     expect(items.find((item) => item.id === "batch-returned-group")?.recordIds).toEqual(returned.map((row) => row.id));
   });
@@ -291,7 +313,7 @@ describe("needs attention rows", () => {
   });
 
   describe("Removal rows from the read model", () => {
-    const row = (removalId: string, title: string) => ({ id: `removal-draft-${removalId}`, recordIds: [removalId], entityCode: `RM-${removalId}`, date: null, title, href: `/removals?removal=${removalId}` });
+    const row = (removalId: string, title: string) => attentionRow("removal", removalId, { id: `removal-draft-${removalId}`, entityCode: `RM-${removalId}`, title });
     const rows = (over: Partial<RemovalAttentionRows>): Promise<RemovalAttentionRows> =>
       Promise.resolve({ drafts: [], rejected: [], returned: [], covered: new Set<string>(), ...over });
     const interruptedBatch = {
@@ -309,6 +331,7 @@ describe("needs attention rows", () => {
       const { items } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
       expect(mocks.changedAttempts).toHaveBeenCalledExactlyOnceWith(CTX, ["rm-i"]);
       expect(items).toContainEqual(expect.objectContaining({
+        stage: "production", recordKind: "removal", recordIds: ["rm-i"],
         id: "removal-interrupted-rm-i", entityCode: "RM-I · CB-I · CB-2",
         title: changed ? CHANGED_SINCE_REVIEW_LABEL : REMOVAL_INTERRUPTED_ATTENTION_TITLE,
         href: `/removals?facility=${FACILITY_ID}&${changed ? "removal" : "resume"}=rm-i`,
@@ -329,7 +352,7 @@ describe("needs attention rows", () => {
       const drafts = Array.from({ length: ATTENTION_PER_CHECK + 1 }, (_, index) => row(`d${index}`, "Ready to submit"));
       const overview = await getDashboardOverview(CTX, FACILITY_ID, "month", rows({ drafts }));
       expect(overview.attention.map((item) => item.id)).toEqual(["removal-interrupted-rm-i", "removal-draft-group", "run-mass-run-0"]);
-      expect(overview.attention[1]).toMatchObject({ count: ATTENTION_PER_CHECK + 1, title: "Draft Removals", recordIds: drafts.flatMap((row) => row.recordIds) });
+      expect(overview.attention[1]).toMatchObject({ stage: "production", recordKind: "removal", count: ATTENTION_PER_CHECK + 1, title: "Draft Removals", recordIds: drafts.flatMap((row) => row.recordIds) });
       expect(overview.attentionTotal).toBe(1 + ATTENTION_PER_CHECK + 1 + 1);
     });
 
@@ -337,6 +360,7 @@ describe("needs attention rows", () => {
       const rejected = Array.from({ length: ATTENTION_PER_CHECK + 1 }, (_, index) => row(`x${index}`, "Submission failed"));
       const returned = rejected.map((item, index) => ({ removalId: `back${index}`, item: { ...item, recordIds: [`back${index}`] } }));
       const { items } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY, rows({ rejected, returned }));
+      expect(items.every((item) => item.stage === "production" && item.recordKind === "removal")).toBe(true);
       expect(items.find((item) => item.id === "removal-rejected-group")?.recordIds).toEqual(rejected.flatMap((item) => item.recordIds));
       expect(items.find((item) => item.id === "removal-returned-group")?.recordIds).toEqual(returned.map((item) => item.removalId));
     });

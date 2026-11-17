@@ -76,7 +76,7 @@ export function DashboardBody({ data: overview, isLoading: overviewLoading, erro
   const todos = data
     ? [
         ...todoRows(data.attention, data.structuralGaps),
-        ...batchTodoRows(batches ?? [], health.data, batchId ?? null, batchesFailed || health.error ? { facilityId } : null),
+        ...todoRows(batchTodoRows(batches ?? [], health.data, batchId ?? null, batchesFailed || health.error ? { facilityId } : null), []),
       ]
     : [];
   const activity = data ? activityRows(data.activity, timeZone) : [];

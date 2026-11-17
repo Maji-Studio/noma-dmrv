@@ -14,7 +14,7 @@
  */
 import { removalResubmitHref } from "@/lib/removal-correction-copy";
 import { CHANGED_SINCE_REVIEW_LABEL } from "@/lib/certification/interrupted-removal-copy";
-import { RECORD_LINKS, recordHref } from "@/lib/record-links";
+import { RECORD_LINKS, recordHref, type RecordKind } from "@/lib/record-links";
 import { db } from "@/db";
 import {
   applications,
@@ -78,6 +78,7 @@ import {
   epochMs,
   getDashboardStations,
   type DashboardStationsData,
+  type DashboardStationKey,
 } from "./dashboard-stations";
 import {
   buildDashboardStructuralGaps,
@@ -159,6 +160,9 @@ export interface DashboardMassFlowSegment {
 
 export interface DashboardAttentionItem {
   id: string;
+  /** The traceability stage whose attention bubble includes this row. */
+  stage: DashboardStationKey;
+  recordKind: RecordKind;
   /**
    * Entity code shown in the mono column, e.g. "PR-26-0042"; on a grouped row
    * the list it links to, e.g. "Production runs".
@@ -167,7 +171,7 @@ export interface DashboardAttentionItem {
   /** Records a grouped row stands for; absent on a single record's row. */
   count?: number;
   /** Every record represented, including records beyond a grouped check's SQL cap. */
-  recordIds?: string[];
+  recordIds: string[];
   /** Available single rows, so a one-record scope can name that record without another read. */
   recordItems?: DashboardAttentionItem[];
   /** Canonical record date shown beside the entity code. */
@@ -600,18 +604,30 @@ function branchIds(id: SQLWrapper): SQL<string[]> {
  * filter to exact ids (within the filter's limit); the feedstock list has no
  * such filter, so its row opens the plain list.
  */
-const FLAG_GROUPS: Record<FlagKind, { title: string; list: string; href: (facilityId: string, ids: string[]) => string }> = {
+const FLAG_GROUPS: Record<FlagKind, {
+  stage: DashboardStationKey;
+  recordKind: RecordKind;
+  title: string;
+  list: string;
+  href: (facilityId: string, ids: string[]) => string;
+}> = {
   "run-mass": {
+    stage: "production",
+    recordKind: "productionRun",
     title: "Complete runs missing mass data",
     list: "Production runs",
     href: (facilityId, ids) => facilityListHref(RECORD_LINKS.productionRun.path, facilityId, ids),
   },
   "feedstock-missing": {
+    stage: "feedstock",
+    recordKind: "feedstock",
     title: "Feedstock records missing data",
     list: "Feedstock intake",
     href: (facilityId) => facilityListHref(RECORD_LINKS.feedstock.path, facilityId),
   },
   "application-evidence": {
+    stage: "applications",
+    recordKind: "application",
     title: "Applications missing evidence",
     list: "Applications",
     href: (facilityId, ids) => facilityListHref(RECORD_LINKS.application.path, facilityId, ids),
@@ -621,9 +637,10 @@ const FLAG_GROUPS: Record<FlagKind, { title: string; list: string; href: (facili
 function groupedRow(
   kind: string, list: string, title: string, count: number, href: string,
   recordItems: DashboardAttentionItem[],
-  recordIds = recordItems.flatMap((item) => item.recordIds ?? []),
+  recordIds = recordItems.flatMap((item) => item.recordIds),
 ): DashboardAttentionItem {
-  return { id: `${kind}-group`, entityCode: list, count, recordIds, recordItems, date: null, title, href };
+  const { stage, recordKind } = recordItems[0];
+  return { stage, recordKind, id: `${kind}-group`, entityCode: list, count, recordIds, recordItems, date: null, title, href };
 }
 
 /** Active batches take their title from `creditBatchAttention`. */
@@ -789,6 +806,8 @@ export async function getDashboardAttentionItems(
       const existing = interrupted.get(removal.id);
       interrupted.set(removal.id, {
         id: `removal-interrupted-${removal.id}`,
+        stage: "production",
+        recordKind: "removal",
         recordIds: [removal.id],
         entityCode: `${existing?.entityCode ?? removal.code} · ${row.code}`,
         date: null,
@@ -805,6 +824,8 @@ export async function getDashboardAttentionItems(
     if (attention.period === "notSubmitted" || attention.period === "returned") {
       (attention.period === "returned" ? returned : notSubmitted).push({
         id: `batch-pending-${row.id}`,
+        stage: "production",
+        recordKind: "creditBatch",
         recordIds: [row.id],
         entityCode: row.code,
         date: row.dateDay,
@@ -823,6 +844,8 @@ export async function getDashboardAttentionItems(
     const group = FLAG_GROUPS[kind];
     const recordItems = kindRows.map((row): DashboardAttentionItem => ({
       id: `${kind}-${row.id}`,
+      stage: group.stage,
+      recordKind: group.recordKind,
       recordIds: [row.id],
       entityCode: row.code,
       date: row.dateDay ?? (row.dateMs == null ? null : new Date(row.dateMs)),
