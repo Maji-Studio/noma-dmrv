@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { INTERRUPTED_REMOVAL_CHANGED_MESSAGE } from "./interrupted-removal-copy";
 import {
   isSubmissionStreamStalledError,
   streamCertificationSubmission,
@@ -141,6 +142,37 @@ describe("streamCertificationSubmission", () => {
     ).rejects.toThrow("The verifier rejected the statement.");
   });
 
+  it("carries the failure kind and attempt id with a streamed error", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({
+        type: "error",
+        error: "The reviewed data changed.",
+        failureKind: "changed_since_review",
+        attemptId: "attempt-2",
+      }) + "\n",
+    )));
+
+    await expect(streamCertificationSubmission(
+      { kind: "removal", input: REMOVAL_INPUT },
+      () => undefined,
+    )).rejects.toMatchObject({
+      message: "The reviewed data changed.",
+      failureKind: "changed_since_review",
+      attemptId: "attempt-2",
+    });
+  });
+
+  it("does not infer a kind from the exact changed-since-review message", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ type: "error", error: INTERRUPTED_REMOVAL_CHANGED_MESSAGE }) + "\n",
+    )));
+    await expect(streamCertificationSubmission(
+      { kind: "removal", input: REMOVAL_INPUT }, () => undefined,
+    )).rejects.toMatchObject({
+      message: INTERRUPTED_REMOVAL_CHANGED_MESSAGE, failureKind: undefined, attemptId: undefined,
+    });
+  });
+
   it("surfaces a safe admission error from the route", async () => {
     vi.stubGlobal(
       "fetch",
@@ -191,6 +223,8 @@ describe("streamCertificationSubmission", () => {
       '{"type":"progress","update":{"step":"unknown","state":"complete"}}\n',
     ],
     ["an error event without a message", '{"type":"error","error":""}\n'],
+    ["an error with an invalid failure kind", '{"type":"error","error":"Stopped.","failureKind":42}\n'],
+    ["an error with an invalid attempt id", '{"type":"error","error":"Stopped.","attemptId":42}\n'],
     ["a result event without a result", '{"type":"result"}\n'],
     ["a null Removal result", '{"type":"result","result":null}\n'],
     ["a primitive Removal result", '{"type":"result","result":42}\n'],

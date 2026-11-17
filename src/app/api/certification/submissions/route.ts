@@ -4,6 +4,7 @@ import { requireOrgContext, requireOrgRole } from "@/lib/auth/server";
 import { SafeError, toActionError } from "@/lib/errors";
 import { checkRateLimit } from "@/lib/rate-limit/in-memory";
 import { SUBMISSION_STREAM_PING_INTERVAL_MS } from "@/lib/certification/submission-progress";
+import { getSubmissionFailureDetails } from "@/lib/certification/submission-error";
 import {
   submitGhgStatementDialogSchema,
   submitRemovalSchema,
@@ -152,7 +153,7 @@ export async function POST(request: Request): Promise<Response> {
           logActionError(error, {
             message: "submission progress stream failed",
           });
-          send({ type: "error", error: message });
+          send({ type: "error", error: message, ...getSubmissionFailureDetails(error) });
         } finally {
           stopPings();
           if (streamOpen) {

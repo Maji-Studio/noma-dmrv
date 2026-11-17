@@ -174,7 +174,23 @@ describe("certification submission progress route", () => {
       error: new Error("database connection included private details"),
       expected: "The submission could not be completed. Try again.",
     },
-  ])("streams $name and closes the response", async ({ error, expected }) => {
+    {
+      name: "a changed stop with attempt details",
+      error: Object.assign(new SafeError("The reviewed data changed."), {
+        failureKind: "changed_since_review", attemptId: "attempt-2",
+      }),
+      expected: "The reviewed data changed.",
+      details: { failureKind: "changed_since_review", attemptId: "attempt-2" },
+    },
+    {
+      name: "an unexpected error with an attempt id",
+      error: Object.assign(new Error("database connection included private details"), {
+        failureKind: null, attemptId: "attempt-2",
+      }),
+      expected: "The submission could not be completed. Try again.",
+      details: { failureKind: null, attemptId: "attempt-2" },
+    },
+  ])("streams $name and closes the response", async ({ error, expected, details }) => {
     mocks.submitRemoval.mockRejectedValue(error);
 
     const response = await POST(
@@ -192,7 +208,7 @@ describe("certification submission progress route", () => {
     );
 
     const text = await response.text();
-    expect(text).toBe(`${JSON.stringify({ type: "error", error: expected })}\n`);
+    expect(text).toBe(`${JSON.stringify({ type: "error", error: expected, ...details })}\n`);
     expect(mocks.logActionError).toHaveBeenCalledWith(error, {
       message: "submission progress stream failed",
     });

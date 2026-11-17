@@ -1,6 +1,7 @@
 import { startSubmissionRegistryAttempt } from "./submission-attempt-start";
 import { ATTEMPT_SUMMARY_OPERATION } from "@/lib/certification/submission-attempts";
 import { isNoAnswerError } from "@/lib/isometric/error-utils";
+import type { SubmissionFailureDetails } from "@/lib/certification/submission-error";
 import {
   CHANGED_SINCE_REVIEW_FAILURE_KIND,
   InterruptedRemovalChangedError,
@@ -170,7 +171,13 @@ export async function submitRemoval(
       attempt.externalMutation === "none" && error instanceof SafeError
         ? "refused"
         : "failed";
-    throw error;
+    const failure: SubmissionFailureDetails = {
+      attemptId: attempt.id,
+      failureKind: error instanceof InterruptedRemovalChangedError
+        ? CHANGED_SINCE_REVIEW_FAILURE_KIND : null,
+    };
+    // Preserve the original error class for safe copy and server-side handling.
+    throw Object.assign(error instanceof Error ? error : new Error(undefined, { cause: error }), failure);
   } finally {
     const safeError = safeRemovalSubmissionError(attemptError);
     // Best-effort: a failed audit insert must not mask the submission's own

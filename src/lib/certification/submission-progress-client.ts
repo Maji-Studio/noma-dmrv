@@ -6,6 +6,8 @@ import {
   type SubmissionProgressStreamEvent,
   type SubmissionProgressUpdate,
 } from "./submission-progress";
+import { CHANGED_SINCE_REVIEW_FAILURE_KIND } from "./interrupted-removal-copy";
+import { SubmissionError } from "./submission-error";
 /*
  * Keep this timeout comfortably above the server ping cadence. A timeout is a
  * recoverable connection failure, not proof that submission work stopped.
@@ -170,10 +172,19 @@ function parseStreamEvent<T>(
       }
       return { type: "result", result: value.result as T };
     case "error":
-      if (typeof value.error !== "string" || !value.error.trim()) {
+      if (
+        typeof value.error !== "string" || !value.error.trim() ||
+        (value.failureKind !== undefined && value.failureKind !== null &&
+          value.failureKind !== CHANGED_SINCE_REVIEW_FAILURE_KIND) ||
+        (value.attemptId !== undefined && !isNonEmptyString(value.attemptId))
+      ) {
         throw unreadableSubmissionStreamError();
       }
-      return { type: "error", error: value.error };
+      return {
+        type: "error", error: value.error,
+        failureKind: value.failureKind,
+        attemptId: value.attemptId,
+      };
     default:
       throw unreadableSubmissionStreamError();
   }
@@ -247,7 +258,7 @@ export async function streamCertificationSubmission<T>(
         if (event.type === "ping") continue;
         if (event.type === "progress") onProgress(event.update);
         if (event.type === "result") result = event.result;
-        if (event.type === "error") throw new Error(event.error);
+        if (event.type === "error") throw new SubmissionError(event.error, event);
       }
       if (done) break;
     }

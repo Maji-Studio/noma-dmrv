@@ -72,6 +72,28 @@ describe("useSaveFacilityCertifierMapping", () => {
 });
 
 describe("useSubmitRemoval", () => {
+  it("preserves streamed failure details in the mutation rejection", async () => {
+    reactQueryMocks.useQueryClient.mockReturnValue({ invalidateQueries: vi.fn() });
+    reactQueryMocks.useMutation.mockClear();
+    useSubmitRemoval();
+    const [{ mutationFn }] = reactQueryMocks.useMutation.mock.calls[0] as [{
+      mutationFn: (vars: { input: { removalId: string; compilationHash: string }; onProgress: () => void }) => Promise<unknown>;
+    }];
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      type: "error", error: "The reviewed data changed.",
+      failureKind: "changed_since_review", attemptId: "attempt-2",
+    }) + "\n")));
+    try {
+      await expect(mutationFn({
+        input: { removalId: "removal-1", compilationHash: "review-hash" }, onProgress: () => undefined,
+      })).rejects.toMatchObject({
+        message: "The reviewed data changed.", failureKind: "changed_since_review", attemptId: "attempt-2",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("refreshes the dashboard, batch to-dos and list states once an attempt settles", async () => {
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
     reactQueryMocks.useQueryClient.mockReturnValue({ invalidateQueries });
