@@ -1,3 +1,4 @@
+import { withRemovedEntryComponents } from "./emission-line-definition";
 import { deriveLineFileEvidence } from "./emission-line-file-evidence";
 import { selectRemovalEntries } from "@/lib/certification/removal-entry-selection";
 import { omittedProductionSources } from "@/lib/certification/removal-emission-lines";
@@ -11,7 +12,12 @@ export async function loadRemovalEntryContext(ctx: OrgContext, scope: RemovalSco
   if (!scope.removalId) return undefined;
   const observation = facility.templatesById[scope.memberBatches[0]?.removalTemplateId ?? ""]?.observation;
   if (!observation) return undefined;
+  const componentNames = new Map(Object.entries(facts).map(([batchId, batch]) => [batchId, new Map(
+    withRemovedEntryComponents(observation.definition, batch.entries, batch.previousObservations)
+      .groups.flatMap((group) => group.components.map((component) => [component.id, component.displayName] as const)),
+  )]));
   const selection = selectRemovalEntries({ removalId: scope.removalId, memberBatches: scope.memberBatches,
+    componentDisplayName: (componentId, batchId) => componentNames.get(batchId)?.get(componentId),
     applicationDates: scope.lineages.map(lineage => lineage.application.applicationDate), observation,
     ownEntries: Object.values(facts).flatMap(batch => batch.entries), carryEntries: carryContext?.entries ?? [],
     frozenEntrySet, contenders: Object.values(facts)[0]?.contenders ?? [],

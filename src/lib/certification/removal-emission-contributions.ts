@@ -7,7 +7,7 @@ import {
 } from "@/lib/certification/emission-entry-carry";
 import type { CarriedEntryNote } from "./emission-entry-carry-copy";
 import { z } from "zod";
-import { ENTRY_HAS_NO_REMOVAL, formatEmissionEntryMessageLabel, sentEntryOutsideRemovalPeriod } from "@/lib/certification/emission-entry-messages";
+import { ENTRY_HAS_NO_REMOVAL, REENTER_EMISSION_ENTRY, ENTRY_FILE_MISSING_INSTRUCTION, formatEmissionEntryMessageLabel, sentEntryOutsideRemovalPeriod } from "@/lib/certification/emission-entry-messages";
 import { formatUtcDate } from "@/lib/date-utils";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { getMetadataValue, SUBMISSION_METADATA_KEYS, SUBMISSION_EXTERNAL_MUTATIONS } from "./submission-metadata";
@@ -125,9 +125,16 @@ export function deriveRemovalEntryContributions(args: {
   contenders: readonly EntryContender[]; entries: readonly RemovalEntryFact[]; lineSources: LineSources;
   entriesWithoutRemoval?: readonly string[];
   creditBatchCodes?: Readonly<Record<string, string>>;
+  componentDisplayName?: (componentId: string, creditBatchId: string) => string | undefined;
   monitoredInputs: readonly { componentId: string; inputKey: string; unit: string; componentDisplayName?: string }[];
 }): RemovalEntryContributions {
   const result: RemovalEntryContributions = { manifest: [], inputs: [], entrySet: [], selectedEntryIds: [], ownedEntryIds: [], sentSingleComponentIds: [], blockers: [] };
+  const lineRef = (entry: Pick<RemovalEntryFact, "componentId" | "creditBatchId">) => ({
+    componentId: entry.componentId,
+    displayName: args.componentDisplayName?.(entry.componentId, entry.creditBatchId)
+      ?? args.monitoredInputs.find((input) => input.componentId === entry.componentId)?.componentDisplayName
+      ?? entry.componentId,
+  });
   const relevant = args.entries.filter((entry) => !entry.deletedAt && (args.memberBatchIds.includes(entry.creditBatchId) ||
     isCarriedToRemoval(entry, args.removalId)));
   const selected: RemovalEntryFact[] = [];
@@ -149,12 +156,12 @@ export function deriveRemovalEntryContributions(args: {
           componentDisplayName: args.monitoredInputs.find((input) => input.componentId === entry.componentId)?.componentDisplayName,
           occurredOn: entry.occurredOn, creditBatchCode: args.creditBatchCodes?.[entry.creditBatchId] })),
         fixTarget: "emissions", creditBatchId: entry.creditBatchId,
-        lineRef: { componentId: entry.componentId, displayName: entry.componentId },
+        lineRef: lineRef(entry),
       });
     }
     if (!owner && entry.kind === "value" && (args.entriesWithoutRemoval?.includes(entry.id) ?? true)) result.blockers.push({
       code: "entryHasNoRemoval", message: ENTRY_HAS_NO_REMOVAL, fixTarget: "emissions", creditBatchId: entry.creditBatchId,
-      lineRef: { componentId: entry.componentId, displayName: entry.componentId },
+      lineRef: lineRef(entry),
     });
     const holdingRemovalId = entryHoldingRemovalId(entry);
     if (entry.kind === "value" && entry.lineRule === "single" && holdingRemovalId && holdingRemovalId !== args.removalId) {
@@ -163,12 +170,12 @@ export function deriveRemovalEntryContributions(args: {
     }
     if (!owned) continue;
     if (!entry.counts || entry.unitMismatch) {
-      result.blockers.push({ code: "lineNeedsReview", message: entry.reason ?? "Enter the values again for the current component.", fixTarget: "emissions", creditBatchId: entry.creditBatchId, lineRef: { componentId: entry.componentId, displayName: entry.componentId } });
+      result.blockers.push({ code: "lineNeedsReview", message: entry.reason ?? REENTER_EMISSION_ENTRY, fixTarget: "emissions", creditBatchId: entry.creditBatchId, lineRef: lineRef(entry) });
       continue;
     }
     if (entryFileMissing(effectiveFilePolicy(contract), {
       kind: entry.kind, isZero: entryAmountIsZero(entry.values), hasEvidence: entry.evidenceDocumentIds.length > 0,
-    })) result.blockers.push({ code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", fixTarget: "emissions", creditBatchId: entry.creditBatchId, lineRef: { componentId: entry.componentId, displayName: entry.componentId } });
+    })) result.blockers.push({ code: "entryMissingEvidence", message: ENTRY_FILE_MISSING_INSTRUCTION, fixTarget: "emissions", creditBatchId: entry.creditBatchId, lineRef: lineRef(entry) });
     selected.push(entry);
   }
   const components = [...new Set(selected.map((entry) => entry.componentId))].sort();
@@ -177,11 +184,11 @@ export function deriveRemovalEntryContributions(args: {
     const values = entries.filter((entry) => entry.kind === "value");
     const inputs = args.monitoredInputs.filter((input) => input.componentId === componentId);
     if (inputs.length > 1 && effectiveContract(args.lineSources[componentId]).entryPolicy === "additive") {
-      result.blockers.push({ code: "lineNeedsReview", message: "Review this component's entry policy. Paired inputs require a single entry.", fixTarget: "emissions", creditBatchId: entries[0].creditBatchId, lineRef: { componentId, displayName: componentId } });
+      result.blockers.push({ code: "lineNeedsReview", message: "Review this component's entry policy. Paired inputs require a single entry.", fixTarget: "emissions", creditBatchId: entries[0].creditBatchId, lineRef: lineRef(entries[0]) });
       continue;
     }
     if ((inputs.length > 1 || effectiveContract(args.lineSources[componentId]).entryPolicy === "single") && values.length > 1) {
-      result.blockers.push({ code: "singleLineMultipleEntries", message: "This component has values on more than one credit batch. Create separate Removals for these batches.", fixTarget: "emissions", creditBatchId: values[0].creditBatchId, lineRef: { componentId, displayName: componentId } });
+      result.blockers.push({ code: "singleLineMultipleEntries", message: "This component has values on more than one credit batch. Create separate Removals for these batches.", fixTarget: "emissions", creditBatchId: values[0].creditBatchId, lineRef: lineRef(values[0]) });
       continue;
     }
     // A value supersedes that batch's zero, even if a caller supplied stale facts.
@@ -192,7 +199,7 @@ export function deriveRemovalEntryContributions(args: {
       for (const entry of counting) {
         const value = entry.kind === "zero" ? { magnitude: "0", unit: input.unit } : entry.values.find((value) => value.inputKey === input.inputKey);
         if (!value || value.unit !== input.unit || canonicalDecimal(value.magnitude) === undefined) {
-          result.blockers.push({ code: "lineNeedsReview", message: "Enter the values again for the current component.", fixTarget: "emissions", creditBatchId: entry.creditBatchId, lineRef: { componentId: entry.componentId, displayName: entry.componentId } });
+          result.blockers.push({ code: "lineNeedsReview", message: REENTER_EMISSION_ENTRY, fixTarget: "emissions", creditBatchId: entry.creditBatchId, lineRef: lineRef(entry) });
           continue;
         }
         manifest.entries.push({ entryId: entry.id, creditBatchId: entry.creditBatchId, occurredOn: entry.occurredOn,

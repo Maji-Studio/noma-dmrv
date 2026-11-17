@@ -1,3 +1,4 @@
+import { REENTER_EMISSION_ENTRY } from "./emission-entry-messages";
 import { entryAmountIsZero } from "./emission-entry-evidence";
 import type { EntryCarryDisposition, EntryCarryDestination } from "./emission-entry-carry";
 import type { listEmissionEntries } from "@/data-access/emission-entries";
@@ -17,7 +18,7 @@ export function deriveEmissionEntryFacts(
     const previous = previousObservations.get(entry.observationId);
     const status = previous
       ? emissionEntryCounts(previous, observation, entry.componentId)
-      : { counts: false, reason: "Enter the values again for the current template component.", canConfirm: false };
+      : { counts: false, reason: REENTER_EMISSION_ENTRY, canConfirm: false };
     const component = observation.definition.groups
       .flatMap((group) => group.components)
       .find((component) => component.id === entry.componentId);

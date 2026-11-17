@@ -1,3 +1,4 @@
+import { REENTER_EMISSION_ENTRY } from "./emission-entry-messages";
 import { z } from "zod";
 import { formatFacilityDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
@@ -135,7 +136,7 @@ export function emissionEntryCounts(
   const after = entryLine(current, componentId);
   const incompatible = {
     counts: false,
-    reason: "Enter the values again for the current template component.",
+    reason: REENTER_EMISSION_ENTRY,
     canConfirm: false,
   };
   if (

@@ -1,3 +1,4 @@
+import { withRemovedEntryComponents } from "@/lib/certification/emission-line-definition";
 import { loadFacilityEmissionEntryCarry } from "./emission-entry-carry";
 import { lockEmissionCorrectionScope, emissionCorrectionWindow } from "./emission-entry-corrections";
 import { deriveRemovalEntryInputs } from "@/lib/certification/removal-entry-inputs";
@@ -117,9 +118,14 @@ export async function recordEmissionZeros(ctx: OrgContext, input: z.input<typeof
     const availableApplications = await listEmissionEntryAvailableApplications(ctx, memberBatchIds, tx);
     const nowMs = Date.now();
     const orphanIds = entriesWithoutRemoval(candidates, contenders, new Set(reservations.filter((row) => isLiveEntryReservation(row, nowMs)).map((row) => row.submissionId)), availableApplications);
+    const componentNames = new Map(memberBatches.map((member) => [member.id, new Map(
+      withRemovedEntryComponents(observation.definition, candidates.filter((entry) => entry.creditBatchId === member.id), entryFacts[member.id].previousObservations)
+        .groups.flatMap((group) => group.components.map((component) => [component.id, component.displayName] as const)),
+    )]));
     const contributions = deriveRemovalEntryInputs({
       removalId: data.removalId, memberBatchIds, window: contenders.find((row) => row.removalId === data.removalId)?.window ?? null,
       contenders, entries: candidates, entriesWithoutRemoval: orphanIds, observation, reservations, nowMs,
+      componentDisplayName: (componentId, batchId) => componentNames.get(batchId)?.get(componentId),
     });
     const problems = validateLineSources(observation.definition, observation.lineSources);
     const { emptyLinesByBatchId } = deriveRemovalEmissionLines(Object.fromEntries(memberBatches.map((member) => [member.id, {

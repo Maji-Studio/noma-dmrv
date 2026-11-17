@@ -1,4 +1,4 @@
-import { LINE_FILE_MISSING_INSTRUCTION, EMPTY_REMOVAL_LINE } from "@/lib/certification/emission-entry-messages";
+import { LINE_FILE_MISSING_INSTRUCTION, EMPTY_REMOVAL_LINE, REENTER_EMISSION_ENTRY, ENTRY_FILE_MISSING_INSTRUCTION } from "@/lib/certification/emission-entry-messages";
 import { DomainError } from "@/lib/domain-errors";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
 import type { AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
@@ -14,8 +14,6 @@ import type { RemovalBlocker } from "./removal-blockers";
 
 const UNIT_MISMATCH_COPY = { detail: "Emissions values use different units.", instruction: "Use the same unit before adding them." };
 const UNIT_MISMATCH_MESSAGE = `${UNIT_MISMATCH_COPY.detail} ${UNIT_MISMATCH_COPY.instruction}`;
-const REENTER_EMISSION_ENTRY = "Enter the values again for the current template component.";
-const MISSING_EVIDENCE_INSTRUCTION = "Add a file for each emissions entry with a value.";
 
 export const EMISSION_LINE_STATE_LABELS = {
   filled: "Recorded", empty: "Not recorded", missingEvidence: "File missing",
@@ -121,7 +119,7 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     if (decision && decision.state !== "empty") { state = decision.state; blocker = decision.blocker; }
     else if (values.some((entry) => entryFileMissing(filePolicy, entry))) {
       state = "missingEvidence";
-      blocker = { code: "entryMissingEvidence", message: MISSING_EVIDENCE_INSTRUCTION, copy: { instruction: MISSING_EVIDENCE_INSTRUCTION }, fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+      blocker = { code: "entryMissingEvidence", message: ENTRY_FILE_MISSING_INSTRUCTION, copy: { instruction: ENTRY_FILE_MISSING_INSTRUCTION }, fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     } else if (recordsNeedFile(filePolicy, automaticFigure?.magnitude ?? "0") &&
       !facts.recordsFileLocked &&
       !facts.lineFiles?.some(({ anchor, documents }) => !anchor.retiredAt && anchor.componentId === component.id && documents.length > 0)) {

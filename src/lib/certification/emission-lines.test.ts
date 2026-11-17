@@ -103,7 +103,7 @@ it.each(["single-with-automatic-source", "foreign-automatic-source", "disallowed
 
 it.each([
   "Confirm this entry for the changed template component.",
-  "Enter the values again for the current template component.",
+  "Enter the values again for the current component.",
 ])("keeps stale entries visible with the action: %s", (reason) => {
   const f = facts();
   f.entries = [entry(f, { counts: false, reason })];
@@ -286,7 +286,7 @@ it("splits the stale-entry fallback instruction when no reason is supplied", () 
   const f = facts();
   f.entries = [entry(f, { counts: false })];
   const [line] = deriveBatchEmissionLines(f);
-  expect(line.blocker?.message).toBe("Enter the values again for the current template component.");
+  expect(line.blocker?.message).toBe("Enter the values again for the current component.");
   expect(line.blocker?.copy).toEqual({ instruction: line.blocker?.message });
 });
 

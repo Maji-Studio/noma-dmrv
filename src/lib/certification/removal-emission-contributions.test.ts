@@ -1,3 +1,4 @@
+import { lineFileEvidenceFacts } from "../../../tests/helpers/line-file-evidence-facts";
 import { ENTRY_FILE_CASES } from "./emission-entry-evidence-test-fixtures";
 import { deriveRemovalBatchEmissionLines } from "./removal-emission-lines";
 import { describe, expect, it } from "vitest";
@@ -244,4 +245,54 @@ it.each(ENTRY_FILE_CASES)("applies the contribution file requirement to $label",
   });
   expect(result.blockers.map((blocker) => blocker.code)).toEqual(missing ? ["entryMissingEvidence"] : []);
   expect(result.selectedEntryIds).toEqual(["e1"]);
+});
+
+it.each([
+  ["missing evidence", { evidenceDocumentIds: [] }, "entryMissingEvidence"],
+  ["stale entry", { counts: false }, "lineNeedsReview"],
+  ["incompatible value", { values: [] }, "lineNeedsReview"],
+  ["unowned entry", { occurredOn: "2026-03-10" }, "entryHasNoRemoval"],
+  ["sent outside period", { occurredOn: "2026-03-10", sentByRemovalId: "r1" }, "sentEntryOutsideWindow"],
+] satisfies [string, Partial<RemovalEntryFact>, string][])("names the component on a %s blocker at its source", (_label, overrides, code) => {
+  const result = derive([entry(overrides)], {
+    componentDisplayName: (componentId, batchId) => componentId === "c1" && batchId === "b1" ? "Electricity" : undefined,
+  });
+  expect(result.blockers).toEqual([expect.objectContaining({
+    code, fixTarget: "emissions", creditBatchId: "b1", lineRef: { componentId: "c1", displayName: "Electricity" },
+  })]);
+});
+
+it("uses a known monitored input name without a separate lookup", () => {
+  const result = derive([entry({ counts: false })], {
+    monitoredInputs: [{ componentId: "c1", componentDisplayName: "Electricity", inputKey: "energy", unit: "kWh" }],
+  });
+  expect(result.blockers[0].lineRef).toEqual({ componentId: "c1", displayName: "Electricity" });
+});
+
+it("keeps the latest template name on a line when the entry observation has an earlier name", () => {
+  const { observation, batch } = lineFileEvidenceFacts();
+  const stored = entry({ componentId: "component", counts: false });
+  const contributions = derive([stored], {
+    lineSources: observation.lineSources, componentDisplayName: () => "Earlier energy name",
+  });
+  expect(contributions.blockers[0].lineRef?.displayName).toBe("Earlier energy name");
+  const [line] = deriveRemovalBatchEmissionLines({
+    ...observation, ...batch, entries: [{ ...stored, hasEvidence: true, total: null }],
+    problems: [], enrichmentComplete: true, entriesCanSubmit: true,
+  }, "b1", { entries: [stored] }, contributions);
+  expect(line.displayName).toBe("Energy");
+  expect(line.blocker?.lineRef?.displayName).toBe("Energy");
+});
+
+it.each(["additive", "single"] as const)("names grouped %s entry blockers by the affected batch", (entryPolicy) => {
+  const result = derive([entry(), entry({ id: "e2", creditBatchId: "b2" })], {
+    memberBatchIds: ["b1", "b2"], contenders: [{ ...first, creditBatchIds: ["b1", "b2"] }],
+    lineSources: { c1: { scope: "operating", origin: "reviewed", entryPolicy } },
+    monitoredInputs: ["initial", "final"].map((inputKey) => ({ componentId: "c1", inputKey, unit: "kWh" })),
+    componentDisplayName: (_componentId, batchId) => batchId === "b1" ? "Electricity" : "Earlier electricity name",
+  });
+  expect(result.blockers).toEqual([expect.objectContaining({
+    code: entryPolicy === "additive" ? "lineNeedsReview" : "singleLineMultipleEntries",
+    creditBatchId: "b1", lineRef: { componentId: "c1", displayName: "Electricity" },
+  })]);
 });

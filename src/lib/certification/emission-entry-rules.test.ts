@@ -179,7 +179,7 @@ describe("entries after template changes", () => {
     const before = observation();
     const after = structuredClone(before);
     after.enrichment.line.electricity_use = { unit: "Wh" };
-    expect(emissionEntryCounts(before, after, "line")).toMatchObject({ counts: false, canConfirm: false, reason: "Enter the values again for the current template component." });
+    expect(emissionEntryCounts(before, after, "line")).toMatchObject({ counts: false, canConfirm: false, reason: "Enter the values again for the current component." });
     expect(emissionEntryCounts(after, after, "line").counts).toBe(true);
   });
   it.each(["removed", "kind", "policy", "scope", "template", "unknown-unit"])(

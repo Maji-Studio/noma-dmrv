@@ -16,6 +16,7 @@ export function selectRemovalEntries(args: {
   memberBatches: readonly { id: string; code: string; startDate: string }[];
   applicationDates: readonly (Date | string)[];
   observation: EntryObservation;
+  componentDisplayName?: Input["componentDisplayName"];
   ownEntries: readonly RemovalEntryFact[];
   carryEntries: readonly CarriedEntry[];
   frozenEntrySet?: { entryId: string; contentRevision: number }[];
@@ -39,7 +40,7 @@ export function selectRemovalEntries(args: {
     frozen, belongsToFrozenView,
     reservationIds: [...new Set(entries.flatMap(entry => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []))],
     derive(reservations: Input["reservations"], nowMs: number) {
-      const contributions = deriveRemovalEntryInputs({ removalId, memberBatchIds: memberIds, observation,
+      const contributions = deriveRemovalEntryInputs({ removalId, memberBatchIds: memberIds, observation, componentDisplayName: args.componentDisplayName,
         window: deriveRemovalEntryWindow(args.memberBatches, args.applicationDates),
         creditBatchCodes: Object.fromEntries([...args.memberBatches.map(batch => [batch.id, batch.code]),
           ...carriedEntries.map(entry => [entry.creditBatchId, entry.creditBatchCode])]),

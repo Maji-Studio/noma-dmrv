@@ -1,3 +1,5 @@
+import { lineFileEvidenceFacts } from "../../../tests/helpers/line-file-evidence-facts";
+import { deriveRemovalEmissionLines } from "./removal-emission-lines";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 import { emissionEntrySourceCandidates } from "@/lib/certification/emission-entry-source-bindings";
@@ -181,4 +183,29 @@ it("requires proof on the claiming Removal even when batch-level proof is locked
   expect(loaded.b2.recordsFileLocked).toBe(true);
   // With the lock cleared and the figure kept, the line requires the file (emission-line-file-evidence.test.ts).
   expect(result!.batchFacts.b2.automaticFigures["run-electricity"]).toEqual({ magnitude: "10", unit: "kWh" });
+});
+
+it.each([false, true])("builds named contribution blockers for a component removed from the current template: %s", async (removed) => {
+  const { observation, batch } = lineFileEvidenceFacts();
+  const previous = { ...facility.templatesById.t1!.observation!, ...observation };
+  const current = structuredClone(previous);
+  if (removed) current.definition.groups = [];
+  const stored = {
+    ...facts().b1.entries[0], componentId: "component", observationId: "earlier-observation", counts: false,
+  };
+  const batchFacts = {
+    b1: { ...batch, entries: [stored], contenders: facts().b1.contenders,
+      previousObservations: new Map([["earlier-observation", previous]]) },
+  };
+  const result = await loadRemovalEntryContext(makeTestOrgContext(), scope, { batchFacts }, {
+    templatesById: { t1: { observation: current } },
+  } as unknown as FacilityCertifierFacts);
+  expect(result?.contributions.blockers).toEqual([expect.objectContaining({
+    code: "lineNeedsReview", creditBatchId: "b1", fixTarget: "emissions",
+    lineRef: { componentId: "component", displayName: "Energy" },
+  })]);
+  const { emissionLinesByBatchId } = deriveRemovalEmissionLines({
+    b1: { ...current, ...batchFacts.b1, problems: [], enrichmentComplete: true },
+  });
+  expect(emissionLinesByBatchId.b1[0].displayName).toBe(result?.contributions.blockers[0].lineRef?.displayName);
 });
