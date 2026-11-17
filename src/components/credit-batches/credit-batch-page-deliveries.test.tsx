@@ -43,15 +43,18 @@ describe("delivery list", () => {
   it("links each row's label block to its application and keeps the Removal link", () => {
     mount();
     const list = screen.getByRole("heading", { name: /Applied biochar by delivery/ }).closest("section") ?? document.body;
-    const rows = within(list).getAllByRole("listitem");
-    expect(rows).toHaveLength(2);
-    const first = within(rows[0]).getByRole("link", { name: /DL-26-001 to DIS\/123/ });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+
+    const first = within(list).getByRole("link", { name: /AP-26-001/ });
     expect(first.getAttribute("href")).toBe("/applications?facility=facility-1&application=app-1");
+    expect(first.textContent).toContain("DL-26-001 to DIS/123");
     expect(first.textContent).toContain("AP-26-001, applied Aug 10, 2026");
-    expect(within(rows[0]).getByRole("link", { name: /RM-26-001/ })).toBeTruthy();
-    expect(within(rows[0]).getAllByRole("link")).toHaveLength(2);
-    const second = within(rows[1]).getByRole("link", { name: /AP-26-002/ });
-    expect(second.getAttribute("href")).toContain("app-2");
-    expect(within(rows[1]).getAllByRole("link")).toHaveLength(1);
+    const firstRow = first.closest("li") as HTMLElement;
+    expect(within(firstRow).getByRole("link", { name: /RM-26-001/ })).toBeTruthy();
+    expect(within(firstRow).getAllByRole("link")).toHaveLength(2);
+
+    const second = within(list).getByRole("link", { name: /AP-26-002/ });
+    expect(second.getAttribute("href")).toBe("/applications?facility=facility-1&application=app-2");
+    expect(within(second.closest("li") as HTMLElement).getAllByRole("link")).toHaveLength(1);
   });
 });
