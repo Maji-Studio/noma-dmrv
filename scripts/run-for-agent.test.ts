@@ -10,6 +10,7 @@ const READABLE_MODE = 0o644;
 const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 7;
 const EXIT_USAGE = 2;
+const EXIT_LOCKED = 75;
 const EXIT_MISSING = 127;
 const EXIT_INTERRUPT = 130;
 const EXIT_TERMINATE = 143;
@@ -64,6 +65,9 @@ function log() {
 }
 function statusPath() {
   return join(root, ".scratchpad/runs/task.exit");
+}
+function lockPath() {
+  return join(root, ".scratchpad/runs/task.lock");
 }
 function start(): { child: ChildProcess; completed: Promise<number | null> } {
   const child = spawn(SCRIPT, ["task"], {
@@ -120,6 +124,7 @@ describe("run-for-agent", () => {
     expect(log()).toContain("progress\n");
     expect(log().endsWith(`\nexit=${EXIT_SUCCESS}\n`)).toBe(true);
     expect(readFileSync(statusPath(), "utf8")).toBe(`${EXIT_SUCCESS}\n`);
+    expect(existsSync(lockPath())).toBe(false);
   });
 
   it("propagates a failing script status and logs it after unterminated output", () => {
@@ -152,6 +157,48 @@ while [ ! -f .scratchpad/release ]; do sleep ${POLL_INTERVAL_SECONDS}; done
     }
   });
 
+  it("refuses overlapping runs without touching the first run's log or status", async () => {
+    prepare(`#!/bin/bash
+printf '${READY_MARKER}'
+while [ ! -f .scratchpad/release ]; do sleep ${POLL_INTERVAL_SECONDS}; done
+printf 'first run finished\\n'
+exit ${EXIT_FAILURE}
+`);
+    const { child, completed } = start();
+    await waitForMarker(child);
+    const firstLog = log();
+    expect(readFileSync(join(lockPath(), "pid"), "utf8")).toBe(`${child.pid}\n`);
+    expect(existsSync(statusPath())).toBe(false);
+    const refused = run();
+    expect(refused.status).toBe(EXIT_LOCKED);
+    expect(refused.stderr).toContain("already running");
+    expect(log()).toBe(firstLog);
+    expect(existsSync(statusPath())).toBe(false);
+    // Also prove refusal preserves an existing status, rather than removing it.
+    writeFileSync(statusPath(), `${EXIT_SUCCESS}\n`);
+    expect(run().status).toBe(EXIT_LOCKED);
+    expect(readFileSync(statusPath(), "utf8")).toBe(`${EXIT_SUCCESS}\n`);
+    expect(log()).toBe(firstLog);
+    writeFileSync(join(root, ".scratchpad/release"), "");
+    expect(await completed).toBe(EXIT_FAILURE);
+    expect(log()).toBe(`${firstLog}first run finished\n\nexit=${EXIT_FAILURE}\n`);
+    expect(readFileSync(statusPath(), "utf8")).toBe(`${EXIT_FAILURE}\n`);
+    expect(existsSync(lockPath())).toBe(false);
+  });
+
+  it("takes over a lock whose runner PID is dead", () => {
+    prepare("#!/bin/bash\nprintf 'reclaimed\\n'\n");
+    const previous = run();
+    expect(previous.status).toBe(EXIT_SUCCESS);
+    expect(() => process.kill(previous.pid, 0)).toThrowError(expect.objectContaining({ code: "ESRCH" }));
+    mkdirSync(lockPath());
+    writeFileSync(join(lockPath(), "pid"), `${previous.pid}\n`);
+    expect(run().status).toBe(EXIT_SUCCESS);
+    expect(log()).toContain("reclaimed\n");
+    expect(readFileSync(statusPath(), "utf8")).toBe(`${EXIT_SUCCESS}\n`);
+    expect(existsSync(lockPath())).toBe(false);
+  });
+
   it.each([
     ["SIGINT", EXIT_INTERRUPT],
     ["SIGTERM", EXIT_TERMINATE],
@@ -164,6 +211,7 @@ while [ ! -f .scratchpad/release ]; do sleep ${POLL_INTERVAL_SECONDS}; done
       expect(existsSync(statusPath())).toBe(false);
       expect(child.kill(signal)).toBe(true);
       expect(await completed).toBe(code);
+      expect(existsSync(lockPath())).toBe(false);
       expect(readFileSync(statusPath(), "utf8")).toBe(`${code}\n`);
       expect(log().endsWith(`\nexit=${code}\n`)).toBe(true);
       expect(log().split("\n").filter((line) => line.startsWith("exit="))).toEqual([`exit=${code}`]);
@@ -213,6 +261,13 @@ while :; do :; done
     expect(log()).toContain("first\nerror\nlast\n");
   });
 
+  it("inherits ignored terminal job-control signals in the prepared script", async () => {
+    prepare("#!/bin/bash\nkill -s TTIN \"$$\"\nkill -s TTOU \"$$\"\nprintf 'signals survived\\n'\n");
+    const { completed } = start();
+    expect(await completed).toBe(EXIT_SUCCESS);
+    expect(log()).toContain("signals survived\n");
+  });
+
   it("passes arguments through without splitting or expansion", () => {
     prepare('#!/bin/bash\nprintf "<%s>\\n" "$@"\n');
     expect(run(["task", "two words", "*.txt", ""]).status).toBe(EXIT_SUCCESS);
@@ -253,6 +308,7 @@ printf '%s\\n' '${root}/.git'
     expect(result.stderr).toContain("prepared script not found");
     expect(log().endsWith(`\nexit=${EXIT_MISSING}\n`)).toBe(true);
     expect(readFileSync(statusPath(), "utf8")).toBe(`${EXIT_MISSING}\n`);
+    expect(existsSync(lockPath())).toBe(false);
   });
 
   it.each(["", "..", "../task", "a/b", "a b", "-task"])("refuses invalid name %j without creating logs", (name) => {

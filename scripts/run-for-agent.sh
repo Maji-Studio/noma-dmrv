@@ -4,10 +4,12 @@
 #   until [ -s "<main checkout>/.scratchpad/runs/<name>.exit" ]; do sleep 1; done
 # Then hand the human one line: "<main checkout>/scripts/run-for-agent.sh" <name> [args...]
 # RUN_FOR_AGENT_ROOT overrides discovery for isolated tests only.
+# A per-name lock refuses overlapping runs with exit 75.
 set -euo pipefail
 
 EXIT_SUCCESS=0
 EXIT_USAGE=2
+EXIT_LOCKED=75
 EXIT_MISSING=127
 EXIT_INTERRUPT=130
 EXIT_TERMINATE=143
@@ -23,7 +25,7 @@ usage() {
 }
 
 if [ "$#" -eq 0 ]; then usage >&2; exit "$EXIT_USAGE"; fi
-case "$1" in --help|-h) usage; exit 0 ;; esac
+case "$1" in --help|-h) usage; exit "$EXIT_SUCCESS" ;; esac
 if [[ ! "$1" =~ $NAME_PATTERN ]]; then
   printf 'run-for-agent: invalid prepared script name: %s\n' "$1" >&2
   usage >&2
@@ -42,17 +44,42 @@ PREPARED="$MAIN_CHECKOUT/.scratchpad/$NAME.sh"
 RUNS_DIR="$MAIN_CHECKOUT/.scratchpad/runs"
 LOG="$RUNS_DIR/$NAME.log"
 STATUS="$RUNS_DIR/$NAME.exit"
+LOCK="$RUNS_DIR/$NAME.lock"
 PIPELINE_PID=''
 mkdir -p "$RUNS_DIR"
-rm -f "$STATUS"
+
+refuse_locked() {
+  printf 'run-for-agent: prepared script already running or lock being acquired: %s\n' "$NAME" >&2
+  exit "$EXIT_LOCKED"
+}
+
+while ! mkdir "$LOCK" 2>/dev/null; do
+  LOCK_PID=''
+  IFS= read -r LOCK_PID 2>/dev/null < "$LOCK/pid" || refuse_locked
+  [[ "$LOCK_PID" =~ ^[1-9][0-9]*$ ]] || refuse_locked
+  if kill -0 "$LOCK_PID" 2>/dev/null; then refuse_locked; fi
+  # Only one contender may reclaim this dead owner's directory. Recheck after
+  # claiming it in case the previous owner was replaced in the meantime.
+  mkdir "$LOCK/reclaim" 2>/dev/null || refuse_locked
+  CURRENT_LOCK_PID=''
+  IFS= read -r CURRENT_LOCK_PID 2>/dev/null < "$LOCK/pid" || true
+  if [ "$CURRENT_LOCK_PID" != "$LOCK_PID" ] || kill -0 "$LOCK_PID" 2>/dev/null; then
+    rmdir "$LOCK/reclaim" 2>/dev/null || true
+    refuse_locked
+  fi
+  rm -f "$LOCK/pid"
+  rm -rf "$LOCK"
+done
 
 finish() {
   # Publishing is terminal: a second signal must not interrupt or duplicate it.
   trap '' INT TERM HUP PIPE
+  trap - EXIT
   printf '\nexit=%s\n' "$1" >> "$LOG" || true
   local temporary_status="$STATUS.$$.tmp"
   printf '%s\n' "$1" > "$temporary_status"
   mv -f "$temporary_status" "$STATUS"
+  rm -rf "$LOCK"
   printf '\nexit=%s\n' "$1" || true
   exit "$1"
 }
@@ -82,6 +109,9 @@ interrupt() {
 trap 'interrupt "$EXIT_INTERRUPT"' INT
 trap 'interrupt "$EXIT_TERMINATE"' TERM
 trap 'interrupt "$EXIT_HANGUP"' HUP
+trap 'finish "$?"' EXIT
+printf '%s\n' "$$" > "$LOCK/pid"
+rm -f "$STATUS"
 
 printf 'start=%s name=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$NAME" | tee "$LOG"
 
@@ -109,12 +139,13 @@ run_prepared() {
 
 # A background job lets wait handle signals immediately on Bash 3.2. Monitor
 # mode gives this job its own group; disable it inside so the pipeline shares it.
-# The job is outside the terminal's foreground group, so a prompt would stop it:
-# stdin is /dev/null and a prepared script that reads input fails at once.
+# The job is outside the terminal's foreground group. Ignore terminal job-control
+# signals so /dev/tty reads fail instead of stopping it; stdin stays /dev/null.
 set -m
 (
   set +m
   set +e
+  trap '' TTIN TTOU
   run_prepared "$@" 2>&1 | tee -a "$LOG"
   exit "${PIPESTATUS[0]}"
 ) < /dev/null &
