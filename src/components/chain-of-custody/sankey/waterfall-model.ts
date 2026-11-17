@@ -196,8 +196,8 @@ export function buildWaterfall(sankey: CreditBatchSankeyData): WaterfallModel {
   const runRecords = (figures: (run: LineageRunFacts) => [number | null, number | null], words: RowWords) =>
     facts.runs.map((run) => withNote(runRecord(run, null), ...figures(run), words)).sort(byCode);
   const productRecords = facts.products
-    .map(({ id, code, name, appliedKg, storedKg }) => withNote(
-      { id, code, name, kind: "biocharProduct", massKg: null }, storedKg, appliedKg, ROW_WORDS.in_storage,
+    .map(({ id, code, name, appliedKg, rowStoredKg }) => withNote(
+      { id, code, name, kind: "biocharProduct", massKg: null }, rowStoredKg, appliedKg, ROW_WORDS.in_storage,
     ))
     .sort(byCode);
 

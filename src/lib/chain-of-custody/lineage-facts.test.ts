@@ -3,7 +3,6 @@ import { PERCENT_SCALE } from "@/lib/mass-moisture";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { extractLineageFacts } from "./lineage-facts";
 import { massTotalsLineage } from "./lineage-mass-totals-test-fixtures";
-import { resolveChainSources } from "./sources";
 
 const SLICE_WET_KG = 120;
 const SLICE_DRY_KG = 90;
@@ -29,8 +28,6 @@ describe("extractLineageFacts", () => {
     entry.feedstocks = [];
     const facts = extractLineageFacts([entry]);
 
-    expect(facts.sources).toEqual([resolveChainSources(entry)]);
-    expect(facts.sources[0]).toBe(entry.sources);
     expect(facts.runs).toEqual([{
       id: "run-1", code: "PR-1", dryInKg: RUN_DRY_IN_KG, dryOutKg: RUN_DRY_OUT_KG,
       wetInKg: FEEDSTOCK_WET_KG, allocatedKg: SLICE_DRY_KG,
@@ -38,7 +35,7 @@ describe("extractLineageFacts", () => {
     expect(facts.feedstockCount).toBe(1);
     expect(facts.feedstockInKg).toBe(RUN_DRY_IN_KG);
     expect(facts.runOutputKg).toBe(RUN_DRY_OUT_KG);
-    expect(facts.products[0]).toMatchObject({ allocatedKg: SLICE_DRY_KG, massKg: SLICE_DRY_KG, storedKg: SLICE_DRY_KG });
+    expect(facts.products[0]).toMatchObject({ allocatedKg: SLICE_DRY_KG, columnMassKg: SLICE_DRY_KG, rowStoredKg: SLICE_DRY_KG });
   });
 
   it.each([{ sources: undefined }, { sources: [] }])("keeps legacy source mass behavior with sources=$sources", ({ sources }) => {
@@ -46,25 +43,26 @@ describe("extractLineageFacts", () => {
     entry.sources = sources;
     const facts = extractLineageFacts([entry]);
 
-    expect(facts.sources).toEqual([resolveChainSources(entry)]);
-    expect(facts.sources[0]).toEqual([{
-      productionRun: entry.productionRun, feedstocks: entry.feedstocks,
-      reactor: null, allocatedWetMassKg: null, allocatedDryMassKg: null,
+    expect(facts.runs).toEqual([{
+      id: "run-1", code: "PR-1", dryInKg: RUN_DRY_IN_KG, dryOutKg: RUN_DRY_OUT_KG,
+      wetInKg: FEEDSTOCK_WET_KG, allocatedKg: null,
     }]);
-    expect(facts.runs[0].allocatedKg).toBeNull();
+    expect(facts.feedstocks).toEqual([{
+      id: "feedstock-1", code: "FS-1", name: null, wetKg: FEEDSTOCK_WET_KG,
+    }]);
     // Empty explicit sources historically mean a known zero product allocation,
     // even though run resolution still falls back to the legacy run.
     expect(facts.products[0].allocatedKg).toBe(sources ? 0 : null);
     expect(facts.lotMassKg).toBe(sources ? 0 : PRODUCT_WET_KG * (1 - entry.biocharProduct!.moistureContentPercent! / PERCENT_SCALE));
   });
 
-  it("has no resolved sources without a run and handles an empty batch", () => {
+  it("has no run or feedstock facts without a run and handles an empty batch", () => {
     const entry = slice();
     entry.sources = [];
     entry.productionRun = null;
-    expect(extractLineageFacts([entry]).sources).toEqual([[]]);
+    expect(extractLineageFacts([entry])).toMatchObject({ runs: [], feedstocks: [], feedstockCount: 0 });
     expect(extractLineageFacts([])).toMatchObject({
-      sources: [], runs: [], feedstocks: [], products: [], applications: [],
+      runs: [], feedstocks: [], products: [], applications: [],
       feedstockCount: 0, hasProductAllocations: false,
       feedstockInKg: 0, runOutputKg: 0, lotMassKg: 0, appliedKg: 0,
     });
@@ -77,11 +75,10 @@ describe("extractLineageFacts", () => {
     entry.sources!.push(second.sources![0]);
     const facts = extractLineageFacts([entry]);
 
-    expect(facts.sources[0]).toHaveLength(2);
     expect(facts.runs.map((run) => run.id)).toEqual(["run-1", "run-2"]);
     expect(facts.products[0]).toMatchObject({
       allocatedKg: SLICE_DRY_KG + SECOND_SLICE_DRY_KG,
-      massKg: SLICE_DRY_KG + SECOND_SLICE_DRY_KG,
+      columnMassKg: SLICE_DRY_KG + SECOND_SLICE_DRY_KG,
     });
   });
 
@@ -92,7 +89,7 @@ describe("extractLineageFacts", () => {
     const dryKg = SLICE_DRY_KG + SECOND_SLICE_DRY_KG;
 
     expect(facts.products).toHaveLength(1);
-    expect(facts.products[0]).toMatchObject({ allocatedKg: dryKg, appliedKg: dryKg, storedKg: dryKg, massKg: dryKg });
+    expect(facts.products[0]).toMatchObject({ allocatedKg: dryKg, appliedKg: dryKg, rowStoredKg: dryKg, columnMassKg: dryKg });
     expect(facts.applications).toEqual([{
       id: "application-1", code: "AP-1", name: null,
       massKg: dryKg, wetKg: SLICE_WET_KG + SECOND_SLICE_WET_KG,
@@ -145,7 +142,7 @@ describe("extractLineageFacts", () => {
     expect(facts.feedstockInKg).toBe(0);
     expect(facts.runOutputKg).toBe(0);
     expect(facts.runs[0].dryInKg).toBe(missing);
-    expect(facts.products[0]).toMatchObject({ allocatedKg: null, massKg: 0, storedKg: null });
+    expect(facts.products[0]).toMatchObject({ allocatedKg: null, columnMassKg: 0, rowStoredKg: null });
   });
 
   it.each([
@@ -164,7 +161,7 @@ describe("extractLineageFacts", () => {
     };
     const facts = extractLineageFacts([entry]);
 
-    expect(facts.products[0]).toMatchObject({ massKg: expectedKg, storedKg: expectedKg });
+    expect(facts.products[0]).toMatchObject({ columnMassKg: expectedKg, rowStoredKg: expectedKg });
     expect(facts.lotMassKg).toBe(expectedKg);
   });
 
@@ -194,6 +191,6 @@ describe("extractLineageFacts", () => {
     expect(facts.feedstockInKg).toBe(RUN_DRY_IN_KG + SLICE_DRY_KG);
     expect(facts.feedstocks.map((record) => record.id)).toEqual(["feedstock-1"]);
     expect(facts.feedstockCount).toBe(2);
-    expect(facts.products[0].massKg).toBeGreaterThan(facts.products[0].storedKg!);
+    expect(facts.products[0].columnMassKg).toBeGreaterThan(facts.products[0].rowStoredKg!);
   });
 });

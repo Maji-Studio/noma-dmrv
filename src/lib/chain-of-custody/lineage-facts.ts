@@ -60,18 +60,12 @@ interface ProductFacts extends RecordFacts {
   appliedKg: number;
   allocatedKg: number | null;
   /** Resolved from the first record for the waterfall's product row. */
-  storedKg: number | null;
+  rowStoredKg: number | null;
   /** Resolved from the last record for the aggregate column. */
-  massKg: number;
+  columnMassKg: number;
 }
 
 export interface LineageFacts {
-  /** Sources in input-record order, including legacy single-run fallbacks. */
-  sources: ReturnType<typeof resolveChainSources<
-    NonNullable<MassBalanceLineage["productionRun"]>,
-    MassBalanceLineage["feedstocks"][number],
-    unknown
-  >>[];
   runs: LineageRunFacts[];
   feedstocks: (RecordFacts & { wetKg: number | null })[];
   products: ProductFacts[];
@@ -92,7 +86,6 @@ export function sumOrNull(values: (number | null | undefined)[]): number | null 
 
 /** Extract raw masses in one lineage walk; presentation and verdicts stay with consumers. */
 export function extractLineageFacts(lineages: readonly MassBalanceLineage[]): LineageFacts {
-  const sources: LineageFacts["sources"] = [];
   const runs = new Map<string, LineageRunFacts>();
   const latestRuns = new Map<string, NonNullable<MassBalanceLineage["productionRun"]>>();
   const feedstocks = new Map<string, LineageFacts["feedstocks"][number]>();
@@ -108,7 +101,6 @@ export function extractLineageFacts(lineages: readonly MassBalanceLineage[]): Li
 
   for (const lineage of lineages) {
     const resolvedSources = resolveChainSources(lineage);
-    sources.push(resolvedSources);
     const app = lineage.application;
     const dryKg = tonnesToKg(app.biocharAppliedDryTons ?? 0);
     appliedKg += dryKg;
@@ -193,12 +185,11 @@ export function extractLineageFacts(lineages: readonly MassBalanceLineage[]): Li
       name: first.formulationName ?? null,
       appliedKg: productAppliedKg,
       allocatedKg,
-      storedKg: first.massKg == null && allocatedKg == null ? null : mass(first),
-      massKg,
+      rowStoredKg: first.massKg == null && allocatedKg == null ? null : mass(first),
+      columnMassKg: massKg,
     });
   }
   return {
-    sources,
     runs: [...runs.values()],
     feedstocks: [...feedstocks.values()],
     products: resolvedProducts,
