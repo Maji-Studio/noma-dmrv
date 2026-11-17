@@ -2,7 +2,6 @@ import { startSubmissionRegistryAttempt } from "./submission-attempt-start";
 import { ATTEMPT_SUMMARY_OPERATION } from "@/lib/certification/submission-attempts";
 import { isNoAnswerError } from "@/lib/isometric/error-utils";
 import type { SubmissionFailureDetails } from "@/lib/certification/submission-error";
-import { submissionStreamErrorMessage } from "@/lib/certification/submission-stream-error";
 import {
   CHANGED_SINCE_REVIEW_FAILURE_KIND,
   InterruptedRemovalChangedError,
@@ -183,13 +182,14 @@ export async function submitRemoval(
         ? "refused"
         : "failed";
     const failure: SubmissionFailureDetails = {
-      ...(submissionStreamErrorMessage(error) === safeRemovalSubmissionError(error).errorMessage
-        ? { attemptId: attempt.id } : {}),
+      // Unexpected and validation errors stay uncorrelated on purpose so the dialog keeps the plain error.
+      ...(error instanceof SafeError ? { attemptId: attempt.id } : {}),
       // no_answer is stored but not streamed because the dialog reads it from the attempt.
       failureKind: failureKind === "no_answer" ? null : failureKind,
     };
-    // Preserve the original error class for safe copy and server-side handling.
-    throw Object.assign(error instanceof Error ? error : new Error(undefined, { cause: error }), failure);
+    // Preserve the thrown value for safe copy and server-side handling.
+    if (typeof error === "object" && error !== null) Object.assign(error, failure);
+    throw error;
   } finally {
     const safeError = safeRemovalSubmissionError(attemptError);
     // Best-effort: a failed audit insert must not mask the submission's own

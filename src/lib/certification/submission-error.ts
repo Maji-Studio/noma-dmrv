@@ -28,7 +28,7 @@ export class SubmissionError extends Error implements SubmissionFailureDetails {
 }
 
 export function getSubmissionFailureDetails(error: unknown): SubmissionFailureDetails {
-  if (!(error instanceof Error)) return {};
+  if (typeof error !== "object" || error === null) return {};
   return {
     ...("failureKind" in error && isSubmissionFailureKind(error.failureKind)
       ? { failureKind: error.failureKind } : {}),
