@@ -23,9 +23,6 @@ export type DashboardBatchScopeView = DashboardBatchScope;
 /** The list filter param grouped rows link with (`facilityListHref`). */
 const IDS_PARAM = "ids";
 
-/** Removals and credit batches: their reasons belong to no stage, so they count on Production. */
-const BATCH_REASON_PATHS = ["/credit-batches", "/removals"];
-
 function batchKpiHints(subject: string): Record<DashboardKpi["key"], string> {
   return {
     feedstockProcessed: `Dry feedstock mass into ${subject} production runs.`,
@@ -48,10 +45,6 @@ function lowerFirst(text: string): string {
   return text.charAt(0).toLowerCase() + text.slice(1);
 }
 
-function pathOf(href: string): string {
-  return href.split("?")[0] ?? href;
-}
-
 function scopedKpis(base: DashboardKpi[], scope: DashboardBatchScopeView): DashboardKpi[] {
   // The possessive, so the hints read "this credit batch's" and "the credit batches'".
   const subject = scope.batchIds.length === 1 ? "this credit batch's" : "the credit batches'";
@@ -66,26 +59,24 @@ function scopedKpis(base: DashboardKpi[], scope: DashboardBatchScopeView): Dashb
   return base.map((kpi) => ({ ...kpi, hint: hints[kpi.key], value: values[kpi.key], deltaPercent: null, detail: "" }));
 }
 
-export function applyBatchScope(overview: DashboardOverview, scope: DashboardBatchScopeView): DashboardOverview {
-  const recordIds = scope.recordIds;
-  const inScope = (href: string) => recordIds.some((id) => href.includes(id));
+/** Keep represented records in scope, preserving the existing grouped count and link rules. */
+export function scopeAttentionItems(items: readonly DashboardAttentionItem[], recordIds: readonly string[]): DashboardAttentionItem[] {
   const scopedIds = new Set(recordIds);
-  const attention = overview.attention.flatMap((item): DashboardAttentionItem[] => {
-    if (item.count == null) return inScope(item.href) ? [item] : [];
-    const ids = item.recordIds?.filter((id) => scopedIds.has(id)) ?? [];
+  return items.flatMap((item): DashboardAttentionItem[] => {
+    if (item.count == null) return item.recordIds.some((id) => scopedIds.has(id)) ? [item] : [];
+    const ids = item.recordIds.filter((id) => scopedIds.has(id));
     if (ids.length === 0) return [];
-    const recordItems = item.recordItems?.filter((record) => record.recordIds?.some((id) => scopedIds.has(id)));
-    const single = ids.length === 1 ? recordItems?.find((record) => record.recordIds?.includes(ids[0])) : undefined;
+    const recordItems = item.recordItems?.filter((record) => record.recordIds.some((id) => scopedIds.has(id)));
+    const single = ids.length === 1 ? recordItems?.find((record) => record.recordIds.includes(ids[0])) : undefined;
     if (single) return [single];
     return [{ ...item, href: withScopedIds(item.href, ids), recordIds: ids, ...(recordItems ? { recordItems } : {}), count: ids.length }];
   });
+}
+
+export function applyBatchScope(overview: DashboardOverview, scope: DashboardBatchScopeView): DashboardOverview {
+  const attention = scopeAttentionItems(overview.attention, scope.recordIds);
   const stations = overview.stations.map((station) => {
-    const listPath = pathOf(station.href);
-    const own = attention.filter(
-      (item) =>
-        pathOf(item.href) === listPath ||
-        (station.key === "production" && BATCH_REASON_PATHS.some((path) => pathOf(item.href).startsWith(path))),
-    );
+    const own = attention.filter((item) => item.stage === station.key);
     const reasons = own.map((item) => ({
       state: "warning" as const,
       // A grouped row says how many, as To do does ("Production runs: 3 affected, missing mass data").

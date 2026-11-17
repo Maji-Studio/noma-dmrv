@@ -7,7 +7,8 @@ import type { CreditBatchHealthSummary } from "@/fn/certification";
 import { facilityListHref } from "@/lib/dashboard-links";
 import { todosLabel } from "@/lib/credit-batches/batch-page";
 import { recordHref } from "@/lib/record-links";
-import type { DashRowData } from "./shared";
+import type { DashboardAttentionItem } from "@/data-access/dashboard-overview";
+import { scopeAttentionItems } from "./batch-scope";
 
 interface TodoBatch {
   id: string;
@@ -27,9 +28,8 @@ export function batchTodoRows(
   selectedBatchId: string | null,
   /** A read failed: keep the rows that loaded and say the check is incomplete. */
   failure: { facilityId: string } | null = null,
-): DashRowData[] {
+): DashboardAttentionItem[] {
   const rows = batches
-    .filter((batch) => selectedBatchId == null || batch.id === selectedBatchId)
     .flatMap((batch) => {
       const summary = summaries[batch.id];
       const blocking = summary?.issueCount ?? 0;
@@ -37,13 +37,21 @@ export function batchTodoRows(
       return total > 0 ? [{ batch, blocking, total }] : [];
     })
     .sort((a, b) => Number(b.blocking > 0) - Number(a.blocking > 0) || a.batch.code.localeCompare(b.batch.code))
-    .map(({ batch, blocking, total }) => ({
+    .map(({ batch, blocking, total }): DashboardAttentionItem => ({
       id: `batch-todos-${batch.id}`,
+      stage: "production",
+      recordKind: "creditBatch",
+      recordIds: [batch.id],
+      date: null,
       title: todosLabel(total).replace(/^./, (first) => first.toUpperCase()),
-      meta: [batch.code, blocking > 0 ? `${blocking} blocking` : null].filter(Boolean).join(" · "),
+      entityCode: [batch.code, blocking > 0 ? `${blocking} blocking` : null].filter(Boolean).join(" · "),
       href: recordHref("creditBatch", batch.id, { facilityId: batch.facilityId }),
     }));
+  const scoped = selectedBatchId == null ? rows : scopeAttentionItems(rows, [selectedBatchId]);
   return failure
-    ? [...rows, { id: "batch-todos-failed", title: BATCH_TODOS_FAILED_TITLE, meta: "Credit batches", href: facilityListHref("/credit-batches", failure.facilityId) }]
-    : rows;
+    ? [...scoped, {
+        id: "batch-todos-failed", stage: "production", recordKind: "creditBatch", recordIds: [], date: null,
+        title: BATCH_TODOS_FAILED_TITLE, entityCode: "Credit batches", href: facilityListHref("/credit-batches", failure.facilityId),
+      }]
+    : scoped;
 }

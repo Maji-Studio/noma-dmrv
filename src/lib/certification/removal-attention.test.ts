@@ -66,6 +66,18 @@ describe("removalAttentionRows", () => {
     expect(returned[0].item.href).toContain("a");
   });
 
+  it("types every draft, rejected and returned row as a Production Removal", () => {
+    const removal = { removalId: "removal-1", code: "RM-1", createdAt };
+    const rows = removalAttentionRows({
+      drafts: [{ ...removal, readiness: null }],
+      rejected: [removal],
+      returned: [{ ...removal, correction: undefined }],
+    }, "fac-1");
+    for (const item of [...rows.drafts, ...rows.rejected, ...rows.returned.map((row) => row.item)]) {
+      expect(item).toMatchObject({ stage: "production", recordKind: "removal", recordIds: [removal.removalId] });
+    }
+  });
+
   it("gives a Removal with a submission running no row", () => {
     expect(
       removalAttentionRows({ ...none, drafts: [{ removalId: "r3", code: "RM-3", createdAt, readiness: { state: "inProgress", reasons: [] } }] }, "fac-1").drafts,
