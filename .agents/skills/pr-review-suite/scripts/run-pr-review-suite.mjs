@@ -567,7 +567,7 @@ async function main() {
     for (const path of options.archive) {
       const archived = await archiveReport(path);
       if (archived) process.stdout.write(`Archive: ${archived}\n`);
-      else if (process.env.PR_REVIEW_SUITE_ARCHIVE_DIR !== "") process.exitCode = ARCHIVE_FAILURE_EXIT_CODE;
+      else if (archived === undefined) process.exitCode = ARCHIVE_FAILURE_EXIT_CODE;
     }
     return;
   }

@@ -12,6 +12,9 @@ EXIT_MISSING=127
 EXIT_INTERRUPT=130
 EXIT_TERMINATE=143
 EXIT_HANGUP=129
+INTERRUPT_GRACE_POLLS=30
+INTERRUPT_KILL_POLLS=10
+INTERRUPT_POLL_SECONDS=0.1
 NAME_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]*$'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -45,21 +48,34 @@ rm -f "$STATUS"
 
 finish() {
   # Publishing is terminal: a second signal must not interrupt or duplicate it.
-  trap '' INT TERM HUP
-  printf '\nexit=%s\n' "$1" | tee -a "$LOG"
+  trap '' INT TERM HUP PIPE
+  printf '\nexit=%s\n' "$1" >> "$LOG" || true
   local temporary_status="$STATUS.$$.tmp"
   printf '%s\n' "$1" > "$temporary_status"
   mv -f "$temporary_status" "$STATUS"
+  printf '\nexit=%s\n' "$1" || true
   exit "$1"
 }
 
 interrupt() {
-  trap '' INT TERM HUP
+  trap '' INT TERM HUP PIPE
   if [ -n "$PIPELINE_PID" ]; then
     # The background job owns its process group, including the prepared script
     # and tee. Stop all of it before appending the final log line.
     kill -TERM -- "-$PIPELINE_PID" 2>/dev/null || true
+    local poll=0
+    while kill -0 -- "-$PIPELINE_PID" 2>/dev/null && [ "$poll" -lt "$INTERRUPT_GRACE_POLLS" ]; do
+      sleep "$INTERRUPT_POLL_SECONDS" || true
+      poll=$((poll + 1))
+    done
+    kill -KILL -- "-$PIPELINE_PID" 2>/dev/null || true
     wait "$PIPELINE_PID" 2>/dev/null || true
+    # Allow killed descendants to be reaped even if the group leader exited first.
+    poll=0
+    while kill -0 -- "-$PIPELINE_PID" 2>/dev/null && [ "$poll" -lt "$INTERRUPT_KILL_POLLS" ]; do
+      sleep "$INTERRUPT_POLL_SECONDS" || true
+      poll=$((poll + 1))
+    done
   fi
   finish "$1"
 }

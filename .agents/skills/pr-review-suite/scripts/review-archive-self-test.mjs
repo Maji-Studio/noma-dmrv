@@ -56,9 +56,11 @@ function testSummary() {
     "Archive: /archive/round-2.json",
   ]);
   equal(JSON.stringify(report), original);
-  deepStrictEqual(findingsSummaryLines({ reports: [] }, "report.json", undefined), [
-    "Findings: report.json (.reports[].findings[])", "No findings.", "Archive: skipped or unavailable",
-  ]);
+  for (const archivePath of [null, undefined]) {
+    deepStrictEqual(findingsSummaryLines({ reports: [] }, "report.json", archivePath), [
+      "Findings: report.json (.reports[].findings[])", "No findings.", "Archive: skipped or unavailable",
+    ]);
+  }
 }
 
 async function testArchive(root) {
@@ -96,7 +98,7 @@ async function testArchive(root) {
   });
   equal(skipped.code, EXIT_SUCCESS);
   equal(skipped.stdout, "");
-  equal(await archiveReport(source, { ...options, cwd: skippedRoot, env: { PR_REVIEW_SUITE_ARCHIVE_DIR: "" } }), undefined);
+  equal(await archiveReport(source, { ...options, cwd: skippedRoot, env: { PR_REVIEW_SUITE_ARCHIVE_DIR: "" } }), null);
   equal(existsSync(skippedRoot), false);
 
   // Explicit archive requests fail on errors; review-time copies stay advisory.

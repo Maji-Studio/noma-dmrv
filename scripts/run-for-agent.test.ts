@@ -17,7 +17,14 @@ const EXIT_HANGUP = 129;
 const SCRIPT_SLEEP_SECONDS = 30;
 const POLL_INTERVAL_SECONDS = 0.01;
 const PROCESS_TIMEOUT_MS = 5_000;
+const INTERRUPT_GRACE_MS = 3_000;
+const INTERRUPT_MARGIN_MS = 1_500;
+const MILLISECONDS_PER_SECOND = 1_000;
+const POLL_INTERVAL_MS = POLL_INTERVAL_SECONDS * MILLISECONDS_PER_SECOND;
 const READY_MARKER = "script-ready\n";
+const SCRIPT_PID_FILE = ".scratchpad/script-pid";
+const RECORD_PROCESS = `printf '%s\\n' "$$" > ${SCRIPT_PID_FILE}`;
+const started: ReturnType<typeof start>[] = [];
 let directory: string;
 let root: string;
 
@@ -26,7 +33,23 @@ beforeEach(() => {
   root = join(directory, "main checkout");
   mkdirSync(join(root, ".scratchpad"), { recursive: true });
 });
-afterEach(() => rmSync(directory, { recursive: true, force: true }));
+afterEach(async () => {
+  const pidFile = join(root, SCRIPT_PID_FILE);
+  if (existsSync(pidFile)) {
+    const pid = Number(readFileSync(pidFile, "utf8").trim());
+    if (Number.isSafeInteger(pid) && pid > 0) {
+      try { process.kill(pid, "SIGKILL"); } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+      }
+    }
+  }
+  for (const { child } of started) {
+    if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
+  }
+  await Promise.allSettled(started.map(({ completed }) => completed));
+  started.length = 0;
+  rmSync(directory, { recursive: true, force: true });
+});
 
 function prepare(body: string, mode = EXECUTABLE_MODE) {
   writeFileSync(join(root, ".scratchpad/task.sh"), body, { mode });
@@ -42,7 +65,7 @@ function log() {
 function statusPath() {
   return join(root, ".scratchpad/runs/task.exit");
 }
-function start() {
+function start(): { child: ChildProcess; completed: Promise<number | null> } {
   const child = spawn(SCRIPT, ["task"], {
     cwd: directory, env: { ...process.env, RUN_FOR_AGENT_ROOT: root },
     timeout: PROCESS_TIMEOUT_MS,
@@ -51,7 +74,16 @@ function start() {
     child.once("error", reject);
     child.once("close", resolve);
   });
-  return { child, completed };
+  const runner = { child, completed };
+  started.push(runner);
+  return runner;
+}
+async function waitForStatus() {
+  const deadline = Date.now() + INTERRUPT_GRACE_MS + INTERRUPT_MARGIN_MS;
+  while (!existsSync(statusPath())) {
+    if (Date.now() >= deadline) throw new Error("Timed out waiting for terminal status");
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+  }
 }
 async function waitForMarker(child: ChildProcess) {
   await new Promise<void>((resolve, reject) => {
@@ -139,6 +171,40 @@ while [ ! -f .scratchpad/release ]; do sleep ${POLL_INTERVAL_SECONDS}; done
       if (child.exitCode === null) child.kill("SIGTERM");
       await completed;
     }
+  });
+
+  it("publishes hangup status with broken stdout", async () => {
+    prepare(`#!/bin/bash
+${RECORD_PROCESS}
+printf '${READY_MARKER}'
+exec sleep ${SCRIPT_SLEEP_SECONDS}
+`);
+    const { child, completed } = start();
+    await waitForMarker(child);
+    child.stdout!.destroy();
+    expect(child.kill("SIGHUP")).toBe(true);
+    await waitForStatus();
+    expect(readFileSync(statusPath(), "utf8")).toBe(`${EXIT_HANGUP}\n`);
+    expect(log().endsWith(`\nexit=${EXIT_HANGUP}\n`)).toBe(true);
+    expect(await completed).toBe(EXIT_HANGUP);
+  });
+
+  it("kills a TERM-ignoring script before publishing interrupt status", async () => {
+    prepare(`#!/bin/bash
+trap '' TERM
+${RECORD_PROCESS}
+printf '${READY_MARKER}'
+while :; do :; done
+`);
+    const { child, completed } = start();
+    await waitForMarker(child);
+    const scriptPid = Number(readFileSync(join(root, SCRIPT_PID_FILE), "utf8").trim());
+    expect(child.kill("SIGINT")).toBe(true);
+    await waitForStatus();
+    expect(() => process.kill(scriptPid, 0)).toThrowError(expect.objectContaining({ code: "ESRCH" }));
+    expect(readFileSync(statusPath(), "utf8")).toBe(`${EXIT_INTERRUPT}\n`);
+    expect(log().endsWith(`\nexit=${EXIT_INTERRUPT}\n`)).toBe(true);
+    expect(await completed).toBe(EXIT_INTERRUPT);
   });
 
   it("captures stdout and stderr in order", () => {

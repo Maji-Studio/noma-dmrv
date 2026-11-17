@@ -57,12 +57,12 @@ export async function resolveArchiveRoot({ cwd = process.cwd(), env = process.en
   return join(homedir(), ".claude", "projects", projectSlug(mainCheckout), "reviews");
 }
 
-// Archive failures are advisory, including root discovery and edited JSON errors.
+// Return null when disabled, undefined on advisory failure, or the archive path.
 export async function archiveReport(reportPath, options = {}) {
   const warn = options.warn || ((message) => process.stderr.write(`${message}\n`));
   try {
     const root = await resolveArchiveRoot(options);
-    if (root === undefined) return undefined;
+    if (root === undefined) return null;
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
     const destination = reportArchivePath(root, report);
     mkdirSync(dirname(destination), { recursive: true });
