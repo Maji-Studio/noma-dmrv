@@ -47,6 +47,7 @@ Every design decision that belongs to the user (a variant, a wording, a trade-of
 - One card per question: a plain question, the situation in two sentences of operator words, a picture of the concrete example, options that say what happens, the recommendation preselected, a note field.
 - The picture is a rendered mock, a screenshot or before → after blocks. A wording question shows each framing as a rendered mock with the user's own numbers.
 - Later rounds go on the same page, with the settled answers folded.
+- Save writes each answer to the page's db under `answers/<id>`, then wakes the session: copy the TELL THE SESSION block from `.agents/skills/pr/merge-page-template.html` and publish with `capabilities: {db: {}, user: {}, comments: {}}`.
 
 Done when the user can answer every open question from the page alone.
 

@@ -22,6 +22,7 @@ Usage:
     [--models codex,opus] [--practices standards,spec,deep-correctness,design]
     [--timeout-minutes N] [--concurrency 2]
     [--artifact-dir <path>] (--publish | --dry-run | --plan)
+  run-pr-review-suite.mjs --archive <report.json> [--archive <report.json>]...
   run-pr-review-suite.mjs --self-test
 
 Modes:
@@ -29,6 +30,7 @@ Modes:
   --dry-run   Run reviews and write the aggregate report without GitHub writes.
   --plan      Resolve inputs and write prompts without running reviewers.
   --self-test Run offline parser, aggregation, and prompt checks.
+  --archive   Archive edited reports without running reviewers. Repeat for more files.
 
 Options:
   --local     Review committed HEAD without a PR; requires --dry-run or --plan.
@@ -48,6 +50,7 @@ export function parseArgs(argv) {
     base: "staging",
     issue: undefined,
     prior: [],
+    archive: [],
     profile: "full",
     models: [...DEFAULT_MODELS],
     practices: [...DEFAULT_PRACTICES],
@@ -74,6 +77,9 @@ export function parseArgs(argv) {
     else if (argument === "--issue") {
       options.issue = value();
       if (!/^[1-9]\d*$/.test(options.issue)) throw new Error("--issue must be a positive issue number");
+    } else if (argument === "--archive") {
+      options.archive.push(value());
+      options.mode = selectMode(options.mode, "archive");
     } else if (argument === "--prior") options.prior.push(value());
     else if (argument === "--profile") options.profile = value();
     else if (argument === "--models") options.models = splitList(value());
@@ -102,8 +108,12 @@ export function parseArgs(argv) {
 
   if (!options.mode) {
     throw new Error(
-      "Choose exactly one mode: --publish, --dry-run, --plan, or --self-test",
+      "Choose exactly one mode: --publish, --dry-run, --plan, --self-test, or --archive",
     );
+  }
+
+  if (options.mode === "archive" && argv.some((arg) => arg.startsWith("--") && arg !== "--archive")) {
+    throw new Error("--archive is standalone; pass only report paths with --archive");
   }
 
   if (options.local && options.pr) throw new Error("--local cannot be combined with --pr");

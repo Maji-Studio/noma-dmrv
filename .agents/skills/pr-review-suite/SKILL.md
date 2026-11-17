@@ -68,6 +68,22 @@ Repeat `--prior` in round order to include more earlier reports.
 Use `--profile light` for Codex gpt-6.1-sol (high) and Opus (medium); the default
 `full` profile keeps Codex gpt-6-astra (medium) and Opus (high).
 
+Reports are archived under `~/.claude/projects/<slug>/reviews/<branch>/`.
+The slug is the absolute main checkout path with each non-alphanumeric character
+replaced by `-`. Worktrees share that archive. Local files are `round-<k>.json`.
+PR files are `pr-<number>-round-<k>.json`. Earlier `--prior` reports are copied
+again to retain disposition edits. Set `PR_REVIEW_SUITE_ARCHIVE_DIR` to override
+the archive root, or to an empty string to skip archiving. Archive errors warn
+and leave the review exit code unchanged.
+
+After editing the last round, save its dispositions with
+`node .agents/skills/pr-review-suite/scripts/run-pr-review-suite.mjs --archive /path/to/report.json`.
+Repeat `--archive` for more reports. This mode runs no reviewers.
+
+Findings are at `.reports[].findings[]`. Finding keys are
+`id, severity, kind, title, path, start_line, end_line, problem, smallest_safe_fix, disposition, reason`.
+The terminal summary lists findings by severity and prints the archive path.
+
 ## Practices
 
 Keep four practices separate throughout collection, inference, and reporting:

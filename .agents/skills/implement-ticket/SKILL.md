@@ -63,6 +63,8 @@ Last reviewed head: `def5678…` (full SHA). Models: <the last round's `Models:`
 Declined: <one line per declined P0-P2: id, title, reason>.
 ```
 
+Archive the last round's report once its dispositions are set, so retros can count them: `node .agents/skills/pr-review-suite/scripts/run-pr-review-suite.mjs --archive <scratch>/round-<k>/report.json` (earlier rounds are archived again when passed as `--prior`).
+
 Commits after the last reviewed head, if any, are named below the table with why they skipped a round. Move the board item to **In review (Maji)**.
 
 Done when: the PR is open and ready (not draft), the section's last reviewed head is an ancestor of the PR head, and the board moved.
