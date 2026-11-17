@@ -201,6 +201,28 @@ describe("SubmitStep failures", () => {
     await act(async () => renderer?.unmount());
   });
 
+  it("uses the matching attempt outcome behind a newer attempt", async () => {
+    state.attempts = [
+      { id: "attempt-2", errorMessage: null, outcome: { kind: "submitted" } },
+      { id: "attempt-1", errorMessage: "Registry check failed", outcome: { kind: "differs" } },
+    ];
+    const mutation = {
+      mutate: vi.fn(), isPending: false, isSuccess: false, isError: true, data: undefined,
+      error: Object.assign(new Error("Registry check failed"), { attemptId: "attempt-1" }), reset: vi.fn(),
+    };
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <SubmitStep removalId="removal-1" facilityId="facility-1" ctx={CONTEXT}
+          onDone={vi.fn()} submitMutation={mutation as never} />,
+      );
+    });
+    expect(JSON.stringify(renderer!.toJSON())).toContain("Outcome notice: differs");
+    expect(findButton(renderer!, "Close")).toBeDefined();
+    expect(findButton(renderer!, "Try again")).toBeUndefined();
+    await act(async () => renderer?.unmount());
+  });
+
   it("keeps the plain error when the newest attempt is an older failure", async () => {
     state.attempts = [{ id: "attempt-1", errorMessage: "An older failure", outcome: { kind: "differs" } }];
     const mutation = {

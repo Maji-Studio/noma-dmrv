@@ -188,7 +188,13 @@ export async function submitRemoval(
       failureKind: failureKind === "no_answer" ? null : failureKind,
     };
     // Preserve the thrown value for safe copy and server-side handling.
-    if (typeof error === "object" && error !== null) Object.assign(error, failure);
+    if (typeof error === "object" && error !== null) {
+      try {
+        Object.assign(error, failure);
+      } catch {
+        // Failure details must not replace the original error.
+      }
+    }
     throw error;
   } finally {
     const safeError = safeRemovalSubmissionError(attemptError);

@@ -130,7 +130,7 @@ export function SubmitStep({
   // Unexpected errors have different client copy, so keep the plain error without an attempt id.
   const attemptsQuery = useRemovalSubmissionAttempts(facilityId, removalId, Boolean(terminalError));
   const endedAttempt = terminalFailure?.attemptId
-    ? attemptsQuery.data?.[0]?.id === terminalFailure.attemptId ? attemptsQuery.data[0] : undefined
+    ? attemptsQuery.data?.find((attempt) => attempt.id === terminalFailure.attemptId)
     : undefined;
   // The typed refusal is available before the attempt summary loads (#1114).
   const outcome = endedAttempt && endedAttempt.outcome.kind !== "submitted"

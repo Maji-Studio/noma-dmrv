@@ -117,6 +117,14 @@ describe("submitRemoval failure details", () => {
     });
   });
 
+  it("rethrows a frozen SafeError as the same object", async () => {
+    const safe = Object.freeze(new SafeError("The template settings changed."));
+    vi.mocked(loadRemovalSubmissionContext).mockRejectedValue(safe);
+    await expect(submitRemoval({
+      orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID, confirmProduction: true,
+    })).rejects.toBe(safe);
+  });
+
   it.each([
     { errorClass: "unexpected Error", unexpected: new Error("Internal failure details"), storedKind: null },
     { errorClass: "unexpected Error matching the stored summary", unexpected: new Error(STORED_UNEXPECTED_ERROR_MESSAGE), storedKind: null },
