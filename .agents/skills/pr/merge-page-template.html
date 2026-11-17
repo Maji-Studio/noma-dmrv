@@ -29,6 +29,7 @@ fieldset{border:0;padding:0;margin:0 0 10px}
 label{display:block;min-height:44px;box-sizing:border-box;padding:10px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;cursor:pointer}
 label:has(input:checked){border-color:var(--accent)}
 textarea{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--bg);color:var(--ink);font:inherit}
+button:disabled{opacity:.5;cursor:default}
 button{font:inherit;min-height:44px;padding:8px 20px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--bg);cursor:pointer}
 .saved{color:var(--ok);margin-left:8px;font-size:14px}.saved.wait{color:var(--wait)}.saved.bad{color:var(--bad)}
 </style>
@@ -112,10 +113,10 @@ const SAVED = "Saved for this head";
       const out = card.querySelector(".saved");
       const sha = PRS.find(p => String(p.num) === card.dataset.pr).sha;
       btn.disabled = true; out.textContent = "Saving…"; out.className = "saved wait";
-      try { await ref.set({choice, sha, note: card.querySelector("textarea").value, savedAt: Date.now()}); out.textContent = SAVED; out.className = "saved"; }
+      try { await ref.set({choice, sha, note: card.querySelector("textarea").value, savedAt: Date.now()}); out.textContent = `${SAVED}. Telling the session…`; }
       catch { out.textContent = "Save failed, try again"; out.className = "saved bad"; btn.disabled = false; return; }
       const told = await tellSession(card, card.dataset.pr, `Merge card saved: #${card.dataset.pr} ${choice} for head ${sha}. Read answers/merge-${card.dataset.pr}.`);
-      out.textContent = told ? `${SAVED}. The session was told.` : `${SAVED}. Type "saved" in the session's chat.`;
+      out.textContent = told ? `${SAVED}. The session was told.` : `${SAVED}. Tell the session.`;
       out.className = told ? "saved" : "saved wait";
       btn.disabled = false;
     };

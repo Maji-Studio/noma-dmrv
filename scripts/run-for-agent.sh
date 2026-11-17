@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Run a prepared, non-interactive main-checkout command with live output and a persistent log.
 # Before handing over the command, remove the old status file and start a background wait:
-#   until [ -s "<main>/.scratchpad/runs/<name>.exit" ]; do sleep 1; done
-# Then hand the human one line: <checkout>/scripts/run-for-agent.sh <name> [args...]
+#   until [ -s "<main checkout>/.scratchpad/runs/<name>.exit" ]; do sleep 1; done
+# Then hand the human one line: "<main checkout>/scripts/run-for-agent.sh" <name> [args...]
 # RUN_FOR_AGENT_ROOT overrides discovery for isolated tests only.
 set -euo pipefail
 
