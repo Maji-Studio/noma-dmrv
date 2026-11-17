@@ -4,7 +4,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { SubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
-import { INTERRUPTED_REMOVAL_CHANGED_MESSAGE } from "@/lib/certification/interrupted-removal-copy";
+import { CONTEXT, findButton, findLink } from "./submit-step-test-helpers";
 import { SubmitStep } from "./submit-step";
 
 const state = vi.hoisted(() => ({
@@ -13,7 +13,7 @@ const state = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
   discardMutate: vi.fn(),
   discardReset: vi.fn(),
-  attempts: [] as Array<{ errorMessage: string | null; outcome: { kind: string } }>,
+  attempts: [] as Array<{ id: string; errorMessage: string | null; outcome: { kind: string } }>,
   deleteAccess: {
     viewerCanDeleteRegistryRemovals: true as boolean | null,
     hasRegisteredProductionBatches: false as boolean | null,
@@ -157,33 +157,6 @@ vi.mock("../submit-confirm-dialog", () => ({
   SubmitConfirmDialog: () => null,
 }));
 
-const CONTEXT = {
-  isProduction: false,
-  latestSubmission: null,
-  linkedGhgStatement: null,
-  mapping: null,
-  emissionsLedger: {
-    inputs: [],
-    inputsUnavailable: true,
-    claims: [],
-    creditBatches: [],
-    productionRuns: [],
-    applications: [],
-  },
-} as unknown as RemovalCertifyContext;
-
-function findButton(renderer: ReactTestRenderer, label: string) {
-  return renderer.root
-    .findAllByType("button")
-    .find((button) => button.props.children === label);
-}
-
-function findLink(renderer: ReactTestRenderer, label: string) {
-  return renderer.root
-    .findAllByType("a")
-    .find((link) => link.props.children?.[0] === label);
-}
-
 beforeAll(() => {
   (
     globalThis as typeof globalThis & {
@@ -268,48 +241,6 @@ describe("SubmitStep", () => {
       await act(async () => { renderer!.unmount(); });
     },
   );
-
-  it.each([
-    ["differs", true],
-    ["no-answer", false],
-  ])("shows the %s outcome notice for the attempt that just ended (close only: %s)", async (kind, closeOnly) => {
-    state.attempts = [{ errorMessage: "Registry check failed", outcome: { kind } }];
-    const mutation = {
-      mutate: vi.fn(), isPending: false, isSuccess: false, isError: true, data: undefined,
-      error: new Error("Registry check failed"), reset: vi.fn(),
-    };
-    let renderer: ReactTestRenderer | undefined;
-    await act(async () => {
-      renderer = create(
-        <SubmitStep removalId="removal-1" facilityId="facility-1" ctx={CONTEXT}
-          onDone={vi.fn()} submitMutation={mutation as never} />,
-      );
-    });
-    const text = JSON.stringify(renderer!.toJSON());
-    expect(text).toContain(`Outcome notice: ${kind}`);
-    expect(findButton(renderer!, "Close") !== undefined).toBe(closeOnly);
-    expect(findButton(renderer!, "Try again") !== undefined).toBe(!closeOnly);
-    await act(async () => renderer?.unmount());
-  });
-
-  it("keeps the plain error when the newest attempt is an older failure", async () => {
-    state.attempts = [{ errorMessage: "An older failure", outcome: { kind: "differs" } }];
-    const mutation = {
-      mutate: vi.fn(), isPending: false, isSuccess: false, isError: true, data: undefined,
-      error: new Error("Registry check failed"), reset: vi.fn(),
-    };
-    let renderer: ReactTestRenderer | undefined;
-    await act(async () => {
-      renderer = create(
-        <SubmitStep removalId="removal-1" facilityId="facility-1" ctx={CONTEXT}
-          onDone={vi.fn()} submitMutation={mutation as never} />,
-      );
-    });
-    const text = JSON.stringify(renderer!.toJSON());
-    expect(text).toContain("Registry check failed");
-    expect(text).not.toContain("Outcome notice");
-    await act(async () => renderer?.unmount());
-  });
 
   describe("footer", () => {
     const idle = { mutate: vi.fn(), isPending: false, isSuccess: false, isError: false, data: undefined, error: null, reset: vi.fn() };
@@ -454,44 +385,6 @@ describe("SubmitStep", () => {
       "Removal deleted. Credit batches are available again.",
     );
     await act(async () => renderer?.unmount());
-  });
-
-  describe("changed since review (#1114)", () => {
-    // The notice is mocked here; its wording per viewer is covered in submission-outcome-notice.test.tsx.
-    const ctx = { ...CONTEXT, latestSubmission: { status: "draft", lockedAt: null,
-      metadata: { lastAttemptOutcome: "interrupted", externalMutation: "possible" } } } as RemovalCertifyContext;
-    const labels = (r: ReactTestRenderer) => r.root.findAllByType("button").map((button) => button.children.join(""));
-    async function renderFailed(message: string) {
-      let renderer: ReactTestRenderer | undefined;
-      const mutation = { mutate: vi.fn(), isPending: false, isSuccess: false, isError: true, data: undefined, error: new Error(message), reset: vi.fn() };
-      await act(async () => {
-        renderer = create(<SubmitStep removalId="removal-1" facilityId="facility-1" ctx={ctx} onDone={vi.fn()} submitMutation={mutation as never} />);
-      });
-      return renderer!;
-    }
-
-    it.each([false, true])("leads with Delete Removal and drops Try again (summary loaded: %s)", async (loaded) => {
-      if (loaded) state.attempts = [{ errorMessage: INTERRUPTED_REMOVAL_CHANGED_MESSAGE, outcome: { kind: "changed" } }];
-      const renderer = await renderFailed(INTERRUPTED_REMOVAL_CHANGED_MESSAGE);
-      expect(JSON.stringify(renderer.toJSON())).toContain("Outcome notice: changed (can)");
-      expect(JSON.stringify(renderer.toJSON())).not.toContain("safe retry");
-      expect(labels(renderer)).toEqual(["Delete Removal", "Close"]);
-      await act(async () => renderer.unmount());
-    });
-
-    it("asks a viewer below the role floor to get an Admin and offers only Close", async () => {
-      state.deleteAccess = { viewerCanDeleteRegistryRemovals: false, hasRegisteredProductionBatches: false };
-      const renderer = await renderFailed(INTERRUPTED_REMOVAL_CHANGED_MESSAGE);
-      expect(JSON.stringify(renderer.toJSON())).toContain("Outcome notice: changed (ask-admin)");
-      expect(labels(renderer)).toEqual(["Close"]);
-      await act(async () => renderer.unmount());
-    });
-
-    it("keeps Try again and offers no deletion after an ordinary failure", async () => {
-      const renderer = await renderFailed("Registry check failed");
-      expect(labels(renderer)).toEqual(["Try again", "Review submission"]);
-      await act(async () => renderer.unmount());
-    });
   });
 
   describe("role floor (issue #746)", () => {

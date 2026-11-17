@@ -52,7 +52,8 @@ import { isometricRegistry } from "@/lib/isometric/links";
 import { SubmitConfirmDialog } from "../submit-confirm-dialog";
 import { SubmissionProgress } from "../submission-progress";
 import { deleteAccessFor, SubmissionOutcomeNotice } from "../submission-outcome-notice";
-import { INTERRUPTED_REMOVAL_CHANGED_MESSAGE } from "@/lib/certification/interrupted-removal-copy";
+import { CHANGED_SINCE_REVIEW_FAILURE_KIND } from "@/lib/certification/interrupted-removal-copy";
+import type { SubmissionError } from "@/lib/certification/submission-error";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
 import { isSubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 import { ReviewDetails } from "./review-details";
@@ -105,7 +106,7 @@ export function SubmitStep({
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<SubmissionError | null>(null);
   const [lastConfirmProduction, setLastConfirmProduction] = useState(false);
   const [attemptIsResubmission, setAttemptIsResubmission] = useState(
     () => Boolean(ctx.latestSubmission),
@@ -117,27 +118,28 @@ export function SubmitStep({
     SubmissionProgressUpdate[]
   >([]);
 
-  const terminalError =
+  const terminalFailure: SubmissionError | null =
     submitError ??
     (submitMutation.error instanceof Error
-      ? submitMutation.error.message
+      ? submitMutation.error
       : submitMutation.isError
-        ? "The Removal was not submitted. Try again."
+        ? new Error("The Removal was not submitted. Try again.")
         : null);
-  // The newest attempt says why in structured form; its error text ties it to this failure rather
-  // than to an older one. An unexpected error reaches the dialog worded differently from the attempt's
-  // summary ("The submission could not be completed..."), so it keeps the plain error. That is intended.
+  const terminalError = terminalFailure?.message ?? null;
+  // Only the attempt that produced this error can supply its structured outcome.
+  // Unexpected errors have different client copy, so keep the plain error without an attempt id.
   const attemptsQuery = useRemovalSubmissionAttempts(facilityId, removalId, Boolean(terminalError));
-  const endedAttempt = terminalError
-    ? attemptsQuery.data?.[0]?.errorMessage === terminalError ? attemptsQuery.data[0] : undefined
+  const endedAttempt = terminalFailure?.attemptId
+    ? attemptsQuery.data?.find((attempt) => attempt.id === terminalFailure.attemptId)
     : undefined;
-  // The changed-since-review refusal is known from its text before the attempt summary loads (#1114).
+  // The typed refusal is available before the attempt summary loads (#1114).
   const outcome = endedAttempt && endedAttempt.outcome.kind !== "submitted"
     ? endedAttempt.outcome
-    : terminalError === INTERRUPTED_REMOVAL_CHANGED_MESSAGE ? ({ kind: "changed" } as const) : null;
+    : terminalFailure?.failureKind === CHANGED_SINCE_REVIEW_FAILURE_KIND ? ({ kind: "changed" } as const) : null;
   const stopped = outcome?.kind === "differs";
   // A retry cannot clear this refusal: Delete Removal is the way out, so it leads and Try again goes.
   const changedSinceReview = outcome?.kind === "changed";
+  const submitChangedSinceReview = submitError?.failureKind === CHANGED_SINCE_REVIEW_FAILURE_KIND;
 
   const externalId = ctx.latestSubmission?.externalId ?? null;
   const rejectedWithExternal =
@@ -293,13 +295,13 @@ export function SubmitStep({
 
   const fireSubmit = (confirmProduction = false) => {
     if (rejectedWithExternal) {
-      setSubmitError(REJECTED_IN_ISOMETRIC_MSG);
+      setSubmitError(new Error(REJECTED_IN_ISOMETRIC_MSG));
       return;
     }
     if (!compilationReady) {
-      setSubmitError(
+      setSubmitError(new Error(
         "The submission review is not ready. Resolve every submission issue and try again.",
-      );
+      ));
       return;
     }
     setSubmitError(null);
@@ -335,8 +337,8 @@ export function SubmitStep({
         onError: (err) => {
           setSubmitError(
             err instanceof Error
-              ? err.message
-              : "The Removal was not submitted. Try again.",
+              ? err
+              : new Error("The Removal was not submitted. Try again."),
           );
         },
       },
@@ -566,7 +568,7 @@ export function SubmitStep({
 
       {/* The persisted rejected state belongs to the summary above; this
           alert is only for what the last submit attempt returned. */}
-      {submitError === INTERRUPTED_REMOVAL_CHANGED_MESSAGE ? (
+      {submitChangedSinceReview ? (
         <SubmissionOutcomeNotice
           outcome={{ kind: "changed" }}
           facilityId={facilityId}
@@ -575,13 +577,13 @@ export function SubmitStep({
           deleteAccess={noticeDeleteAccess}
         />
       ) : (
-        submitError && <ServerError message={submitError} />
+        submitError && <ServerError message={submitError.message} />
       )}
 
       {showFooter && (
         <div className="sticky bottom-0 z-10 -mx-20 -mb-20 flex flex-wrap items-center justify-start gap-12 border-t border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-20 py-12">
           {/* Under the changed-since-review stop Submit again only refuses again (#1114). */}
-          {!fixesOnly && submitError !== INTERRUPTED_REMOVAL_CHANGED_MESSAGE && submitButton}
+          {!fixesOnly && !submitChangedSinceReview && submitButton}
           {backToEmpty}
           {!fixesOnly && canDeleteRemoval ? (
             <Button

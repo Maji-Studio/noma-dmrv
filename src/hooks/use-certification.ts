@@ -58,6 +58,7 @@ import {
   streamCertificationSubmission,
 } from "@/lib/certification/submission-progress-client";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
+import type { SubmissionError } from "@/lib/certification/submission-error";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import type {
   CreateGhgStatementInput,
@@ -540,12 +541,12 @@ export function useSelectableBatches(facilityId: string, enabled = true) {
 // Submits an existing removal directly (the workspace's single submit entry).
 export function useSubmitRemoval() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useMutation<RemovalSubmissionResult, SubmissionError, {
+    input: SubmitRemovalInput;
+    onProgress: (update: SubmissionProgressUpdate) => void;
+  }>({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
-    mutationFn: (vars: {
-      input: SubmitRemovalInput;
-      onProgress: (update: SubmissionProgressUpdate) => void;
-    }) =>
+    mutationFn: (vars) =>
       streamCertificationSubmission<RemovalSubmissionResult>(
         { kind: "removal", input: vars.input },
         vars.onProgress,

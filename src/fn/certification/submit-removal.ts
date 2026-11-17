@@ -1,6 +1,7 @@
 import { startSubmissionRegistryAttempt } from "./submission-attempt-start";
 import { ATTEMPT_SUMMARY_OPERATION } from "@/lib/certification/submission-attempts";
 import { isNoAnswerError } from "@/lib/isometric/error-utils";
+import type { SubmissionFailureDetails } from "@/lib/certification/submission-error";
 import {
   CHANGED_SINCE_REVIEW_FAILURE_KIND,
   InterruptedRemovalChangedError,
@@ -142,6 +143,14 @@ interface RemovalSubmitAttempt {
   externalMutation: RemovalExternalMutation;
 }
 
+function removalSubmissionFailureKind(error: unknown) {
+  return isNoAnswerError(error)
+    ? "no_answer" as const
+    : error instanceof InterruptedRemovalChangedError
+      ? CHANGED_SINCE_REVIEW_FAILURE_KIND
+      : null;
+}
+
 // The submission unit: one Isometric Removal == one certifierRemovals row.
 // Loads the removal's full context (every member credit batch's deduped run
 // union + applied-biochar attribution), aggregates ALL runs together with
@@ -159,6 +168,7 @@ export async function submitRemoval(
   };
   let outcome: "succeeded" | "refused" | "failed" = "failed";
   let attemptError: unknown = null;
+  let failureKind: ReturnType<typeof removalSubmissionFailureKind> = null;
 
   try {
     const result = await submitRemovalCore(args, attempt);
@@ -166,10 +176,33 @@ export async function submitRemoval(
     return result;
   } catch (error) {
     attemptError = error;
+    failureKind = removalSubmissionFailureKind(error);
     outcome =
       attempt.externalMutation === "none" && error instanceof SafeError
         ? "refused"
         : "failed";
+    const failure: SubmissionFailureDetails = {
+      // Unexpected and validation errors stay uncorrelated on purpose so the dialog keeps the plain error.
+      ...(error instanceof SafeError ? { attemptId: attempt.id } : {}),
+      // no_answer is stored but not streamed because the dialog reads it from the attempt.
+      failureKind: failureKind === "no_answer" ? null : failureKind,
+    };
+    // Preserve the thrown value for safe copy and server-side handling.
+    if (typeof error === "object" && error !== null) {
+      try {
+        for (const [key, value] of Object.entries(failure)) {
+          if (value === undefined) continue;
+          Object.defineProperty(error, key, {
+            value,
+            enumerable: false,
+            configurable: true,
+            writable: true,
+          });
+        }
+      } catch {
+        // Failure details must not replace the original error.
+      }
+    }
     throw error;
   } finally {
     const safeError = safeRemovalSubmissionError(attemptError);
@@ -187,11 +220,7 @@ export async function submitRemoval(
         error_class: safeError.errorClass,
         error_message: safeError.errorMessage,
         // Read back by the Removal sheet to say "Isometric did not answer".
-        failure_kind: isNoAnswerError(attemptError)
-          ? "no_answer"
-          : attemptError instanceof InterruptedRemovalChangedError
-            ? CHANGED_SINCE_REVIEW_FAILURE_KIND
-            : null,
+        failure_kind: failureKind,
         ghg_entry_external_mutation: attempt.externalMutation,
       },
       errorMessage: safeError.errorMessage,
