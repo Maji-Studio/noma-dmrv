@@ -146,6 +146,7 @@ while [ ! -f .scratchpad/release ]; do sleep ${POLL_INTERVAL_SECONDS}; done
     const { child, completed } = start();
     try {
       await waitForMarker(child);
+      while (!log().includes(READY_MARKER)) await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
       expect(log()).toContain(`exit=${EXIT_SUCCESS}\n`);
       expect(existsSync(statusPath())).toBe(false);
       writeFileSync(join(root, ".scratchpad/release"), "");
@@ -166,6 +167,8 @@ exit ${EXIT_FAILURE}
 `);
     const { child, completed } = start();
     await waitForMarker(child);
+    // tee writes the screen and the log separately; wait until the marker is in the log too.
+    while (!log().includes(READY_MARKER)) await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
     const firstLog = log();
     expect(readFileSync(join(lockPath(), "pid"), "utf8")).toBe(`${child.pid}\n`);
     expect(existsSync(statusPath())).toBe(false);
