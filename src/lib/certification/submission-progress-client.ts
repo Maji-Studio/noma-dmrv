@@ -6,8 +6,7 @@ import {
   type SubmissionProgressStreamEvent,
   type SubmissionProgressUpdate,
 } from "./submission-progress";
-import { CHANGED_SINCE_REVIEW_FAILURE_KIND } from "./interrupted-removal-copy";
-import { SubmissionError } from "./submission-error";
+import { isSubmissionAttemptId, isSubmissionFailureKind, SubmissionError } from "./submission-error";
 /*
  * Keep this timeout comfortably above the server ping cadence. A timeout is a
  * recoverable connection failure, not proof that submission work stopped.
@@ -174,9 +173,8 @@ function parseStreamEvent<T>(
     case "error":
       if (
         typeof value.error !== "string" || !value.error.trim() ||
-        (value.failureKind !== undefined && value.failureKind !== null &&
-          value.failureKind !== CHANGED_SINCE_REVIEW_FAILURE_KIND) ||
-        (value.attemptId !== undefined && !isNonEmptyString(value.attemptId))
+        (value.failureKind !== undefined && !isSubmissionFailureKind(value.failureKind)) ||
+        (value.attemptId !== undefined && !isSubmissionAttemptId(value.attemptId))
       ) {
         throw unreadableSubmissionStreamError();
       }

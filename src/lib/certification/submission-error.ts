@@ -5,6 +5,16 @@ export interface SubmissionFailureDetails {
   attemptId?: string;
 }
 
+export function isSubmissionFailureKind(
+  value: unknown,
+): value is Exclude<SubmissionFailureDetails["failureKind"], undefined> {
+  return value === null || value === CHANGED_SINCE_REVIEW_FAILURE_KIND;
+}
+
+export function isSubmissionAttemptId(value: unknown): value is string {
+  return typeof value === "string" && Boolean(value.trim());
+}
+
 export class SubmissionError extends Error implements SubmissionFailureDetails {
   readonly failureKind?: SubmissionFailureDetails["failureKind"];
   readonly attemptId?: string;
@@ -20,10 +30,9 @@ export class SubmissionError extends Error implements SubmissionFailureDetails {
 export function getSubmissionFailureDetails(error: unknown): SubmissionFailureDetails {
   if (!(error instanceof Error)) return {};
   return {
-    ...("failureKind" in error &&
-      (error.failureKind === null || error.failureKind === CHANGED_SINCE_REVIEW_FAILURE_KIND)
+    ...("failureKind" in error && isSubmissionFailureKind(error.failureKind)
       ? { failureKind: error.failureKind } : {}),
-    ...("attemptId" in error && typeof error.attemptId === "string"
+    ...("attemptId" in error && isSubmissionAttemptId(error.attemptId)
       ? { attemptId: error.attemptId } : {}),
   };
 }

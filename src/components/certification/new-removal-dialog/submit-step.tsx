@@ -127,6 +127,7 @@ export function SubmitStep({
         : null);
   const terminalError = terminalFailure?.message ?? null;
   // Only the attempt that produced this error can supply its structured outcome.
+  // Unexpected errors have different client copy, so keep the plain error without an attempt id.
   const attemptsQuery = useRemovalSubmissionAttempts(facilityId, removalId, Boolean(terminalError));
   const endedAttempt = terminalFailure?.attemptId
     ? attemptsQuery.data?.[0]?.id === terminalFailure.attemptId ? attemptsQuery.data[0] : undefined

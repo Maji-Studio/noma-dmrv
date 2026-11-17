@@ -1,7 +1,8 @@
 import { waitUntil } from "@vercel/functions";
 import { z } from "zod";
 import { requireOrgContext, requireOrgRole } from "@/lib/auth/server";
-import { SafeError, toActionError } from "@/lib/errors";
+import { SafeError } from "@/lib/errors";
+import { submissionStreamErrorMessage } from "@/lib/certification/submission-stream-error";
 import { checkRateLimit } from "@/lib/rate-limit/in-memory";
 import { SUBMISSION_STREAM_PING_INTERVAL_MS } from "@/lib/certification/submission-progress";
 import { getSubmissionFailureDetails } from "@/lib/certification/submission-error";
@@ -143,13 +144,7 @@ export async function POST(request: Request): Promise<Response> {
                 });
           send({ type: "result", result });
         } catch (error) {
-          const message =
-            error instanceof z.ZodError
-              ? `Validation error: ${error.issues.map((issue) => issue.message).join(", ")}`
-              : toActionError(
-                  error,
-                  "The submission could not be completed. Try again.",
-                );
+          const message = submissionStreamErrorMessage(error);
           logActionError(error, {
             message: "submission progress stream failed",
           });

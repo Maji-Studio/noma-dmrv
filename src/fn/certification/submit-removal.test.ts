@@ -9,6 +9,7 @@ import { submitRemoval } from "./submit-removal";
 import { make1000YearSequestrationTemplate } from "../../../tests/fixtures/submit-removal-templates";
 import { collectContextRemovalBlockers } from "./removal-blockers-gate";
 import { REMOVAL_PREPARATION_BLOCKERS } from "@/lib/certification/removal-submission-prepare";
+import { SafeError } from "@/lib/errors";
 
 function tierMismatchContext() {
   const ctx = makeContext(undefined, { removalTemplate: make1000YearSequestrationTemplate() });
@@ -69,12 +70,33 @@ describe("submitRemoval failure details", () => {
       attemptId: expect.any(String),
       failureKind: changed ? CHANGED_SINCE_REVIEW_FAILURE_KIND : null,
     });
+    expect(error).toBeInstanceOf(SafeError);
     if (changed) expect(error).toBeInstanceOf(InterruptedRemovalChangedError);
     const summary = vi.mocked(appendSyncEvent).mock.calls.find(([, event]) =>
       event.operation === "removal:submit:attempt-summary");
     expect(summary?.[1].responsePayload).toMatchObject({
       attempt_id: (error as { attemptId: string }).attemptId,
       failure_kind: changed ? CHANGED_SINCE_REVIEW_FAILURE_KIND : null,
+    });
+  });
+
+  it("keeps an unexpected failure uncorrelated with its stored attempt", async () => {
+    const unexpected = new Error("Internal failure details");
+    vi.mocked(loadRemovalSubmissionContext).mockRejectedValue(unexpected);
+    const error = await submitRemoval({
+      orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID, confirmProduction: true,
+    }).catch((error: unknown) => error);
+    expect(error).toBe(unexpected);
+    expect(error).not.toHaveProperty("attemptId");
+    expect(error).toHaveProperty("failureKind", null);
+    const summary = vi.mocked(appendSyncEvent).mock.calls.find(([, event]) =>
+      event.operation === "removal:submit:attempt-summary");
+    expect(summary?.[1].responsePayload).toMatchObject({
+      attempt_id: expect.any(String),
+      outcome: "failed",
+      error_class: "UnexpectedError",
+      error_message: "Removal submission failed unexpectedly. Submit the Removal again.",
+      failure_kind: null,
     });
   });
 });

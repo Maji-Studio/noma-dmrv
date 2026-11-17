@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { INTERRUPTED_REMOVAL_CHANGED_MESSAGE } from "./interrupted-removal-copy";
+import { getSubmissionFailureDetails } from "./submission-error";
 import {
   isSubmissionStreamStalledError,
   streamCertificationSubmission,
@@ -171,6 +172,37 @@ describe("streamCertificationSubmission", () => {
     )).rejects.toMatchObject({
       message: INTERRUPTED_REMOVAL_CHANGED_MESSAGE, failureKind: undefined, attemptId: undefined,
     });
+  });
+
+  it.each([null, "changed_since_review"])("accepts the same failure kind on the server and stream: %s", async (failureKind) => {
+    const details = { failureKind, attemptId: "attempt-1" };
+    expect(getSubmissionFailureDetails(Object.assign(new Error("Stopped."), details))).toEqual(details);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ type: "error", error: "Stopped.", ...details }) + "\n",
+    )));
+    await expect(streamCertificationSubmission(
+      { kind: "removal", input: REMOVAL_INPUT }, () => undefined,
+    )).rejects.toMatchObject(details);
+  });
+
+  it.each(["", " ", 42, null])("omits invalid attempt ids on the server and rejects them in the stream: %s", async (attemptId) => {
+    expect(getSubmissionFailureDetails(Object.assign(new Error("Stopped."), { attemptId }))).toEqual({});
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ type: "error", error: "Stopped.", attemptId }) + "\n",
+    )));
+    await expect(streamCertificationSubmission(
+      { kind: "removal", input: REMOVAL_INPUT }, () => undefined,
+    )).rejects.toThrow("The progress connection returned an unreadable response.");
+  });
+
+  it.each(["no_answer", "", 42])("omits invalid failure kinds on the server and rejects them in the stream: %s", async (failureKind) => {
+    expect(getSubmissionFailureDetails(Object.assign(new Error("Stopped."), { failureKind }))).toEqual({});
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ type: "error", error: "Stopped.", failureKind }) + "\n",
+    )));
+    await expect(streamCertificationSubmission(
+      { kind: "removal", input: REMOVAL_INPUT }, () => undefined,
+    )).rejects.toThrow("The progress connection returned an unreadable response.");
   });
 
   it("surfaces a safe admission error from the route", async () => {
