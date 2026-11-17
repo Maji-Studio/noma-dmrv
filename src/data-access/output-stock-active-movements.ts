@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, ne, notInArray } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, ne, notInArray, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { DbTransaction } from '@/db';
 import { binMovements, outputStockAllocations } from '@/db/schema';
@@ -13,6 +13,17 @@ export function activeOutputMovement(ctx: OrgContext, tx: Pick<DbTransaction, 's
     tx.select({ id: reversals.correctsMovementId }).from(reversals).where(and(
       eq(reversals.organizationId, ctx.organizationId), eq(reversals.outputKind, 'reversal'), isNotNull(reversals.correctsMovementId),
     ))));
+}
+
+/** Live allocation draws exclude canceled movements and deleted product layers. */
+export function liveOutputDraw(ctx: OrgContext, tx: Pick<DbTransaction, 'select'>) {
+  requireOrgScope(ctx);
+  return and(
+    eq(outputStockAllocations.organizationId, ctx.organizationId),
+    eq(binMovements.organizationId, ctx.organizationId),
+    activeOutputMovement(ctx, tx),
+    sql`(${outputStockAllocations.biocharProductId} is null or ${notInArray(outputStockAllocations.biocharProductId, deletedProductIds(ctx, tx))})`,
+  );
 }
 
 /** Deleted products retain their placement facts but never become stock again on facility restore. */

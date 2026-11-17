@@ -421,7 +421,7 @@ export function OrderList() {
       }}
       title={sideSheetTitle}
       subtitle={sideSheetSubtitle}
-      {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
+      {...recordLockSheetProps({ record: { kind: "order", id: displaySideSheet?.entity?.id }, lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
       canEdit={isRecordEditable(sheetLock)}
       editLabel="Edit order"
       sections={sideSheetEntity ? orderSheetSections(sideSheetEntity) : undefined}

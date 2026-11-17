@@ -33,7 +33,9 @@ vi.mock("@/hooks/use-file-upload", () => ({
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ success: vi.fn() }),
 }));
-vi.mock("@phosphor-icons/react/dist/ssr", () => ({
+vi.mock("@phosphor-icons/react/dist/ssr", async (importOriginal) => ({
+  // The Used by chart reads the Flow chart's real icons.
+  ...(await importOriginal<typeof import("@phosphor-icons/react/dist/ssr")>()),
   MapPinIcon: () => <span />,
   PolygonIcon: () => <span />,
   CameraIcon: () => <span />,

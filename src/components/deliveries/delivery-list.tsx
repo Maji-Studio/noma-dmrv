@@ -568,7 +568,7 @@ export function DeliveryList() {
       }}
       title={sideSheetTitle}
       subtitle={sideSheetSubtitle}
-      {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
+      {...recordLockSheetProps({ record: { kind: "delivery", id: displaySideSheet?.entity?.id }, lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
       canEdit={isRecordEditable(sheetLock)}
       editLabel="Edit delivery"
       readOnly={sheetReadOnly}
