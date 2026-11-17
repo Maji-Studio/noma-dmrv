@@ -37,6 +37,8 @@ import {
 } from "./review-runtime.mjs";
 import { modelSettings, profileModels } from "./review-models.mjs";
 import { loadPriors } from "./review-prior.mjs";
+import { archiveReport, findingsSummaryLines } from "./review-archive.mjs";
+import { selfTestReviewArchive } from "./review-archive-self-test.mjs";
 import { selfTestLocalReview } from "./review-local-self-test.mjs";
 import { discoverSpec } from "./review-spec.mjs";
 import { resolveTarget, verifyLocalHead, verifyRemoteHead } from "./review-target.mjs";
@@ -428,6 +430,7 @@ async function removeReviewWorktree(cwd, worktree) {
 async function selfTest() {
   selfTestDesignContext();
   await selfTestLocalReview();
+  await selfTestReviewArchive();
   const sample = {
     practice: "standards",
     findings: [
@@ -559,6 +562,14 @@ async function main() {
     return;
   }
 
+  if (options.mode === "archive") {
+    for (const path of options.archive) {
+      const archived = await archiveReport(path);
+      if (archived) process.stdout.write(`Archive: ${archived}\n`);
+    }
+    return;
+  }
+
   const cwd = await getRepoRoot();
   const artifactDir = options.artifactDir
     ? resolve(cwd, options.artifactDir)
@@ -569,6 +580,9 @@ async function main() {
   mkdirSync(artifactDir, { recursive: true });
   const timeoutMs = options.timeoutMinutes * 60 * 1000;
   const { priors, round } = loadPriors(options.prior);
+  if (options.mode !== "plan") {
+    for (const path of options.prior) await archiveReport(path, { cwd });
+  }
   const localTarget = options.local ? await resolveTarget(options, cwd) : undefined;
 
   const versions = {
@@ -767,42 +781,46 @@ async function main() {
     models: options.models,
   };
   writeFileSync(reportPath, aggregateReport(aggregate));
-  writeFileSync(
-    join(artifactDir, REPORT_FILENAME),
-    `${JSON.stringify(buildReportJson(aggregate), null, 2)}\n`,
-  );
-  if (options.local) {
-    const warning = await verifyLocalHead(headSha, cwd);
-    if (warning) process.stderr.write(warning);
-  }
-  const failures = reports.filter((report) => report.error);
-  if (failures.length > 0) {
-    const detail = failures
-      .map(
-        (failure) =>
-          `${displayPractice(failure.practice)} / ${displayModel(failure.model, options.profile)}: ${
-            failure.error
-          }`,
-      )
-      .join("\n");
-    throw new Error(
-      `Review suite incomplete; refusing to publish.\n${detail}\nArtifacts: ${artifactDir}`,
-    );
-  }
+  const jsonReport = buildReportJson(aggregate);
+  const jsonReportPath = join(artifactDir, REPORT_FILENAME);
+  writeFileSync(jsonReportPath, `${JSON.stringify(jsonReport, null, 2)}\n`);
+  const archivePath = await archiveReport(jsonReportPath, { cwd });
+  try {
+    if (options.local) {
+      const warning = await verifyLocalHead(headSha, cwd);
+      if (warning) process.stderr.write(warning);
+    }
+    const failures = reports.filter((report) => report.error);
+    if (failures.length > 0) {
+      const detail = failures
+        .map(
+          (failure) =>
+            `${displayPractice(failure.practice)} / ${displayModel(failure.model, options.profile)}: ${
+              failure.error
+            }`,
+        )
+        .join("\n");
+      throw new Error(
+        `Review suite incomplete; refusing to publish.\n${detail}\nArtifacts: ${artifactDir}`,
+      );
+    }
 
-  if (options.mode === "dry-run") {
+    if (options.mode === "dry-run") {
+      process.stdout.write(
+        `Dry run complete. Report: ${reportPath}\nNo GitHub changes made.\n`,
+      );
+      return;
+    }
+
+    await verifyRemoteHead(options.pr, headSha);
+    const repo = await getRepoSlug();
+    const commentUrl = await publishComment(repo, pr.number, reportPath);
     process.stdout.write(
-      `Dry run complete. Report: ${reportPath}\nNo GitHub changes made.\n`,
+      `Published PR review suite.\nPR: ${pr.url}\nHead: ${headSha}\nComment: ${commentUrl}\nArtifacts: ${artifactDir}\n`,
     );
-    return;
+  } finally {
+    process.stdout.write(`${findingsSummaryLines(jsonReport, jsonReportPath, archivePath).join("\n")}\n`);
   }
-
-  await verifyRemoteHead(options.pr, headSha);
-  const repo = await getRepoSlug();
-  const commentUrl = await publishComment(repo, pr.number, reportPath);
-  process.stdout.write(
-    `Published PR review suite.\nPR: ${pr.url}\nHead: ${headSha}\nComment: ${commentUrl}\nArtifacts: ${artifactDir}\n`,
-  );
 }
 
 main().catch((error) => {
