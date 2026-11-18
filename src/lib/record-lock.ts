@@ -219,12 +219,12 @@ export function isRemovalCorrectionWindowOpen(
 /** Display only: persisted statuses use the correction rule for every shared holder.
  * Missing/failed lineage reads must be rejected by the caller, never replaced by [].
  */
-export function readsAsCorrectionWindowOpenFromPersisted(removalId: string, lineage: readonly RecordLockRemoval[]): boolean {
+export function readsAsCorrectionWindowOpenFromPersisted(removalId: string, lineage: readonly RecordLockRemoval[], options: { ownReturnedNotRequired?: boolean } = {}): boolean {
   const persisted = lineage.map(holder => ({ ...holder,
     statements: holder.statements.map(statement => ({ ...statement, fresh: true })),
   }));
   const removal = persisted.find(holder => holder.id === removalId);
-  return !!removal && isRemovalCorrectionWindowOpen(removal, persisted);
+  return !!removal && isRemovalCorrectionWindowOpen(removal, persisted, options);
 }
 
 function returnedBy(facts: RecordLockFacts): Pick<RecordLock, "returnedBy"> {

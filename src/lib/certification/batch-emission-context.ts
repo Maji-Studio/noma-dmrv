@@ -69,13 +69,15 @@ export async function loadBatchEmissionContext(
   for (const id of ids) {
     if (rollups[id]?.batch.facilityId !== facilityId) throw new SafeError("Credit batch was not found.");
   }
-  const [storedEntries, automatic, contenders, availableApplications, lineFiles, fileReservations] = await Promise.all([
+  const claimedBatchIds = ids.filter(id => rollups[id].batch.productionEmissionsClaimedByRemovalId);
+  const [storedEntries, automatic, contenders, availableApplications, lineFiles, fileReservations, fileContenders] = await Promise.all([
     listEmissionEntriesForBatches(ctx, ids),
     loadBatchesEmissionAutomaticFacts(ctx, ids),
     coversBatches(coveredContenders, ids, claimedAttempt) ? coveredContenders.contenders : listEmissionEntryDraftContenders(ctx, ids, undefined, claimedAttempt),
     listEmissionEntryAvailableApplications(ctx, ids),
     listEmissionLineFilesForBatches(ctx, ids),
     loadComponentFileReservations(ctx, ids.flatMap(id => rollups[id].batch.productionEmissionsClaimReservedBySubmissionId ? [rollups[id].batch.productionEmissionsClaimReservedBySubmissionId!] : [])),
+    claimedBatchIds.length ? listEmissionEntryDraftContenders(ctx, claimedBatchIds, undefined, claimedAttempt, { forComponentFiles: true }) : [],
   ]);
   const carryKey = JSON.stringify([ctx.organizationId, facilityId, claimedAttempt]);
   let carryRead = carryReads?.get(carryKey);
@@ -110,7 +112,7 @@ export async function loadBatchEmissionContext(
     ));
     const entries = mergeEntryCarryFacts(deriveEmissionEntryFacts(stored, observation, previousObservations), carryContext.entries);
     result[id] = { lineFiles: groupEmissionLineFiles(lineFiles.filter(row => row.anchor.creditBatchId === id)),
-      recordsFileLocked: batchComponentFileLocked({ ...rollups[id].batch, id }, fileReservations, contenders), productionReservationSubmissionId: rollups[id].batch.productionEmissionsClaimReservedBySubmissionId, entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
+      recordsFileLocked: batchComponentFileLocked({ ...rollups[id].batch, id }, fileReservations, fileContenders), productionReservationSubmissionId: rollups[id].batch.productionEmissionsClaimReservedBySubmissionId, entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
       entriesWithoutRemoval: entriesWithoutRemoval(entries, contenders, liveReservationIds, availableApplications) };
   }
   for (const contender of contenders.filter((item) => loadCorrection && item.contenderKind === "correction")) {

@@ -57,7 +57,7 @@ export async function loadBatchesEmissionLines(
     loadBatchEmissionEntryCarry(ctx, readyIds),
     listEmissionLineFilesForBatches(ctx, readyIds),
     // Only a claimed batch can reopen through its claiming Removal's correction window.
-    claimedReadyIds.length ? listEmissionEntryDraftContenders(ctx, claimedReadyIds, undefined, undefined, { savedOnly: true }) : [],
+    claimedReadyIds.length ? listEmissionEntryDraftContenders(ctx, claimedReadyIds, undefined, undefined, { savedOnly: true, forComponentFiles: true }) : [],
     loadComponentFileReservations(ctx, batches.flatMap(batch => batch.productionEmissionsClaimReservedBySubmissionId ? [batch.productionEmissionsClaimReservedBySubmissionId] : [])),
   ]);
   // A file Isometric already holds cannot be removed; the slot offers Replace for it instead.

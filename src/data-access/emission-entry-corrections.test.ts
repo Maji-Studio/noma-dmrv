@@ -6,6 +6,8 @@ import { expect, it, vi } from "vitest";
 import type { DbTransaction } from "@/db";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
 
+// Existing entry-window fixtures have no registry-missing versions.
+vi.mock("./component-file-corrections", () => ({ registryMissingComponentFileRemovalIds: async () => new Set<string>() }));
 vi.mock("@/db", () => ({ db: {} }));
 const mocks = vi.hoisted(() => ({ locked: vi.fn(), lineage: vi.fn(), members: vi.fn(), latest: vi.fn() }));
 vi.mock("./emission-entry-carry-queries", () => ({ listCarryRemovalMembers: mocks.members }));

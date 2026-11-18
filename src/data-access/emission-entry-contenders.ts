@@ -1,3 +1,4 @@
+import { registryMissingComponentFileRemovalIds } from "./component-file-corrections";
 import { decideSubmissionClaim } from "@/lib/isometric/utils/submission-claim";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { isSubmittedAttempt, isRemovalCorrectionWindowOpen, readsAsCorrectionWindowOpenFromPersisted, isReturnedStatement } from "@/lib/record-lock";
@@ -14,8 +15,9 @@ import type { OrgContext } from "@/lib/auth/server";
 import { deriveRemovalEntryWindow, type EntryContender } from "@/lib/certification/removal-emission-contributions";
 import { requireOrgScope, type Executor } from "./utils";
 
-/** Every unsubmitted Removal is a contender, even before it acquires a ledger row. */
-export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBatchIds: string[], executor: Executor & Pick<typeof db, "selectDistinct"> = db, claimedAttempt?: { removalId: string; submissionId?: string }, { savedOnly = false }: { savedOnly?: boolean } = {}): Promise<EntryContender[]> {
+/** Every unsubmitted Removal is a contender, even before it acquires a ledger row.
+ * forComponentFiles is a file-only projection; never use it for entry ownership/corrections. */
+export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBatchIds: string[], executor: Executor & Pick<typeof db, "selectDistinct"> = db, claimedAttempt?: { removalId: string; submissionId?: string }, { savedOnly = false, forComponentFiles = false }: { savedOnly?: boolean; forComponentFiles?: boolean } = {}): Promise<EntryContender[]> {
   requireOrgScope(ctx);
   if (!creditBatchIds.length) return [];
   const members = await executor.select({ removalId: creditBatchApplications.removalId }).from(creditBatchApplications)
@@ -49,13 +51,15 @@ export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBa
   const lineageByBatch = await readPerCorrectionUnion(ctx, executor, rows.map((row) => row.creditBatchId), async union =>
     (await getCertifiedLineageForBatches(ctx, executor, union, statementReads, excludeSubmissionId, savedOnly)).map(row => row.recordLockRemoval));
   const facts = [...lineageByBatch.values()].flat();
+  const missing = forComponentFiles ? await registryMissingComponentFileRemovalIds(ctx, executor, ids) : new Set<string>();
   return ids.flatMap((removalId) => {
     const group = rows.filter((row) => row.removalId === removalId && !hasFreshRemovalDeletionLease(row.metadata));
     const fact = facts.find((item) => item.id === removalId);
     if (!fact) return [];
     const eligibleBatchIds = group.map((row) => row.creditBatchId).filter((id) => {
       const shared = lineageByBatch.get(id);
-      return !!shared && (savedOnly ? readsAsCorrectionWindowOpenFromPersisted(fact.id, shared) : isRemovalCorrectionWindowOpen(fact, shared));
+      const options = { ownReturnedNotRequired: missing.has(fact.id) };
+      return !!shared && (savedOnly ? readsAsCorrectionWindowOpenFromPersisted(fact.id, shared, options) : isRemovalCorrectionWindowOpen(fact, shared, options));
     });
     const correction = eligibleBatchIds.length > 0;
     // The correction window's own rule; inside an open window every statement passes it.
