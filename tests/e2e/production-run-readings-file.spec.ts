@@ -56,7 +56,7 @@ async function seedProductionRun(seededData: SeededChainData) {
       id: runId,
       code,
       facilityId: seededData.facility.id,
-      status: "complete",
+      status: "complete", outputPostedAt: RUN_WINDOW_END,
       startTime: RUN_WINDOW_START,
       endTime: RUN_WINDOW_END,
       reactorId: seededData.reactor.id,

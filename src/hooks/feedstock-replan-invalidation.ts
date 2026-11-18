@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { activityKeys } from "./activity-query-keys";
 import { creditBatchKeys } from "./credit-batch-query-keys";
 import { chainOfCustodyKeys } from "./use-chain-of-custody";
-import { certificationKeys } from "./use-certification";
+import { certificationKeys } from "./certification-query-keys";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
 import { productionRunKeys } from "./use-production-runs";
 

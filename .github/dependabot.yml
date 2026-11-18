@@ -5,7 +5,7 @@
 version: 2
 updates:
   - package-ecosystem: "npm" # covers pnpm-lock.yaml
-    directories: ["/", "/site"]
+    directories: ["/"]
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 0

@@ -121,6 +121,6 @@ describe("DashboardView updated time", () => {
     mocks.facilityId = "facility-1";
     mocks.generatedAt = "2026-10-21T21:30:00Z";
     await mount();
-    expect(JSON.stringify(renderer.toJSON())).toContain("Live operations · updated Oct 22, 2026, 00:30");
+    expect(JSON.stringify(renderer.toJSON())).toContain("Updated Oct 22, 00:30");
   });
 });

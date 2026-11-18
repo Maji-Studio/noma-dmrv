@@ -75,7 +75,6 @@ export interface EnergyCreditBatchInput {
   code: string;
   startDate: string;
   endDate: string;
-  status: string;
 }
 
 export interface EnergyInputs {

@@ -1,8 +1,11 @@
+import { waitUntil } from "@vercel/functions";
 import { z } from "zod";
 import { requireOrgContext, requireOrgRole } from "@/lib/auth/server";
-import { SafeError, toActionError } from "@/lib/errors";
+import { SafeError } from "@/lib/errors";
+import { submissionStreamErrorMessage } from "@/lib/certification/submission-stream-error";
 import { checkRateLimit } from "@/lib/rate-limit/in-memory";
 import { SUBMISSION_STREAM_PING_INTERVAL_MS } from "@/lib/certification/submission-progress";
+import { getSubmissionFailureDetails } from "@/lib/certification/submission-error";
 import {
   submitGhgStatementDialogSchema,
   submitRemovalSchema,
@@ -10,7 +13,7 @@ import {
 import { logActionError } from "@/fn/action-errors";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { submitGhgStatementToVerifierCore } from "@/fn/certification/submit-ghg-statement";
-import { submitRateLimit } from "@/fn/certification/shared";
+import { submitRateLimit } from "@/lib/certification/shared";
 import type { OrgContext } from "@/lib/auth/server";
 import type {
   SubmissionProgressStreamEvent,
@@ -18,6 +21,9 @@ import type {
 } from "@/lib/certification/submission-progress";
 
 export const runtime = "nodejs";
+// Sequential Removal calls need minutes, within Pro Fluid
+// compute's 800s limit. Stop by the 10-minute claim TTL to avoid live reclaim.
+export const maxDuration = 600;
 
 const progressRequestSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("removal"), input: submitRemovalSchema }),
@@ -104,9 +110,9 @@ export async function POST(request: Request): Promise<Response> {
         try {
           controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
         } catch {
-          // Do not deliberately cancel the core when the response disconnects.
-          // The route is not a detached job, so a later retry must reconcile
-          // any registry work whose local completion was not persisted.
+          // The client disconnected: stop progress delivery only. waitUntil
+          // keeps the core running up to maxDuration; a crash past that is
+          // reconciled on retry from the persisted attempt marker.
           streamOpen = false;
           stopPings();
         }
@@ -119,7 +125,7 @@ export async function POST(request: Request): Promise<Response> {
         send({ type: "ping" });
       }, SUBMISSION_STREAM_PING_INTERVAL_MS);
 
-      void (async () => {
+      const core = (async () => {
         try {
           const result =
             body.kind === "removal"
@@ -138,17 +144,11 @@ export async function POST(request: Request): Promise<Response> {
                 });
           send({ type: "result", result });
         } catch (error) {
-          const message =
-            error instanceof z.ZodError
-              ? `Validation error: ${error.issues.map((issue) => issue.message).join(", ")}`
-              : toActionError(
-                  error,
-                  "The submission could not be completed. Try again.",
-                );
+          const message = submissionStreamErrorMessage(error);
           logActionError(error, {
             message: "submission progress stream failed",
           });
-          send({ type: "error", error: message });
+          send({ type: "error", error: message, ...getSubmissionFailureDetails(error) });
         } finally {
           stopPings();
           if (streamOpen) {
@@ -157,10 +157,11 @@ export async function POST(request: Request): Promise<Response> {
           }
         }
       })();
+      waitUntil(core);
     },
     cancel() {
-      // Do not deliberately cancel the core. A disconnect does not guarantee
-      // that serverless execution will continue after the response is gone.
+      // waitUntil keeps the core alive after disconnect, up to maxDuration.
+      // Cancellation only closes the progress transport.
       streamOpen = false;
       stopPings();
     },

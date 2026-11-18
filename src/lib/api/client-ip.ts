@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { fingerprint } from "@/lib/crypto/fingerprint";
 import { BlockList, isIP } from "node:net";
 import { API_CONNECTOR_EGRESS_CIDRS } from "@/config/api-rate-limits";
 
@@ -35,7 +35,7 @@ export function clientIp(headers: Headers, onVercel = process.env.VERCEL === "1"
 }
 
 export function clientIpBucketKey(headers: Headers, onVercel = process.env.VERCEL === "1"): string {
-  return `ip:${createHash("sha256").update(clientIp(headers, onVercel)).digest("hex")}`;
+  return `ip:${fingerprint(clientIp(headers, onVercel))}`;
 }
 
 /** Invalid addresses never qualify for the connector tier. */

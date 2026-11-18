@@ -20,7 +20,7 @@ describe("RemovalDetailSheet sync history contract", () => {
       "utf8",
     );
 
-    expect(source).toContain("deriveRemovalWorkflowStatus");
+    expect(source).toContain("deriveRemovalShownStatus");
     expect(source).toContain("SheetStatusBlock");
     expect(source).not.toContain("ReadinessBlock");
     expect(source).not.toContain("all preconditions met");

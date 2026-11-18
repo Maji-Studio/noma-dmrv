@@ -9,6 +9,7 @@ export interface BatchLineageFeedstockFact {
   deliveryDate: Date | null;
   massDryKg: number | null;
   wetMassUsedKg: number | null;
+  supplierId?: string | null;
   supplierName: string | null;
   feedstockTypeName: string | null;
 }

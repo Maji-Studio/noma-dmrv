@@ -9,8 +9,8 @@ const source = (path: string) =>
 const ACCOUNTING_PATH = "src/data-access/credit-batch-accounting.ts";
 const DETAIL_PATH = "src/data-access/credit-batches.ts";
 const CERTIFICATION_PATH =
-  "src/fn/certification/certify-context-core.ts";
-const SELECTABLE_PATH = "src/fn/certification/selectable-batches.ts";
+  "src/lib/certification/certify-context-core.ts";
+const SELECTABLE_PATH = "src/lib/certification/selectable-batches.ts";
 const TRACEABILITY_PATH =
   "src/data-access/chain-of-custody-batch.ts";
 

@@ -1,23 +1,24 @@
+import { ENTRY_FILE_MISSING_INSTRUCTION } from "@/lib/certification/emission-entry-messages";
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import { getSentRemovalForComparison, loadRemovalCorrectionFacts, listStatementRemovalIdentities } from "@/data-access/removal-entry-correction";
 import { getCreditBatchesByRemovalId } from "@/data-access/certifier-removals";
 import { getTemplateObservationById, getLatestTemplateObservation } from "@/data-access/removal-template-observations";
-import { loadRemovalEntryCorrection } from "./removal-correction-core";
-import { compileRemovalCorrectionContent } from "./removal-correction-compile-core";
-import { assertStatementRemovalsCurrent } from "./statement-removal-correction-core";
-import { compareRemovalCurrentContent } from "./removal-content-comparison-core";
+import { loadRemovalEntryCorrection } from "@/lib/certification/removal-correction-core";
+import { compileRemovalCorrectionContent } from "@/lib/certification/removal-correction-compile-core";
+import { assertStatementRemovalsCurrent } from "@/fn/certification/statement-removal-correction-core";
+import { compareRemovalCurrentContent } from "@/lib/certification/removal-content-comparison-core";
 import { z } from "zod";
 import { logger } from "@/lib/log";
 import { loadBatchEmissionEntryFacts } from "@/data-access/emission-entry-facts";
-import { RemovalComparisonBlockedError } from "./removal-comparison-blocked-error";
+import { RemovalComparisonBlockedError } from "@/lib/certification/removal-comparison-blocked-error";
 import { SafeError } from "@/lib/errors";
 
 vi.mock("@/data-access/removal-entry-correction", () => ({ getSentRemovalForComparison: vi.fn(), loadRemovalCorrectionFacts: vi.fn(), listStatementRemovalIdentities: vi.fn() }));
 vi.mock("@/data-access/certifier-removals", () => ({ getCreditBatchesByRemovalId: vi.fn() }));
 vi.mock("@/data-access/removal-template-observations", () => ({ getTemplateObservationById: vi.fn(), getLatestTemplateObservation: vi.fn() }));
 vi.mock("@/data-access/emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: vi.fn(async () => ({ previousObservations: new Map() })) }));
-vi.mock("./removal-correction-compile-core", () => ({ compileRemovalCorrectionContent: vi.fn() }));
+vi.mock("@/lib/certification/removal-correction-compile-core", () => ({ compileRemovalCorrectionContent: vi.fn() }));
 vi.mock("@/lib/log", () => ({ logger: { warn: vi.fn() } }));
 const ctx = makeTestOrgContext();
 const observation = { id: "sent-observation", definition: { groups: [{ components: [{ id: "energy", displayName: "Energy" }] }] } };
@@ -94,7 +95,7 @@ it("reuses the notice facts and hydrates historical names only for its changed p
 });
 
 it("carries compile blocker messages and reason through both notice projections and fails closed", async () => {
-  const messages = ["Add a file for each emissions entry with a value.", "Review this component's entry policy. Paired inputs require a single entry."];
+  const messages = [ENTRY_FILE_MISSING_INSTRUCTION, "Review this component's entry policy. Paired inputs require a single entry."];
   vi.mocked(compileRemovalCorrectionContent).mockRejectedValue(new RemovalComparisonBlockedError(messages));
   expect(await compareRemovalCurrentContent(ctx, "removal")).toMatchObject({
     kind: "unavailable", reason: "compile_refused", unavailableMessages: messages,

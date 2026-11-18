@@ -3,7 +3,7 @@ import { beforeAll, expect, it } from "vitest";
 import { db } from "@/db";
 import { documents, productionRunReadings, productionRuns } from "@/db/schema";
 import { getProductionRunsForCertification } from "@/data-access/production-runs";
-import { buildEntityReadinessResult } from "@/fn/certification/certify-readiness-gaps";
+import { buildEntityReadinessResult } from "@/lib/certification/certify-readiness-gaps";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { withLineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext } from "./helpers/test-org";
@@ -28,7 +28,7 @@ it("requires only uploaded sensor-data CSV evidence with zero parsed readings", 
       eq(productionRunReadings.productionRunId, fixture.productionRunId),
     );
     await db.update(productionRuns).set({
-      status: "complete",
+      status: "complete", outputPostedAt: RUN_END,
       endTime: RUN_END,
       dieselOperationLiters: 0,
       dieselGensetLiters: 0,

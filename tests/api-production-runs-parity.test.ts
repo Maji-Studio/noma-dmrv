@@ -66,11 +66,12 @@ async function remove(transport: Transport, saved: Awaited<ReturnType<typeof cre
 function normalize(state: Awaited<ReturnType<typeof captureProductionRunState>>) {
   return {
     ...state,
-    runs: state.runs.map(({ id, code, createdAt, updatedAt, stockPostingSequence, ...row }) => {
+    runs: state.runs.map(({ id, code, createdAt, updatedAt, outputPostedAt, stockPostingSequence, ...row }) => {
       expect(id).toBeTruthy(); expect(code).toMatch(/^PR-\d{2}-\d{3,}$/);
       expect(createdAt).toBeInstanceOf(Date); expect(updatedAt).toBeInstanceOf(Date);
       expect(stockPostingSequence).toBeGreaterThan(BigInt(0));
-      return row;
+      if (outputPostedAt !== null) expect(outputPostedAt).toBeInstanceOf(Date);
+      return { ...row, outputPostedAt: outputPostedAt === null ? null : "set" };
     }),
     draws: state.draws.map(({ id, productionRunId, createdAt, ...draw }) => {
       expect(id).toBeTruthy(); expect(productionRunId).toBeTruthy(); expect(createdAt).toBeInstanceOf(Date);

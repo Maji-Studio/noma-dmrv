@@ -3,17 +3,16 @@ import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { assertThrowawayTestDatabase } from "../../tests/helpers/throwaway-database";
+import { MS_PER_HOUR, OUTPUT_RUN_START_HOURS_AGO, SEEDED_RUN_START_HOURS_AGO, seedIntakeDate } from "./seed-dates";
 
 const FIXTURE_LABEL = "API fuzz fixture";
 const FACILITY_TIME_ZONE = "UTC";
 const INTAKE_WET_MASS_KG = 100;
 const INTAKE_MOISTURE_PERCENT = 20;
 const RUN_DRAW_WET_MASS_KG = 10;
-const SEEDED_RUN_START_HOURS_AGO = 3;
 const SEEDED_RUN_END_HOURS_AGO = 2;
 // The completed run that fills the biochar bin ends before the product, which
 // precedes the loss. hooks.py places its create example later still.
-const OUTPUT_RUN_START_HOURS_AGO = 6;
 const OUTPUT_RUN_END_HOURS_AGO = 5;
 const OUTPUT_RUN_DRAW_WET_MASS_KG = 60;
 const BIOCHAR_OUTPUT_WET_MASS_KG = 20;
@@ -22,7 +21,7 @@ const PRODUCT_PLACED_HOURS_AGO = 4;
 const PRODUCT_BIOCHAR_WET_MASS_KG = 5;
 const LOSS_HOURS_AGO = 3.5;
 const LOSS_WET_MASS_KG = 1;
-// The credit batch covers the completed run's day and the day before, so a sample
+// The credit batch covers the previous and current UTC days, so a sample
 // taken shortly before now is inside its window whatever the clock reads.
 const BATCH_WINDOW_DAYS_BACK = 1;
 const SAMPLE_TAKEN_HOURS_AGO = 1;
@@ -33,7 +32,6 @@ const SAMPLE_HYDROGEN_PERCENT = 2.5;
 const ORDER_QUANTITY_KG = 10_000;
 const DELIVERY_WET_MASS_KG = 0.1;
 const DELIVERY_HOURS_AGO = 1;
-const MS_PER_HOUR = 3_600_000;
 const MS_PER_DAY = 24 * MS_PER_HOUR;
 const PRIVATE_FILE_MODE = 0o600;
 
@@ -116,9 +114,11 @@ async function main(): Promise<void> {
   }));
   const driver = await createDriver(ctx, { code: "FUZZ-DRV", name: FIXTURE_LABEL });
   const vehicle = await createVehicle(ctx, { code: "FUZZ-VEH", name: FIXTURE_LABEL, vehicleType: "truck" });
+  const now = Date.now();
+  const intakeDate = seedIntakeDate(now, FACILITY_TIME_ZONE);
   const intake = await runOperation(logFeedstockDelivery, ctx, {
     facilityId: facility.id, supplierId: supplier.id, feedstockTypeId: feedstockType.id,
-    deliveryDate: formatFacilityDate(new Date(), FACILITY_TIME_ZONE),
+    deliveryDate: intakeDate,
     totalWetMassKg: INTAKE_WET_MASS_KG, moisturePercent: INTAKE_MOISTURE_PERCENT,
     allocations: [{ storageLocationId: bin.id, allocatedWetMassKg: INTAKE_WET_MASS_KG }],
   });
@@ -126,13 +126,12 @@ async function main(): Promise<void> {
   if (!feedstock) throw new Error("API fuzz intake did not create a feedstock.");
   await runOperation(logFeedstockDelivery, ctx, {
     facilityId: facility.id, supplierId: supplier.id, feedstockTypeId: feedstockType.id,
-    deliveryDate: formatFacilityDate(new Date(), FACILITY_TIME_ZONE),
+    deliveryDate: intakeDate,
     totalWetMassKg: INTAKE_WET_MASS_KG, moisturePercent: INTAKE_MOISTURE_PERCENT,
     allocations: [{ storageLocationId: runBin.id, allocatedWetMassKg: INTAKE_WET_MASS_KG }],
   });
   // A failed run with a closed window in the past. hooks.py builds its seeded create from a
   // later window on the same reactor, so the overlap guard does not refuse it.
-  const now = Date.now();
   const startedRun = (await runOperation(startProductionRun, ctx, {
     facilityId: facility.id, reactorId: reactor.id, status: "running",
     startTime: new Date(now - SEEDED_RUN_START_HOURS_AGO * MS_PER_HOUR).toISOString(),
@@ -187,7 +186,7 @@ async function main(): Promise<void> {
   })).data;
   const orderInput = {
     facilityId: facility.id, customerId: customer.id, customerLocationId: customerLocation.id,
-    formulationId: pure.id, orderDate: formatFacilityDate(new Date(now), FACILITY_TIME_ZONE),
+    formulationId: pure.id, orderDate: formatFacilityDate(new Date(now - DELIVERY_HOURS_AGO * MS_PER_HOUR), FACILITY_TIME_ZONE),
     quantityKg: ORDER_QUANTITY_KG, packaging: "loose" as const,
   };
   const order = (await runOperation(recordOrder, ctx, orderInput)).data;
@@ -203,6 +202,7 @@ async function main(): Promise<void> {
   const currentProduct = await readApiBiocharProduct(ctx, { id: product.id });
   const { seedApplications } = await import("./seed-applications");
   const applicationFixture = await seedApplications(ctx, {
+    now,
     facilityId: facility.id, supplierId: supplier.id,
     formulationId: pure.id, customerId: customer.id, customerLocationId: customerLocation.id,
     gpsLatitude: customerLocation.gpsLatitude, gpsLongitude: customerLocation.gpsLongitude, timeZone: FACILITY_TIME_ZONE,

@@ -1,0 +1,513 @@
+import { EMISSION_LINE_FILE_CHANGED } from "@/lib/certification/emission-entry-messages";
+import { includesProductionInputs } from "./production-claim-policy";
+import { EMISSION_ENTRY_FILE_UNAVAILABLE, formatEmissionEntryMessageLabel } from "@/lib/certification/emission-entry-messages";
+import { withEmissionEntryEvidenceDiagnostics } from "./emission-entry-evidence-diagnostics";
+import { logger } from "@/lib/log";
+import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
+import { emissionEntrySourceCandidates } from "@/lib/certification/emission-entry-source-bindings";
+import { listEmissionLineFilesForBatches } from "@/data-access/emission-line-files";
+import { lineFileSourceCandidates, type LineFileEvidence } from "./emission-line-file-evidence";
+import { loadRemovalSourceContext } from "./emission-entry-source-context";
+import type { OrgContext } from "@/lib/auth/server";
+import type { DbTransaction } from "@/db";
+import {
+  listDocumentUploadsForDocuments,
+  type CertifierDocumentUploadRow,
+  type DocumentUploadMetadata,
+} from "@/data-access/certifier-document-uploads";
+import {
+  getCertifierProjectByFacility,
+  type DocumentRow,
+} from "@/data-access/certification";
+import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
+import { getSamplesByCreditBatchIds } from "@/data-access/credit-batch-samples";
+import {
+  getCertifierRemovalById,
+  getCreditBatchesByRemovalId,
+} from "@/data-access/certifier-removals";
+import { listDocumentsForEntity, listEmissionEntryDocumentsByIds } from "@/data-access/documents";
+import {
+  biocharApplicationIdForSource,
+  isApplicationEvidenceDocumentReady,
+} from "@/lib/certification/application-evidence";
+import {
+  classifyRemovalSourceCandidate,
+  type ClassifiedRemovalSource,
+} from "@/lib/certification/removal-source-bindings";
+import { SafeError } from "@/lib/errors";
+import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
+
+export type CandidateLineageEntityType =
+  | "application"
+  | "delivery"
+  | "feedstock"
+  | "credit_batch"
+  | "sample"
+  | "emission_entry"
+  | "emission_line";
+
+export interface CandidateLineageEntity {
+  entityType: CandidateLineageEntityType;
+  entityId: string;
+  entityLabel: string;
+}
+
+export interface CandidateDocument {
+  includedInSubmission?: boolean;
+  document: DocumentRow;
+  lineageEntity: CandidateLineageEntity;
+  binding: ClassifiedRemovalSource | null;
+  biocharApplicationId?: string | null;
+  mirror: {
+    externalDocumentId: string;
+    isPublic: boolean;
+    mirroredAt: Date;
+  } | null;
+}
+
+export interface CandidateDocumentsForRemoval {
+  evidenceRefreshSubmissionId?: string | null;
+  removalId: string;
+  facilityId: string;
+  candidates: CandidateDocument[];
+  mirroredExternalIds: string[];
+  hasMapping: boolean;
+}
+
+async function collectLineageEntities(
+  orgCtx: OrgContext,
+  memberBatchIds: string[],
+  removalId: string,
+): Promise<CandidateLineageEntity[]> {
+  if (memberBatchIds.length === 0) return [];
+
+  const accountingByBatch = await loadCreditBatchRollups(
+    orgCtx,
+    memberBatchIds,
+    { removalId },
+  );
+  const memberSamples = await getSamplesByCreditBatchIds(
+    orgCtx,
+    memberBatchIds,
+  );
+  const seen = new Map<string, CandidateLineageEntity>();
+  const add = (entity: CandidateLineageEntity) => {
+    const key = `${entity.entityType}:${entity.entityId}`;
+    if (!seen.has(key)) seen.set(key, entity);
+  };
+
+  for (const memberBatchId of memberBatchIds) {
+    const accounting = accountingByBatch[memberBatchId];
+    if (!accounting) {
+      throw new SafeError(`Credit batch ${memberBatchId} could not be loaded.`);
+    }
+    const { batch, lineageFacts } = accounting;
+    add({
+      entityType: "credit_batch",
+      entityId: batch.id,
+      entityLabel: `Credit batch ${batch.code}`,
+    });
+
+    for (const application of lineageFacts.applications) {
+      add({
+        entityType: "application",
+        entityId: application.id,
+        entityLabel: `Application ${application.code}`,
+      });
+      add({
+        entityType: "delivery",
+        entityId: application.delivery.id,
+        entityLabel: `Delivery ${application.delivery.code}`,
+      });
+    }
+
+    for (const run of lineageFacts.runs) {
+      for (const feedstock of run.feedstocks) {
+        if (!feedstock.ownsTransport || !includesProductionInputs(batch.productionEmissionsClaimedByRemovalId, removalId)) continue;
+        add({
+          entityType: "feedstock",
+          entityId: feedstock.id,
+          entityLabel: `Feedstock ${feedstock.code}`,
+        });
+      }
+    }
+  }
+
+  for (const sample of memberSamples) {
+    add({
+      entityType: "sample",
+      entityId: sample.id,
+      entityLabel: `Sample ${sample.sampleCode || sample.id}`,
+    });
+  }
+
+  return Array.from(seen.values());
+}
+
+export async function loadCandidateDocumentsForRemovalForUser(
+  orgCtx: OrgContext,
+  removalId: string,
+): Promise<CandidateDocumentsForRemoval> {
+  const removal = await getCertifierRemovalById(orgCtx, removalId);
+  if (!removal) throw new SafeError("Removal not found.");
+
+  const mapping = await getCertifierProjectByFacility(
+    orgCtx,
+    removal.facilityId,
+    ISOMETRIC_PROVIDER,
+  );
+  const batches = await getCreditBatchesByRemovalId(orgCtx, removalId);
+  const lineageEntities = await collectLineageEntities(
+    orgCtx,
+    batches.map((batch) => batch.id),
+    removalId,
+  );
+  const documentsByEntity = await Promise.all(
+    lineageEntities.map((entity) =>
+      listDocumentsForEntity(
+        orgCtx,
+        entity.entityType,
+        entity.entityId,
+      ).then((documents) => ({ entity, documents })),
+    ),
+  );
+
+  const seenDocuments = new Map<
+    string,
+    { document: DocumentRow; entity: CandidateLineageEntity }
+  >();
+  for (const { entity, documents } of documentsByEntity) {
+    for (const document of documents) {
+      if (!seenDocuments.has(document.id)) {
+        seenDocuments.set(document.id, { document, entity });
+      }
+    }
+  }
+
+  const evidence = await loadRemovalSourceContext(orgCtx, removalId);
+  const explicitCandidates = [
+    ...await collectEntrySourceDocuments(orgCtx, evidence?.contributions, removalId),
+    ...await collectLineFileSourceDocuments(orgCtx, evidence?.lineFileEvidence ?? []),
+  ];
+  const explicitBindingByDocumentId = new Map(explicitCandidates.map(({ document, binding }) => [document.id, binding]));
+  for (const { document, binding } of explicitCandidates) {
+    seenDocuments.set(document.id, { document, entity: { ...binding.lineage, entityType: binding.nomaRole === "emission_line_file" ? "emission_line" : "emission_entry" } });
+  }
+
+  const mirrorRows = await listDocumentUploadsForDocuments(
+    orgCtx,
+    ISOMETRIC_PROVIDER,
+    Array.from(seenDocuments.keys()),
+  );
+  const mirrorByDocumentId = new Map<string, CertifierDocumentUploadRow>(
+    mirrorRows.map((row) => [row.documentId, row]),
+  );
+  const candidates = Array.from(seenDocuments.values()).flatMap(
+    ({ document, entity }): CandidateDocument[] => {
+      const explicitBinding = explicitBindingByDocumentId.get(document.id);
+      const eligibility = explicitBinding ? { binding: explicitBinding, biocharApplicationId: null } : sourceCandidateEligibility({
+        document,
+        lineage: entity,
+        removalId,
+      });
+      if (!eligibility) return [];
+      const { binding, biocharApplicationId } = eligibility;
+
+      const mirrorRow = mirrorByDocumentId.get(document.id);
+      const metadata = (mirrorRow?.metadata ?? null) as
+        | (DocumentUploadMetadata & { [key: string]: unknown })
+        | null;
+      return [
+        {
+          document,
+          lineageEntity: entity,
+          binding,
+          biocharApplicationId,
+          mirror: mirrorRow
+            ? {
+                externalDocumentId: mirrorRow.externalDocumentId,
+                isPublic: metadata?.isPublic ?? false,
+                mirroredAt: mirrorRow.createdAt,
+              }
+            : null,
+        },
+      ];
+    },
+  );
+
+  candidates.sort((left, right) => {
+    const mirrorOrder =
+      Number(Boolean(left.mirror)) - Number(Boolean(right.mirror));
+    return (
+      mirrorOrder ||
+      left.document.fileName.localeCompare(right.document.fileName)
+    );
+  });
+
+  return {
+    removalId,
+    facilityId: removal.facilityId,
+    candidates,
+    mirroredExternalIds: Array.from(
+      new Set(
+        candidates.flatMap((candidate) =>
+          candidate.mirror ? [candidate.mirror.externalDocumentId] : [],
+        ),
+      ),
+    ).sort(),
+    hasMapping: Boolean(mapping),
+  };
+}
+
+export interface CandidateSourceDocument {
+  documentId: string;
+  binding: ClassifiedRemovalSource | null;
+  biocharApplicationId?: string | null;
+}
+
+interface SourceCandidateLineage {
+  application: { id: string; code?: string | null };
+  delivery: { id: string; code?: string | null };
+  feedstocks: Array<{ id: string; code?: string | null; ownsTransport?: boolean }>;
+}
+
+interface SourceCandidateDocumentFacts {
+  documentType: string;
+  metadata: unknown;
+  uploadStatus?: string | null;
+  fileUrl?: string | null;
+}
+
+export interface SourceCandidateEligibility {
+  binding: ClassifiedRemovalSource | null;
+  biocharApplicationId: string | null;
+}
+
+/** One eligibility rule shared by candidate readback, submission, and summaries. */
+export function sourceCandidateEligibility(args: {
+  document: SourceCandidateDocumentFacts;
+  lineage: CandidateLineageEntity;
+  removalId?: string;
+}): SourceCandidateEligibility | null {
+  if (!isApplicationEvidenceDocumentReady(args.document)) return null;
+  const binding = classifyRemovalSourceCandidate({
+    documentType: args.document.documentType,
+    metadata: args.document.metadata,
+    lineage: args.lineage,
+    removalId: args.removalId,
+  });
+  const biocharApplicationId = biocharApplicationIdForSource(
+    args.lineage,
+    args.document.documentType,
+  );
+  return binding || biocharApplicationId
+    ? { binding, biocharApplicationId }
+    : null;
+}
+
+export async function collectCandidateDocumentIdsForRemoval(
+  orgCtx: OrgContext,
+  args: {
+    removalId: string;
+    lineages: Array<
+      SourceCandidateLineage & {
+        order: { id: string } | null;
+        biocharProduct: { id: string } | null;
+        productionRun: { id: string } | null;
+        reactor: { id: string } | null;
+      }
+    >;
+    memberBatches: Array<{ id: string; code?: string | null }>;
+  },
+): Promise<string[]> {
+  const evidence = await loadRemovalSourceContext(orgCtx, args.removalId);
+  const candidates = await collectCandidateSourceDocumentsForRemoval(orgCtx, {
+    entryContributions: evidence?.contributions, lineFileEvidence: evidence?.lineFileEvidence,
+    removalId: args.removalId,
+    lineages: args.lineages,
+    memberBatches: args.memberBatches,
+  });
+  return Array.from(
+    new Set(candidates.map((candidate) => candidate.documentId)),
+  ).sort();
+}
+
+/** Discover operator evidence and current generated ledgers for a Removal. */
+export async function collectCandidateSourceDocumentsForRemoval(
+  orgCtx: OrgContext,
+  args: {
+    removalId?: string;
+    lineages: SourceCandidateLineage[];
+    memberBatches?: Array<{ id: string; code?: string | null }>;
+    memberSamples?: Array<{ id: string; code?: string | null }>;
+    entryContributions?: RemovalEntryContributions;
+    lineFileEvidence?: readonly LineFileEvidence[];
+    /** The production-claim-aware transport scope, including unapplied owner runs. */
+    transportFeedstockIds?: string[];
+    feedstockCodes?: Readonly<Record<string, string>>;
+  },
+): Promise<CandidateSourceDocument[]> {
+  const entities = new Map<string, CandidateLineageEntity>();
+  const add = (entity: CandidateLineageEntity) => {
+    const key = `${entity.entityType}:${entity.entityId}`;
+    if (!entities.has(key)) entities.set(key, entity);
+  };
+  for (const lineage of args.lineages) {
+    add({
+      entityType: "application",
+      entityId: lineage.application.id,
+      entityLabel: `Application ${lineage.application.code ?? lineage.application.id}`,
+    });
+    add({
+      entityType: "delivery",
+      entityId: lineage.delivery.id,
+      entityLabel: `Delivery ${lineage.delivery.code ?? lineage.delivery.id}`,
+    });
+    for (const feedstock of lineage.feedstocks) {
+      if (args.transportFeedstockIds ? !args.transportFeedstockIds.includes(feedstock.id) : !feedstock.ownsTransport) continue;
+      const code = feedstock.code ?? args.feedstockCodes?.[feedstock.id];
+      add({
+        entityType: "feedstock",
+        entityId: feedstock.id,
+        entityLabel: code ? `Feedstock ${code}` : "Feedstock",
+      });
+    }
+  }
+  for (const id of args.transportFeedstockIds ?? []) {
+    const code = args.feedstockCodes?.[id];
+    add({ entityType: "feedstock", entityId: id, entityLabel: code ? `Feedstock ${code}` : "Feedstock" });
+  }
+  for (const batch of args.memberBatches ?? []) {
+    add({
+      entityType: "credit_batch",
+      entityId: batch.id,
+      entityLabel: `Credit batch ${batch.code ?? batch.id}`,
+    });
+  }
+  for (const sample of args.memberSamples ?? []) {
+    add({
+      entityType: "sample",
+      entityId: sample.id,
+      entityLabel: `Sample ${sample.code ?? sample.id}`,
+    });
+  }
+
+  const documentsByEntity = await Promise.all(
+    Array.from(entities.values(), async (lineage) => ({
+      lineage,
+      documents: await listDocumentsForEntity(
+        orgCtx,
+        lineage.entityType,
+        lineage.entityId,
+      ),
+    })),
+  );
+  const candidates = new Map<string, CandidateSourceDocument>();
+  for (const { lineage, documents } of documentsByEntity) {
+    for (const document of documents) {
+      const eligibility = sourceCandidateEligibility({
+        document,
+        lineage,
+        removalId: args.removalId,
+      });
+      if (eligibility && !candidates.has(document.id)) {
+        candidates.set(document.id, {
+          documentId: document.id,
+          ...eligibility,
+        });
+      }
+    }
+  }
+  for (const { document, binding } of await collectEntrySourceDocuments(orgCtx, args.entryContributions, args.removalId)) {
+    candidates.set(document.id, { documentId: document.id, binding });
+  }
+  const files = args.lineFileEvidence ?? [];
+  for (const { document, binding } of await collectLineFileSourceDocuments(orgCtx, files)) {
+    candidates.set(document.id, { documentId: document.id, binding });
+  }
+  return Array.from(candidates.values()).sort((left, right) =>
+    left.documentId.localeCompare(right.documentId),
+  );
+}
+
+export interface ResolvedSourceBindingCandidate
+  extends CandidateSourceDocument {
+  sourceId: string;
+}
+
+export async function resolveSourceBindingCandidates(
+  orgCtx: OrgContext,
+  args: { candidates: CandidateSourceDocument[] },
+  txOrDb?: DbTransaction,
+): Promise<ResolvedSourceBindingCandidate[]> {
+  if (args.candidates.length === 0) return [];
+  const uploads = await listDocumentUploadsForDocuments(
+    orgCtx,
+    ISOMETRIC_PROVIDER,
+    args.candidates.map((candidate) => candidate.documentId),
+    txOrDb,
+  );
+  const sourceIdByDocumentId = new Map(
+    uploads.map((upload) => [upload.documentId, upload.externalDocumentId]),
+  );
+  return args.candidates.flatMap((candidate) => {
+    const sourceId = sourceIdByDocumentId.get(candidate.documentId);
+    return sourceId ? [{ ...candidate, sourceId }] : [];
+  });
+}
+
+export async function resolveSourceIdsForRemoval(
+  orgCtx: OrgContext,
+  args: { candidateDocumentIds: string[] },
+  txOrDb?: DbTransaction,
+): Promise<string[]> {
+  if (args.candidateDocumentIds.length === 0) return [];
+  const uploads = await listDocumentUploadsForDocuments(
+    orgCtx,
+    ISOMETRIC_PROVIDER,
+    args.candidateDocumentIds,
+    txOrDb,
+  );
+  return Array.from(new Set(uploads.map((u) => u.externalDocumentId))).sort();
+}
+
+/** Read through the org-scoped document store, then select exactly the manifest IDs. */
+async function collectEntrySourceDocuments(orgCtx: OrgContext, contributions?: RemovalEntryContributions, removalId?: string) {
+  const candidates = withEmissionEntryEvidenceDiagnostics(removalId, () => emissionEntrySourceCandidates(contributions));
+  if (!candidates.length) return [];
+  const entryIds = [...new Set(candidates.map((candidate) => candidate.binding.lineage.entityId))];
+  const documents = await listEmissionEntryDocumentsByIds(orgCtx, entryIds, candidates.map((candidate) => candidate.documentId));
+  const documentsById = new Map(documents.map((document) => [document.id, document]));
+  return candidates.map(({ documentId, binding }) => {
+    const document = documentsById.get(documentId);
+    if (!document || document.entityId !== binding.lineage.entityId || !isApplicationEvidenceDocumentReady(document)) {
+      logger.warn({ removalId, documentId, entryId: binding.lineage.entityId,
+        targets: [binding.intendedTarget, ...(binding.additionalIntendedTargets ?? [])].map((target) => ({
+          componentId: target.kind === "explicit" ? target.componentId : undefined, inputKey: target.inputKey,
+        })),
+      }, "Contributing emissions entry file unavailable");
+      const target = binding.intendedTarget;
+      const input = contributions?.manifest.find((input) => target.kind === "explicit" &&
+        input.componentId === target.componentId && input.inputKey === target.inputKey);
+      const entry = input?.entries.find((entry) => entry.entryId === binding.lineage.entityId);
+      const messageLabel = formatEmissionEntryMessageLabel({ componentDisplayName: input?.componentDisplayName,
+        occurredOn: entry?.occurredOn, creditBatchCode: entry?.creditBatchCode });
+      throw new SafeError(EMISSION_ENTRY_FILE_UNAVAILABLE(messageLabel));
+    }
+    return { document, binding };
+  });
+}
+
+/** Uploaded component files are loaded through the organization-scoped batch reader. */
+export async function collectLineFileSourceDocuments(ctx: OrgContext, evidence: readonly LineFileEvidence[]) {
+  if (!evidence.length) return [];
+  const rows = await listEmissionLineFilesForBatches(ctx, [...new Set(evidence.map(file => file.creditBatchId))]);
+  return lineFileSourceCandidates(evidence).map(candidate => {
+    const row = rows.find(row => row.anchor.id === candidate.binding.lineage.entityId &&
+      row.anchor.version === candidate.binding.lineFile?.anchorVersion &&
+      row.anchor.creditBatchId === candidate.binding.lineFile?.creditBatchId && row.document?.id === candidate.documentId &&
+      row.document.entityType === "emission_line" && row.document.entityId === row.anchor.id && row.document.uploadStatus === "uploaded");
+    if (!row?.document) throw new SafeError(EMISSION_LINE_FILE_CHANGED);
+    return { document: row.document, binding: candidate.binding };
+  });
+}

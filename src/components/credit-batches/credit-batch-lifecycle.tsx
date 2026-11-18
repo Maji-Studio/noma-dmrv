@@ -76,7 +76,7 @@ export function CreditBatchLifecycleSteps({
     >
       {CREDIT_BATCH_LIFECYCLE_STEPS.map((step, index) => {
         const state = lifecycle.stepStates[index];
-        const isCurrent = index === lifecycle.currentStepIndex;
+        const isCurrent = step.key === lifecycle.currentStep;
         const label = isCurrent ? lifecycle.label : step.label;
 
         return (

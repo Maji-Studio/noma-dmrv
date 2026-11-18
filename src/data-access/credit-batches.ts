@@ -30,6 +30,8 @@ import {
 } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
 import { samples } from "@/db/schema/production";
+import { certifierProductionBatches } from "@/db/schema/certifier-production-batches";
+import { certifierBiocharApplications } from "@/db/schema/certifier-biochar-applications";
 import { feedstockTypes } from "@/db/schema/feedstock";
 import { certifierRemovals, certifierProjects } from "@/db/schema/certification";
 import {
@@ -69,7 +71,7 @@ import { formatUtcDate } from "@/lib/date-utils";
 import { ActionConflictError, SafeError } from "@/lib/errors";
 import { conflictCode } from "@/lib/conflict-ref";
 import { isBatchEligible } from "@/lib/certifier-policy";
-import { retireDocumentsForEntities, retireTombstonedEmissionEntryDocuments } from "./documents";
+import { retireCreditBatchEmissionLineFiles, retireDocumentsForEntities, retireTombstonedEmissionEntryDocuments } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import {
   assertCreditBatchSlicesAreUnassigned,
@@ -811,6 +813,32 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
     await assertRemovalAllowsCreditBatchMutation(ctx, tx, id, "delete", batch.lockedRemovals);
     await assertNoRemoteRemovalHoldsCreditBatch(ctx, tx, batch);
 
+    const [productionRegistration] = await tx
+      .select({ externalProductionBatchId: certifierProductionBatches.externalProductionBatchId })
+      .from(certifierProductionBatches)
+      .where(and(eq(certifierProductionBatches.organizationId, ctx.organizationId), eq(certifierProductionBatches.creditBatchId, id)))
+      .limit(1);
+    const registration = productionRegistration ?? (await tx
+      .select({ externalProductionBatchId: certifierBiocharApplications.externalProductionBatchId })
+      .from(certifierBiocharApplications)
+      .where(and(eq(certifierBiocharApplications.organizationId, ctx.organizationId), eq(certifierBiocharApplications.creditBatchId, id)))
+      .orderBy(certifierBiocharApplications.id)
+      .limit(1))[0];
+    if (registration) {
+      const [removal] = [...batch.lockedRemovals]
+        .sort((a, b) => a.code.localeCompare(b.code) || a.id.localeCompare(b.id));
+      if (removal) {
+        throw new ActionConflictError(
+          `Credit batch ${batch.code} is registered in Isometric and Removal ${removal.code} still uses it. Delete Removal ${removal.code} first, then delete the batch.`,
+          { entity: "removal", id: removal.id, code: conflictCode(removal.code) },
+        );
+      }
+      throw new ActionConflictError(
+        `Credit batch ${batch.code} is still registered in Isometric as production batch ${registration.externalProductionBatchId}. Ask support to remove that registration, then delete the batch.`,
+        { entity: "credit_batch", id, code: conflictCode(batch.code) },
+      );
+    }
+
     const [sample] = await tx.select({ id: samples.id, code: samples.sampleCode }).from(samples)
       .where(and(eq(samples.creditBatchId, id), eq(samples.organizationId, ctx.organizationId))).limit(1);
     if (sample) {
@@ -861,6 +889,7 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
         .delete(creditBatchProductionRuns)
         .where(and(eq(creditBatchProductionRuns.creditBatchId, id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)));
       await deleteCreditBatchApplicationSlices(ctx, tx, id);
+      await retireCreditBatchEmissionLineFiles(ctx, tx, id);
       await tx.delete(creditBatches).where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)));
 
       await retireDocumentsForEntities(ctx, tx, [

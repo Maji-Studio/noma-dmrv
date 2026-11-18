@@ -171,7 +171,7 @@ export async function seedFeedstockDraw(
   const wetMassKg = allocations.reduce((sum, allocation) => sum + allocation.wetMassUsedKg, 0);
   const [run] = await db.insert(productionRuns).values({
     organizationId: org, facilityId: fixture.facilityId, reactorId: reactor.id,
-    code: "PR-FEEDSTOCK-SUITE", status: "complete",
+    code: "PR-FEEDSTOCK-SUITE", status: "complete", outputPostedAt: new Date("2026-10-06T11:00:00Z"),
     biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
     biocharOutputKg: PRODUCTION_RUN_FIXTURE_OUTPUT_WET_KG,
     startTime: new Date("2026-10-06T10:00:00Z"), endTime: new Date("2026-10-06T11:00:00Z"),

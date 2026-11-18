@@ -350,7 +350,7 @@ it("publishes lab sample and credit batch reads with their own scopes, and lab s
   const sample = document.components.schemas.lab_sample.properties as Record<string, JsonSchema>;
   for (const field of ["facilityId", "durabilityOption", "creditBatchCode", "productionRunId", "timeZone"]) expect(sample).not.toHaveProperty(field);
   expect(Object.keys(document.components.schemas.credit_batch.properties as object).sort()).toEqual(
-    ["archivedAt", "code", "createdAt", "endDate", "facilityId", "feedstockTypeId", "id", "sampling", "startDate", "status", "updatedAt", "version"]);
+    ["archivedAt", "code", "createdAt", "endDate", "facilityId", "feedstockTypeId", "id", "sampling", "startDate", "updatedAt", "version"]);
   expect(document.components.schemas.facility.properties).toHaveProperty("durabilityOption");
   expect(document.paths["/credit-batches"]).not.toHaveProperty("post");
   expect(document.paths["/lab-samples"].post).toMatchObject({ operationId: "record_lab_sample", "x-required-scope": "lab-samples:write" });
@@ -484,9 +484,10 @@ it("publishes document reads with owner scopes, validators and private expiring 
       Location: expect.any(Object), "Cache-Control": { schema: { const: "private, no-store" } }, "Referrer-Policy": { schema: { const: "no-referrer" } },
     } });
   }
-  for (const field of ["contentType", "sizeBytes"]) {
-    expect(document.components.schemas.document.properties).toMatchObject({ [field]: { anyOf: expect.arrayContaining([{ type: "null" }]) } });
-  }
+  expect(document.components.schemas.document.properties).toMatchObject({
+    contentType: { type: ["string", "null"] },
+    sizeBytes: { anyOf: [{ type: "integer" }, { type: "null" }] },
+  });
   expect(document.components.schemas.document.properties).not.toHaveProperty("storageKey");
 });
 
@@ -525,7 +526,7 @@ it("publishes upload capabilities, keyless confirm and every document write refu
 it("publishes formulation revision 2 fields and the archive-only list filter", () => {
   const formulation = document.components.schemas.formulation;
   expect(formulation.required).toContain("description");
-  expect(formulation).toMatchObject({ properties: { description: { anyOf: [{ type: "string" }, { type: "null" }] } } });
+  expect(formulation).toMatchObject({ properties: { description: { type: ["string", "null"] } } });
   const list = document.paths["/formulations"].get;
   expect(list.parameters).toContainEqual(expect.objectContaining({ name: "archived", schema: expect.objectContaining({ type: "boolean", default: false }) }));
   expect(list.responses).toHaveProperty("400");

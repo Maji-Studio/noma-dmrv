@@ -4,11 +4,11 @@ import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
 import {
   buildCreditBatchContexts,
   type FacilityCertifierFacts,
-} from "@/fn/certification/certify-context-core";
+} from "@/lib/certification/certify-context-core";
 import {
   loadLinkedGhgStatementStatus,
-} from "@/fn/certification/linked-ghg-statement-status";
-import { loadDurabilityBatchData } from "@/fn/certification/durability-readiness";
+} from "@/lib/certification/linked-ghg-statement-status";
+import { loadDurabilityBatchData } from "@/lib/certification/durability-readiness";
 import { makeTestOrgContext } from "./helpers/test-org";
 
 vi.mock("@/data-access/facilities", () => ({ getFacilityById: vi.fn() }));
@@ -17,11 +17,11 @@ vi.mock("@/data-access/credit-batch-accounting", () => ({
   loadCreditBatchRollups: vi.fn(),
 }));
 
-vi.mock("@/fn/certification/linked-ghg-statement-status", () => ({
+vi.mock("@/lib/certification/linked-ghg-statement-status", () => ({
   loadLinkedGhgStatementStatus: vi.fn(),
 }));
 
-vi.mock("@/fn/certification/durability-readiness", () => ({
+vi.mock("@/lib/certification/durability-readiness", () => ({
   loadDurabilityBatchData: vi.fn(),
 }));
 

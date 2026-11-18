@@ -116,8 +116,9 @@ pnpm env:run --1p-env=staging -- pnpm -s feedstock:recalculate --dry-run
 
 `env:run` passes only names in `.env.tpl`, so for staging/prod it does not
 provide `ADMIN_EMAIL`, `ISOMETRIC_ACCESS_TOKEN` or `ISOMETRIC_CLIENT_SECRET`.
-Admin bootstrap and Isometric credential setup for staging/prod run through the
-`migrate.yml` workflow, which loads them from the matching item.
+Only `reset-seed-staging` loads admin and registry credentials for bootstrap.
+Plain deployments choose their first Platform Admin at `/setup`; organization
+Admins configure registry credentials in the app.
 
 Non-obvious semantics only:
 
@@ -143,8 +144,8 @@ Non-obvious semantics only:
   1Password items (local, staging, production); `pnpm env:vercel` syncs the
   staging and production values to Vercel Preview and Production.
   [Vercel invokes cron jobs only on Production deployments](https://vercel.com/docs/cron-jobs/quickstart),
-  so neither runs on staging (Preview). The site Production deployment answers
-  404 to both routes. Staging's idempotency claim path
+  so neither runs on staging (Preview). Only the app project reads this repo's
+  cron configuration. Staging's idempotency claim path
   deletes expired records lazily when their keys are reused; idle rate-limit
   buckets have no scheduled staging cleanup.
 - **`API_WRITES_DISABLED`** — `true` or `false`, defaults to `false`. API write
@@ -229,9 +230,10 @@ Read directly from `process.env`, **not** validated by `env.ts`:
   for fetching licensed fonts. Optional `FONTS_S3_ENDPOINT`, `FONTS_S3_REGION`,
   `FONTS_S3_BUCKET` and `FONTS_S3_PREFIX` override the private object location.
   These are read by `scripts/fetch-fonts.mjs`; missing credentials use system
-  fallback fonts. The key is in the three 1Password items like other secrets,
-  but the noma-site Vercel project needs it set by hand (`pnpm env:vercel` syncs
-  only noma-dmrv). See [Fonts](./design-system.md#fonts).
+  fallback fonts. The key is in the three 1Password items like other secrets;
+  `pnpm env:vercel` syncs only the app project. The marketing site's environment
+  lives in its separate Vercel project. Its private repo commits the fonts,
+  so that project needs no `FONTS_S3_*` credentials. See [Fonts](./design-system.md#fonts).
 
 - `NEXT_PUBLIC_SHOT_MODE` — `next.config.ts` and
   `src/components/navigation/sidebar-content.tsx`. Only the literal `true` counts and it is ignored when
@@ -257,8 +259,8 @@ Read directly from `process.env`, **not** validated by `env.ts`:
   `src/lib/cli/org-context.ts` it permits the CLI org-context seam (the seed
   calling real server actions without a session) to run under
   `NODE_ENV=production`. Both refuse without it; the shared literals live in
-  `src/config/bootstrap.ts`. Only the manually confirmed staging reset jobs set
-  it.
+  `src/config/bootstrap.ts`. Only the manually confirmed `reset-seed-staging` job sets
+  it. The admin CLI always refuses `NODE_ENV=production`, including with this override.
 - `DB_RESET_ALLOW_REMOTE`: consumed only by the database-reset CLI. Only the
   literal string `"true"` overrides the [local database target rule](./database.md#local-database-targets);
   the manually confirmed staging and production reset jobs load it from their
@@ -280,7 +282,7 @@ Read directly from `process.env`, **not** validated by `env.ts`:
 
 Both `ADMIN_PASSWORD` and `ISOMETRIC_DEMO_PROJECT_ID` **are** pulled locally via
 `.env.local.tpl`; they are absent from the deployment-facing `.env.tpl` only and
-must be set directly on the staging/production items.
+belong only in local/CI or seeded-staging configuration.
 
 ### Hermetic-CI exception on the production fail-closed gates
 
@@ -335,9 +337,12 @@ Notes:
 - Vercel Production/Preview secrets sync as sensitive; `NEXT_PUBLIC_*` as
   non-sensitive. Local `vercel build --target=preview` cannot reconstruct
   sensitive values — use local env injection for local builds.
-- `ADMIN_EMAIL`, `ISOMETRIC_ACCESS_TOKEN` and `ISOMETRIC_CLIENT_SECRET` live
-  in the 1Password items for workflows only, outside `.env.tpl`, so they are not
-  synced to Vercel. Sync never deletes, so older Vercel copies stay until removed
+- `ADMIN_EMAIL` and `ADMIN_PASSWORD` live in the local and staging items (local
+  dev and `reset-seed-staging`); `ISOMETRIC_ACCESS_TOKEN` and
+  `ISOMETRIC_CLIENT_SECRET` only in the staging item. All four sit outside
+  `.env.tpl`, so they are not synced to Vercel.
+  Copies left in the production item can be removed; env sync reports them as
+  untracked there. Sync never deletes, so older Vercel copies stay until removed
   by hand.
 - **Optional vars may be missing from an item.** Both sync scripts skip template
   refs with no matching field (per-var warning) and abort only on a missing
@@ -388,27 +393,34 @@ values are present, and `isometric-health.yml` uses its dedicated pair through
 Pushes to `main` run `migrate-production`, which loads `DATABASE_URL` and
 `DATABASE_CA_CERT` from the production 1Password item. The CA PEM is required
 for verified TLS to managed Postgres and must exist in that item before the
-production migration, bootstrap, or reset jobs run. Everything destructive is
+production migration or reset jobs run. Everything destructive is
 a manual `workflow_dispatch` with a typed confirmation phrase:
 
 | action | confirmation |
 | --- | --- |
 | `reset-seed-staging` | `RESET AND SEED STAGING` |
 | `reset-empty-staging` | `RESET STAGING (EMPTY)` |
-| `bootstrap-production` | `BOOTSTRAP PRODUCTION` |
 | `reset-production` | `RESET PRODUCTION` + `authorized` checkbox |
 
 `reset-production` wipes production and is the most dangerous operation in the
 repo — it requires the explicit `authorized` approval checkbox in addition to the
 phrase.
 
-`bootstrap-production` runs `db:ensure-admin` with `NODE_ENV=production`, creating
-the Platform Admin, the default organization and encrypted registry credentials,
-skipping the shared local/test teammate. It is idempotent and never clobbers live
-state (existing admin password untouched; credentials inserted only when none
-exist) and fails loudly rather than exiting 0 without a credential row. The
-Platform Admin must use the organization invitation flow to add the first real
-Admin.
+### First Platform Admin
+
+A plain database has no users or organizations. The first visitor opens `/setup`,
+chooses an email and password, and signs in as a verified Platform Admin at
+`/platform/organizations`. `createFirstPlatformAdmin` holds a transaction-scoped
+Postgres advisory lock and rechecks that no user exists before inserting the user
+and credential together. Once any user exists, further setup attempts are refused.
+Public signup stays disabled. This one-time pre-organization seam deliberately
+has no session or organization guard.
+
+`ADMIN_EMAIL` and `ADMIN_PASSWORD` bootstrap only local development, CI and seeded
+staging. `db:ensure-admin` refuses production and points to `/setup`.
+`reset-empty-staging` and `reset-production` run `db:reset:plain`, then verify the
+schema, leaving first-run setup to the next visitor. They load no admin or registry
+secrets. The production reset retains its confirmation phrase and approval checkbox.
 
 The manually confirmed `reset-seed-staging` job loads the Isometric trio from
 the staging item. The Mafinga seed stores the organization credentials and, when
@@ -416,8 +428,7 @@ the repository variable `ISOMETRIC_DEMO_FACILITY_ID` holds the Certify `fcl_`
 ID, maps its facility to the visible project through the same server actions
 the Settings UI uses. Without that variable the mapping is finished by hand in
 Certification Settings. The seed only reads registry catalogues and templates;
-it creates no registry business records. `reset-empty-staging` continues to
-omit registry credentials.
+it creates no registry business records. `reset-empty-staging` leaves no users, organizations or registry credentials.
 
 After a `reset-seed-staging` run, check by hand that the registry connection
 works, because the scheduled live checks use their own credentials and seed
@@ -426,6 +437,20 @@ their own mapping:
 1. Settings, Registry says Connected.
 2. The Mafinga facility is mapped to the sandbox project and a Removal template.
 3. `/removals` opens without redirecting to Settings, Registry.
+
+## Invitation account setup
+
+The invited mailbox sets the first password through an emailed reset token.
+Invitation bootstrap creates an unverified user without a credential or session.
+See [Invitations in auth.md](./auth.md#invitations) for pending retries and mail cooldown policy.
+Only setting the first password through the emailed link confirms the email,
+in the same transaction as credential creation. Resetting an existing credential
+leaves email verification unchanged. Sign-in and invitation acceptance require
+verified email. Existing confirmed invitees sign in normally.
+
+Invitation lists are Admin only in the application's data-access layer. The
+organization plugin's invitation-list and full-organization endpoints are
+server-only; their HTTP routes return Forbidden for Members and Admins.
 
 ## Account changes
 
@@ -447,21 +472,22 @@ their own mapping:
   cooldown; never lower the global setting.
 - **Build-script gating** — `allowBuilds` in `pnpm-workspace.yaml` allowlists the
   only packages permitted to run install scripts.
-- **One pnpm version** — `packageManager` in `package.json` and `site/package.json`
-  pins pnpm for local installs, every `pnpm/action-setup` step and both Vercel
-  projects (their build logs show "Detected … from package.json#packageManager").
-  Bump both files together, and to a release pnpm will install: Vercel's
+- **One pnpm version**: `packageManager` in `package.json` pins pnpm for local
+  installs, every `pnpm/action-setup` step and the app Vercel project
+  (its build logs show "Detected … from package.json#packageManager").
+  Use a release pnpm will install: Vercel's
   install refused 11.13.0 as "a broken release". Overrides belong in
   `pnpm-workspace.yaml`, the only place pnpm 11 reads them.
 - **Dependabot (security-only)** — `.github/dependabot.yml` sets
-  `open-pull-requests-limit: 0` for the app (`/`) and the marketing site
-  (`/site`), disabling routine version bumps; only security-fix PRs open.
+  `open-pull-requests-limit: 0` for the app (`/`), disabling routine version
+  bumps; only security-fix PRs open.
   Severity filtering lives in repo Settings → Advanced Security auto-triage
   rules. The one per-package rule in `dependabot.yml` ignores `maplibre-gl`
   major versions, which break the map worker under Turbopack; see
   [`maps/maplibre-v6`](./open-questions-toolchain.md#maplibre-gl-v6-upgrade-mapsmaplibre-v6-opened-2026-10-02).
   A security fix that exists only in a new major is never merged on green CI
-  alone: read the changelog and check the Vercel preview first.
+  alone: read the changelog and check a Vercel preview first (push a
+  `[preview]` commit, see [architecture.md](./architecture.md#vercel-builds)).
 
 
 ## API write audit

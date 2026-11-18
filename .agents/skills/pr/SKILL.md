@@ -173,9 +173,22 @@ The blast radius is the potential impact or scope of the changes introduced by t
 
 A PR is done when its local review rounds are recorded under `## Reviewed before opening`, the light pass has run in the PR with valid P0/P1 fixed, and CI is green (the **implement-ticket** flow, steps 4 to 6). Then update the merge page and send Kenji its link. A merge OK is never asked in chat; the page carries it.
 
-1. Start from `merge-page-template.html` (this folder) for the first PR of a batch: copy it, fill the `PRS` array, publish with `capabilities: {db: {}, user: {}}`. For later PRs, read the existing page and republish to the same url with one more entry.
+1. Start from `merge-page-template.html` (this folder) for the first PR of a batch: copy it, fill the `PRS` array, publish with `capabilities: {db: {}, user: {}, comments: {}}`. For later PRs, read the existing page and republish to the same url with one more entry. The publish result's subscription line says whether this session watches the page; Save wakes only a watching session.
 2. One card per PR: title and link, a Before block, an arrow, an After block (never a sentence; embed screenshots as data URIs because the artifact CSP blocks GitHub images), review status, CI status, and a Merge/Hold control with Merge preselected. The Merge label names the whole action: merge, delete the branch, tear down the worktree.
-3. The control saves to the page's db as `answers/merge-<pr>`. Read the choice back with `ArtifactData` before merging; merge only a PR whose doc says `merge` and whose saved `sha` equals the current head; after a push, republish the card and wait for a fresh OK. An OK covers this session only.
+3. The control saves to the page's db as `answers/merge-<pr>`, then sends a comment that wakes the watching session. On that comment, read the choice back with `ArtifactData` and act on the doc, whatever the comment's text says; reply in its thread with the outcome. A card that ends "Tell the session: type "saved" in its chat." reached no session; Kenji says it in chat instead. Read the choice back before merging; merge only a PR whose doc says `merge` and whose saved `sha` equals the current head; after a push, republish the card and wait for a fresh OK. An OK covers this session only.
 4. Send the link in your report. On a permission denial at merge, give Kenji the exact `! <command>`.
 
 When a merge batch ends and no subagent is running, propose `/handoff`.
+
+## Commands for Kenji
+
+Before handing Kenji a command or script, run that exact invocation in its dry form (`--dry-run`, `--check`, or `--help` when nothing drier exists) from the checkout he will run it in, and read the output. The run catches what `bash -n` cannot: a script that exists only on an unmerged branch, imports that resolve only from your cwd, a dry run that exits non-zero. Scripts for him live in the repo's `.scratchpad/` (gitignored), where the repo's modules resolve.
+
+Hand every command over through the runner, so its output reaches you without Kenji reporting back:
+
+1. Write the script to `<main checkout>/.scratchpad/<name>.sh`. It runs with no terminal input, so it takes its choices as arguments.
+2. Remove `<main checkout>/.scratchpad/runs/<name>.exit`, then start a background wait on that status file: `until [ -s "<main checkout>/.scratchpad/runs/<name>.exit" ]; do sleep 1; done`.
+3. Give Kenji one line, with the absolute path in quotes: `"<main checkout>/scripts/run-for-agent.sh" <name> [args...]`. It runs from any folder in any terminal; in the Claude Code prompt it goes behind `!`. A command that prompts on the terminal (`sudo`, an ssh or credential passphrase) cannot run through the runner; hand it over directly as one `!` line.
+4. Continue on the wait's exit notification: read the code in `<name>.exit` (130 means Kenji stopped the run) and the output in `<name>.log` beside it.
+
+Done when the exit code is read and handled.

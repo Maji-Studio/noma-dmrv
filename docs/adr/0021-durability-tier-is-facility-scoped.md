@@ -34,17 +34,17 @@ pre-filled an independently-editable per-batch toggle.
   that the template's `co2-stored` sequestration blueprint matches the facility
   tier and fails closed early with an actionable message otherwise.
 - The facility tier is **locked once the facility is consequential**
-  (`updateFacility` guard in `src/data-access/facilities.ts`). Two independent
-  signals lock it, since flipping the tier retroactively reinterprets every
-  join-derived batch under it: (1) a non-archived `verified`/`issued` credit
-  batch, whose CO₂e-stored preview was computed under the current tier, and
-  (2) a registry submission (Removal / GHG Statement) already built for the
-  facility — tracked in `certification_submissions`, **not**
-  `credit_batches.status` (the submit path never writes it), so the guard reuses
-  `hasBlockingFacilitySubmission`, the same probe that gates removal regroup and
-  certifier-mapping repoint. Either case is rejected with a `SafeError`. This
-  relocates the "locked after `verified`/`issued`" invariant that previously
-  lived on the per-batch tier toggle and extends it to registry-built claims.
+  (`updateFacility` guard in `src/data-access/facilities.ts`), since flipping
+  the tier retroactively reinterprets every join-derived batch under it. One
+  signal locks it: a registry submission (Removal / GHG Statement) already
+  built for the facility, tracked in `certification_submissions`. The guard
+  reuses `hasBlockingFacilitySubmission`, the same probe that gates removal
+  regroup and certifier-mapping repoint, and rejects the change with a
+  `SafeError`. This relocates the "locked after `verified`/`issued`" invariant
+  that previously lived on the per-batch tier toggle onto registry-built
+  claims. (Amended 2026-11-11, #1046: this ADR first also named a
+  non-archived `verified`/`issued` credit batch as a signal. Nothing ever set
+  `credit_batches.status` past `pending`, and the column is now dropped.)
   The check and tier update run in one transaction under a facility-scoped
   advisory lock. Submission draft claim/reset paths acquire the same lock before
   mapping and artifact locks, so a consequential ledger write cannot cross the

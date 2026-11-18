@@ -35,7 +35,7 @@ test.describe("Emissions page, facility activity", () => {
         facilityId,
         reactorId: seededData.reactor.id,
         code,
-        status: "complete",
+        status: "complete", outputPostedAt: new Date(start.getTime() + RUN_LENGTH_HOURS * MS_PER_HOUR),
         startTime: start,
         endTime: new Date(start.getTime() + RUN_LENGTH_HOURS * MS_PER_HOUR),
         dieselOperationLiters: 8,

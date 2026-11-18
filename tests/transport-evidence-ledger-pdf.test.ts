@@ -68,6 +68,7 @@ describe("renderEvidenceLedgerPdf", () => {
         sample: [],
       },
       memberBatchCodes: "CB-26-001",
+      organizationName: "Example Carbon",
       facilityName: "Dark Earth Hub",
       externalProjectId: "prj_TEST",
       generatedAtIso: "2026-07-13T00:00:00.000Z",
@@ -78,6 +79,8 @@ describe("renderEvidenceLedgerPdf", () => {
     expect(pages.length).toBeGreaterThan(1);
     const extractedText = pages.join(" ").replace(/\s+/g, " ");
     const compactText = extractedText.replace(/\s+/g, "");
+    expect(compactText).toContain("dMRV·EXAMPLECARBON");
+    expect(compactText).not.toContain("DARKEARTHCARBON");
     expect(compactText).toContain("DISPLAYEDROWSUM");
     // Each row shows the counted round trip with the one-way distance under it.
     expect(compactText).toContain("1km·rt0.5oneway");

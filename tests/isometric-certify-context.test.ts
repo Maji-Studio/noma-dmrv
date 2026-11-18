@@ -1,11 +1,11 @@
-vi.mock("@/fn/certification/batch-emission-context", () => ({ loadBatchEmissionContext: vi.fn(async () => ({ batchFacts: {} })) }));
+vi.mock("@/lib/certification/batch-emission-context", () => ({ loadBatchEmissionContext: vi.fn(async () => ({ batchFacts: {} })) }));
 vi.mock("@/data-access/transport-distance-fix-links", () => ({ getTransportDistanceFixLinks: vi.fn(async () => new Map()) }));
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations";
 import { reviewedTemplateSources } from "./helpers/template-line-sources";
 import { listPinnedRemovalTemplateIds } from "@/data-access/credit-batch-removal-template";
-import { observeRemovalTemplate } from "@/fn/certification/observe-removal-template";
+import { observeRemovalTemplate } from "@/lib/certification/observe-removal-template";
 vi.mock("@/data-access/credit-batch-removal-template", () => ({ listPinnedRemovalTemplateIds: vi.fn() }));
-vi.mock("@/fn/certification/observe-removal-template", () => ({ observeRemovalTemplate: vi.fn() }));
+vi.mock("@/lib/certification/observe-removal-template", () => ({ observeRemovalTemplate: vi.fn() }));
 import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { makeTestOrgContext } from "./helpers/test-org";
@@ -26,7 +26,7 @@ import { getProductionRunsForCertification } from "@/data-access/production-runs
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { getTransportLegsWithEvidenceForEntities } from "@/data-access/transport-legs";
 import { listComponentBlueprints, listProjects, listGhgEntryTemplates, type IsometricComponentBlueprint, type IsometricProject, type IsometricGhgEntryTemplate } from "@/lib/isometric";
-import { loadCertifyContextForCreditBatchForUser } from "@/fn/certification/certify-context-core";
+import { loadCertifyContextForCreditBatchForUser } from "@/lib/certification/certify-context-core";
 import { mockNormalizedLineageFacts, satisfiedVisualEvidenceDocuments, transportTemplate } from "./fixtures/certify-context";
 
 vi.mock("@/data-access/production-run-readings");

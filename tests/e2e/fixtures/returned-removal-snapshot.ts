@@ -1,12 +1,12 @@
 import type { RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
 import type { OrgContext } from "@/lib/auth/server";
 import { fixtureOrgId } from "./fixture-org";
-import { compileRemovalCorrectionContent } from "@/fn/certification/removal-correction-compile-core";
-import { buildRemovalContext } from "@/fn/certification/removal-context-build";
-import { resolveScopeForRemoval } from "@/fn/certification/removal-scope";
-import { storedRemovalTemplateFacts } from "@/fn/certification/stored-removal-template";
-import { generatedEvidenceFacts } from "@/fn/certification/generated-evidence-facts";
-import { compareRemovalCurrentContent } from "@/fn/certification/removal-content-comparison-core";
+import { compileRemovalCorrectionContent } from "@/lib/certification/removal-correction-compile-core";
+import { buildRemovalContext } from "@/lib/certification/removal-context-build";
+import { resolveScopeForRemoval } from "@/lib/certification/removal-scope";
+import { storedRemovalTemplateFacts } from "@/lib/certification/stored-removal-template";
+import { generatedEvidenceFacts } from "@/lib/certification/generated-evidence-facts";
+import { compareRemovalCurrentContent } from "@/lib/certification/removal-content-comparison-core";
 import { getFacilityById } from "@/data-access/facilities";
 import { getCertifierProjectByFacility } from "@/data-access/certification";
 

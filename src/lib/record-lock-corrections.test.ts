@@ -14,3 +14,12 @@ it("refuses an in-flight lineage attempt or another verified statement", () => {
   expect(isRemovalCorrectionWindowOpen(returned, [returned, { id: "other", submissions: [{ status: "draft", inFlight: true }], statements: [] }])).toBe(false);
   expect(isRemovalCorrectionWindowOpen(returned, [returned, { id: "other", submissions: [], statements: [{ ...returned.statements[0], status: "VERIFIED" }] }])).toBe(false);
 });
+it("lets a missing Removal skip only its own returned requirement, not its shared holders' checks", () => {
+  const missing: RecordLockRemoval = { id: "missing", submissions: [{ status: "superseded", externalId: "gone", submittedAt: "2026-01-01" }], statements: [] };
+  const option = { ownReturnedNotRequired: true };
+  expect(isRemovalCorrectionWindowOpen(missing, [missing])).toBe(false);
+  expect(isRemovalCorrectionWindowOpen(missing, [missing], option)).toBe(true);
+  expect(isRemovalCorrectionWindowOpen(missing, [missing, { id: "idle", submissions: [], statements: [returned.statements[0]] }], option)).toBe(true);
+  expect(isRemovalCorrectionWindowOpen(missing, [missing, { id: "busy", submissions: [{ status: "draft", inFlight: true }], statements: [] }], option)).toBe(false);
+  expect(isRemovalCorrectionWindowOpen(missing, [missing, { id: "unreturned", submissions: [], statements: [{ ...returned.statements[0], status: "VERIFIED" }] }], option)).toBe(false);
+});

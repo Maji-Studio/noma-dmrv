@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastProvider } from "@/components/ui/toast";
-import { certificationKeys } from "@/hooks/use-certification";
+import { certificationKeys } from "@/hooks/certification-query-keys";
 import { CreditBatchPage } from "./credit-batch-page";
 
 const harness = vi.hoisted(() => ({
@@ -17,7 +17,7 @@ const harness = vi.hoisted(() => ({
   pageModel: {
     creditBatchId: "batch-1", facilityId: "facility-1", slices: [], removals: [],
     mass: { producedDryKg: 100, appliedDryKg: 50, inSubmittedDryKg: 0, inDraftDryKg: 0, notInRemovalDryKg: 50, notAppliedDryKg: 50 },
-    milestones: { firstRemovalSubmittedAt: null, firstRemovalSubmittedCode: null, ghgStatement: null },
+    milestones: { firstRemovalSubmittedAt: null, firstRemovalSubmittedCode: null, ghgStatements: [] },
   },
 }));
 

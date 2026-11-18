@@ -4,16 +4,6 @@ import type { SubmittedOnState } from "@/lib/certification/submitted-on";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { isRemovalSubmissionInterruptedFromSubmission } from "@/lib/certification/from-submission";
 
-/**
- * What a list cell calls a Removal's status. A draft that is blocked reads
- * "N to fix", the fixes Review & submit lists for its unmet checks (not the reason count); the reasons themselves live
- * on the sheet and in Review & submit. Every other state keeps its own label.
- */
-export function listStatusLabel(status: { kind: string; label: string; reasons: readonly string[]; fixCount?: number }): string {
-  const count = status.fixCount ?? status.reasons.length;
-  return status.kind === "blocked" && count > 0 ? `${count} to fix` : status.label;
-}
-
 export type RemovalEnrichmentStatus =
   | "loading"
   | "available"
@@ -26,6 +16,7 @@ export interface RemovalEnrichmentState {
 }
 
 export interface RemovalListRow {
+  registryMissing?: boolean;
   correction?: RemovalPreflightSummary["correction"];
   removalId: string;
   code: string;
@@ -84,6 +75,7 @@ export function buildRemovalListRows(
       version: data?.version ?? identity.latestSubmission?.version ?? null,
       submittedOn: identity.submittedOn,
       local,
+      registryMissing: lifecycleData?.registryMissing ?? identity.latestSubmission?.registryMissing ?? false,
       lockInFlight:
         lifecycleData?.lockInFlight ??
         (identity.latestSubmission

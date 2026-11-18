@@ -76,7 +76,7 @@ export function SignOutAndReturn({
         type="button"
         variant={compact ? "default" : "primary"}
         size={compact ? "small" : undefined}
-        className={compact ? PHONE_TOUCH_TARGET : undefined}
+        className={PHONE_TOUCH_TARGET}
         width={compact ? undefined : "full"}
         onClick={handleClick}
         busy={pending}

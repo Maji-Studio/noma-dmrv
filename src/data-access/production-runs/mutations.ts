@@ -268,6 +268,7 @@ export async function createProductionRunInTransaction(
         code: data.code,
         facilityId: data.facilityId,
         status,
+        outputPostedAt: status === "complete" ? new Date() : null,
         cancellationReason: data.cancellationReason?.trim() || null,
         startTime: data.startTime,
         endTime: data.endTime,
@@ -765,6 +766,16 @@ export async function updateProductionRunInTransaction(
           wetMass,
           moisture,
         );
+      }
+
+      const postedOutputChanged =
+        lockedTargetBiocharOutput !== locked.biocharOutputKg ||
+        (data.biocharMoisturePercent !== undefined && data.biocharMoisturePercent !== locked.biocharMoisturePercent) ||
+        (transactionUpdateData.biocharDryMassKg !== undefined && transactionUpdateData.biocharDryMassKg !== locked.biocharDryMassKg) ||
+        effectiveBiocharStorageId !== locked.biocharStorageLocationId ||
+        lockedTargetEndTime?.getTime() !== locked.endTime?.getTime();
+      if (lockedTargetStatus !== locked.status || (lockedTargetStatus === "complete" && postedOutputChanged)) {
+        transactionUpdateData.outputPostedAt = lockedTargetStatus === "complete" ? new Date() : null;
       }
 
       const previousDraws = await readRunDrawSnapshot(ctx, tx, productionRunId);

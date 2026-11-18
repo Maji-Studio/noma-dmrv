@@ -22,7 +22,7 @@ import {
 } from "@/fn/applications";
 import { creditBatchKeys } from "@/hooks/use-credit-batches";
 import { chainOfCustodyKeys } from "./use-chain-of-custody";
-import { invalidateCertificationReadiness } from "@/hooks/use-certification";
+import { invalidateCertificationReadiness } from "@/hooks/stale-reads";
 import type { ApplicationFormData } from "@/schemas/applications";
 import type { ApplicationListOptions } from "@/data-access/applications";
 import { unwrap } from "@/hooks/types";

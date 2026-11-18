@@ -30,7 +30,6 @@ vi.mock("@/hooks/use-facility-context", () => ({
   }),
 }));
 vi.mock("@/hooks/use-certification", () => ({
-  certificationKeys: { all: ["certification"] },
   useFacilityCertifierSummary: () => ({
     data: {
       isProduction: false,

@@ -132,7 +132,7 @@ beforeAll(async () => {
       organizationId: TEST_ORG_ID,
       code: `PR-SC-${suffix}`,
       facilityId: facility.id,
-      status: "complete",
+      status: "complete", outputPostedAt: new Date("2025-06-10T12:00:00Z"),
       reactorId: reactor.id,
       startTime: new Date("2025-06-10T08:00:00Z"),
       endTime: new Date("2025-06-10T12:00:00Z"),

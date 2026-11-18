@@ -13,7 +13,7 @@ const collision = () => new Error("Query failed", {
 function attempt(occupied: string[], failure?: Error) {
   const select = vi.fn()
     .mockReturnValueOnce({ from: () => ({ where: async () => occupied.map((slug) => ({ slug })) }) })
-    .mockReturnValueOnce({ from: () => ({ where: () => ({ limit: async () => [{ id: "first-admin" }] }) }) });
+    .mockReturnValueOnce({ from: () => ({ where: () => ({ limit: async () => [{ id: "first-admin", emailVerified: true }] }) }) });
   const values = vi.fn().mockImplementation(async () => {
     if (failure) throw failure;
   });

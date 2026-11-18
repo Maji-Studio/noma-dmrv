@@ -81,7 +81,6 @@ export async function createRemovalDeletionFixture(tracked: {
       facilityId: facility.id,
       feedstockTypeId: feedstockType.id,
       productionProcessId: productionProcess.id,
-      status: "pending",
       startDate: "2026-01-01",
       endDate: "2026-01-31",
       certifier: "isometric",

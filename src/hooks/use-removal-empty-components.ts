@@ -18,11 +18,9 @@ import {
   landingStep,
   type RemovalEmptyComponents,
 } from "@/lib/certification/empty-components-state";
-import {
-  certificationKeys,
-  invalidateCertificationReadiness,
-  removalCertifyContextQueryOptions,
-} from "./use-certification";
+import { removalCertifyContextQueryOptions } from "./use-certification";
+import { certificationKeys } from "./certification-query-keys";
+import { invalidateCertificationReadiness } from "./stale-reads";
 
 export type {
   RemovalEmptyComponents,

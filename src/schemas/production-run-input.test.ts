@@ -48,10 +48,9 @@ it.each(inputs)("keeps draw checks for coerced masses and canonical published nu
     .toThrow(expect.objectContaining({ issues: [expect.objectContaining({ path: ["feedstockDraws", 0, "mystery"] })] }));
   expect(() => rejectUnknownFields({ ...base, electricityKwh: "12.5" }, contract)).not.toThrow();
   const published = contract.properties as Record<string, unknown>;
-  expect(JSON.stringify(published.residenceTimeMinutes)).toContain('"type":"integer"');
+  expect(published.residenceTimeMinutes).toMatchObject({ anyOf: [{ type: "integer" }, { type: "null" }] });
   for (const field of numericFields) {
-    expect(JSON.stringify(published[field])).toMatch(/"type":"(number|integer)"/);
-    expect(JSON.stringify(published[field])).not.toContain('"type":"string"');
+    if (field !== "residenceTimeMinutes") expect(published[field], field).toMatchObject({ type: ["number", "null"] });
   }
 });
 

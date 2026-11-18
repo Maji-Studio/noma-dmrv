@@ -50,9 +50,23 @@ Read these first. Each one fails quietly rather than loudly.
   `ICON_BUTTON_TOUCH_PROPS` for a standalone icon-only `Button` (spread it:
   `size="icon"` is a 32px square by default; the bundle adds the 44px hit area and
   `shrink-0`; row menus, location rows; keep 12px between neighbours). `CENTRED_HIT_AREA` (`::before`) for chips and badges.
+  `LABEL_HIT_AREA` for a `<label>` that wraps a checkbox or radio (it lifts the input above the pseudo-element so direct clicks still reach it; plain `CENTRED_HIT_AREA` on such a label makes the input unclickable).
   `INLINE_HIT_AREA` (`::after`, `_FROM_SM` variant) for inline links.
   `PHONE_TOUCH_TARGET` for a footer button or a select that must be 44px tall
-  on a phone. A `<select>` cannot take a pseudo-element, so it grows instead.
+  on a phone, and for every full-width action on the auth pages (form submits
+  such as Sign in and Set password, outcome actions, Accept invitation). A `<select>` cannot take a pseudo-element, so it grows instead.
+- **Explicit small control heights are checked.** `pnpm check:touch-targets`
+  flags only unprefixed (phone-level) height/size classes below 44px on JSX
+  controls, ignoring min-width breakpoint (`sm:` to `2xl:`, `min-`) and state variants;
+  `max-*` variants count as phone-level.
+  Use a shared
+  hit-area recipe on the control or its action/label slot; native selects use
+  `PHONE_TOUCH_TARGET`. Button size props are outside this static check.
+  `scripts/touch-target-allowlist.ts` records narrow exceptions with reasons,
+  including the sanctioned 24px glyphs. Runtime layout and spacing still need
+  visual review. The check deliberately does not accept `INLINE_HIT_AREA_FROM_SM`
+  (no pseudo area on phones) or `ROW_ACTION_HIT_AREA` on the element itself (only
+  on its slot or row), and `aria-hidden` controls are not exempt.
 - **Radius: default to `rounded-none`** — the aesthetic is brutalist, and it is
   the majority (30 of 54 call sites). Sanctioned exceptions, all generated from
   the `--radius-*` tokens: `rounded-full` (dots, pills, avatars — 11),
@@ -85,24 +99,23 @@ Read these first. Each one fails quietly rather than loudly.
 
 ## Fonts
 
-GT Flexa is commercially licensed for our websites. Never commit its font files.
+GT Flexa is commercially licensed. Never commit its font files in this public app repo.
 `scripts/fetch-fonts.mjs` downloads them from private DigitalOcean Spaces objects
 at `https://fra1.digitaloceanspaces.com`, region `fra1`, bucket `maji`, prefix
 `noma-dmrv-assets/fonts`, with a read-only key in `FONTS_S3_ACCESS_KEY_ID` and
 `FONTS_S3_SECRET_ACCESS_KEY`. Like every secret, the key lives in the three
 1Password items (`.env.tpl`, `.env.local.tpl`); `pnpm env:vercel` carries it to
-the noma-dmrv project. The noma-site project is not synced by that script, so set
-the same two variables there by hand after a rotation. Optional overrides are
-`FONTS_S3_ENDPOINT`, `FONTS_S3_REGION`, `FONTS_S3_BUCKET` and `FONTS_S3_PREFIX`.
+the noma-dmrv project. Optional overrides are `FONTS_S3_ENDPOINT`,
+`FONTS_S3_REGION`, `FONTS_S3_BUCKET` and `FONTS_S3_PREFIX`.
 The script reads the process environment; `pnpm fonts:fetch` also loads `.env.local`.
 
-App and site builds fetch into a gitignored `fonts/` directory inside
-`public/` and `site/public/`. Without credentials, builds succeed using the existing
-system font fallbacks. Download failures with credentials fail the build.
-Run `pnpm fonts:fetch` to populate both directories for local development;
+App builds fetch into a gitignored `fonts/` directory inside `public/`. The marketing site commits
+its own font copy in its separate private repo. Without credentials, app builds
+succeed using the existing system font fallbacks. Download failures with credentials fail the build.
+Run `pnpm fonts:fetch` to populate the app directory for local development;
 complete, nonempty copies are reused unless the script receives `--force`.
 The files keep fixed names under `/fonts/`, so the root `vercel.json` gives them a
-one week `Cache-Control` for both Vercel projects.
+one week `Cache-Control` for the app.
 
 ## Color System
 
@@ -250,7 +263,7 @@ Size tokens live in `src/app/globals.css`; the classes live in
 `src/styles/typography.css`. Size → class ladder:
 
 - **12px:** `.body-caption` (captions) · `.label-micro` (mono uppercase): page-level eyebrows only, never labels, table headers or controls
-- **14px:** `.body-small`, `.label-button` (secondary text, buttons). `.label-button` is mono uppercase everywhere it is used, including link buttons and choice option titles; keep it that way (Kenji, 2026-10-01). The sidebar group labels stay mono caps for the same reason. One exception: an inline text action on a field's hint line beside a value (first use: "Refresh from location" on the one-way distance) is `body-caption`, sentence case, underlined, with a 14px icon before it, so it fits the hint line. Every other link button keeps mono uppercase.
+- **14px:** `.body-small`, `.label-button` (secondary text, buttons). `.label-button` is mono uppercase everywhere it is used, including link buttons and choice option titles; keep it that way (Kenji, 2026-10-01). The sidebar group labels stay mono caps for the same reason. One exception: an inline text action on a field's hint line beside a value (first use: "Refresh from location" on the one-way distance) is `body-caption`, sentence case, underlined, with a 14px icon before it, so it fits the hint line. Pick the label by hierarchy, not by habit (Kenji, 2026-11-09): an action that follows the content it belongs to and must not outrank it can be a quiet link, `body-small font-medium`, sentence case, no outline, with a trailing 14px arrow (first use: the dashboard's stage actions under each stage's figures). An action that is what the surface is for stays a mono caps button. Every other link button keeps mono uppercase.
 - **16px:** `.body-medium` (default body)
 - **18px:** `.body-large`, `.label-input`
 - **20px:** `.body-lead`; with `font-medium` it is the title of every read sheet and form section (`SectionLabel`, shared by `DetailSection` and `FormSection`; #1554)
@@ -583,14 +596,23 @@ Always use `Button`; never a raw `<button>` with manual styling.
   `<button>`: it is a proportional sliver of fill with no label, and `Button`'s
   type, heights and padding would change its width. It keeps the focus ring
   and a 44px tall hit area (`INLINE_HIT_AREA`); segments in a Removal are links.
-  The Allocation flow chart (`allocation-flow-chart.tsx`) is the same case: one
-  transparent raw `<button>` per drawn node sits over the SVG, with the focus
-  ring and at least a 44px tall hit area, because the node's size is the data.
+  The Allocation share bars (`allocation-share-bars.tsx`) are the same case: one
+  raw `<button>` per quantity row (caret, bar, figure) with the focus ring and at
+  least a 44px tall hit area, because the whole row is the click target.
+- **Exception: Used by Show all.** In the read sheets' Used by section
+  (`record-used-by-next-step.tsx`) a kind with more than three records ends in
+  "and 45 more, Apr 8 to Jun 28" with an inline "Show all" / "Show less". It is
+  a raw `<button>` styled as small underlined secondary text, because
+  `TextAction`'s mono uppercase label competed with the section's "Open in
+  Traceability" link (Kenji, 2026-11-16). It keeps the focus ring,
+  `aria-expanded`, `aria-controls` and a 44px tall hit area.
 - **Exception: Removal sheet Records.** The credit batch row in `removal-records.tsx` is a
-  full-width disclosure row (date range, dry mass, caret, 44px tall) and "Show all N" is an
-  underlined text action under a record list. `Button` has no variant with the text-link look
-  or a row layout (fixed heights, `whitespace-nowrap`, `label-button` type), so both stay raw
-  `<button>`s with the focus ring and a 44px hit area (`INLINE_HIT_AREA_FROM_SM`).
+  full-width disclosure row (date range, dry mass, caret, 44px tall). `Button` has no row
+  layout (fixed heights, `whitespace-nowrap`, `label-button` type), so it stays a raw
+  `<button>` with the focus ring and a 44px row (`min-h-44`). "Show all N"
+  is not an exception: it is `TextAction` (`ui/text-action.tsx`), a `noOutline` Button with
+  a 44px hit area and its label flush with the text above, mono uppercase like every text
+  button ("Show the top N" in the energy record list too).
 - **A confirm dialog keeps its label.** `DeleteConfirmDialog` and
   `ConfirmActionDialog` show the spinner through `busy` and never swap the text
   ("Deleting...", "Submitting…"); Cancel is disabled and Escape, the backdrop
@@ -720,7 +742,7 @@ bin, reactor, facility, delivery, customer, supplier, feedstock, order, biochar
 product, credit batch, sample, members, invitations). They are decoration
 (`aria-hidden`); the text next to them carries the meaning.
 
-**Where they go.** Three places, nowhere else.
+**Where they go.** Three places, nowhere else, plus the dashboard scene below.
 
 - Choice cards (`ChoiceCardGroup` `art`), at the default card size (56px wide).
   If one card in a group has a drawing, all of them do.
@@ -731,6 +753,12 @@ product, credit batch, sample, members, invitations). They are decoration
   its Phosphor icon, so the `icon` prop switches with the title. Error states,
   filtered states and nested `padding="sm"` empties never get a drawing.
 - Onboarding: the setup-in-progress state. The dashboard guide carries welcome copy in its header.
+
+The dashboard stage band has its own drawing, not one from the set: a landscape
+from supplier to field (`components/dashboard/scene-landscape*`), drawn in the
+same monoline style at band size, `aria-hidden`. Each stage owns a ground lot
+(`data-art-lot`) that lights in `--clr-purple-5` with its column; the stations
+never move and nothing covers the drawing. Phones get no scene.
 
 Everything else (buttons, table rows, KPI cards, nav) stays on Phosphor.
 
@@ -1045,11 +1073,15 @@ bands, traceability, and schema explorer surfaces retain the canonical page
 width. Never constrain all `<form>` elements globally.
 
 **The one sanctioned exception is the Dashboard**: it keeps the container/gap
-shell but opens with a display headline ("Dashboard" as `title-heading-2` under
-a mono facility eyebrow) instead of `PageHeader`, its KPI strip is the 4-cell
-**HeroKpiBand** (one ink-bordered strip, not iconed StatCards), and its hero is
-the isometric traceability scene (`components/dashboard/flow-hero*`). No other
-page gets a display headline.
+shell but opens with a display headline ("Dashboard" as `title-heading-2`, an
+"Updated 18:37" line, no eyebrow) instead of `PageHeader`, with the credit
+batch filter (`DataTable.FilterSelect`) top right. Its KPI strip is the 4-cell
+**HeroKpiBand** (one ink-bordered strip, not iconed StatCards), then the stage
+band (`components/dashboard/stage-band.tsx` over the landscape scene). No other
+page gets a display headline. Its To do, Bins and Recent activity rows are one
+line each, except that a Bins row carries a second caption line with the bin
+kind and what it holds ("Feedstock bin · Forestry waste"), dropped when it
+repeats the kind or the name.
 
 ### List-page idiom — copy `order-list.tsx:120-349`
 
@@ -1086,6 +1118,14 @@ Fifteen list components share one shape. Copy it rather than re-deriving:
   Base UI Select. `<DataTable.Toolbar>` / `<DataTable.Pagination>` go in as
   children; server-paginated lists use `manualPagination` + `pageCount` +
   `pageIndex`.
+- **Cells stay quiet.** Show the name the operator knows (the bin name, with
+  the code as the fallback), with no decorative icon in a value cell and no
+  grey second line that only repeats a code or a category. A second line is
+  for a second fact: the dry mass of a `MassPair`, the location under a
+  customer, the reporting window under a Removal code. A Sent record shows
+  the lock icon right before its code (`recordLockTitleMark` on
+  `meta.recordLinkBefore`), with no lock column and no slot kept for unsent
+  rows; Open and In use show nothing in a list.
 - Call `useOpenCreateIntent(openCreate)` on any list with a create sheet — it
   powers `?create=true` deep links from the sidebar's "New X" actions.
 

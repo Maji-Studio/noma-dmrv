@@ -1,5 +1,6 @@
+import { realColumn } from './real-column';
 import { relations, sql } from 'drizzle-orm';
-import { integer, check, doublePrecision, foreignKey, pgTable, text, timestamp, unique, uniqueIndex, uuid, real, jsonb } from 'drizzle-orm/pg-core';
+import { integer, check, doublePrecision, foreignKey, pgTable, text, timestamp, unique, uniqueIndex, uuid, jsonb } from 'drizzle-orm/pg-core';
 import { REACTOR_TYPES, outputDrawOrder, outputStockMode, storageLocationType, durabilityOption } from './common';
 import { organizations } from './auth';
 
@@ -87,7 +88,7 @@ export const reactors = pgTable(
     reactorType: text('reactor_type', { enum: REACTOR_TYPES }).notNull(),
     // Sampling is not a reactor property; each credit batch stores its own
     // sampled/unsampled choice within a facility/feedstock process (ADR 0022).
-    nominalThroughputTph: real('nominal_throughput_tph'),
+    nominalThroughputTph: realColumn('nominal_throughput_tph'),
     specifications: jsonb('specifications'), // { description, manufacturer, ... }
     // Stamped by individual or facility-cascade archive; NULL = active
     archivedAt: timestamp('archived_at'),
@@ -131,7 +132,7 @@ export const storageLocations = pgTable(
     code: text('code').notNull(),
     name: text('name').notNull(), // e.g., "Bin 7", "Feedstock Pile 002"
     type: storageLocationType('type').notNull(),
-    capacityKg: real('capacity_kg'),
+    capacityKg: realColumn('capacity_kg'),
     storageMethod: text('storage_method'),
     storageDescription: text('storage_description'),
     // Enforces "one feedstock type per bin": set at creation; a bin without a type gets one on its first intake.

@@ -2,7 +2,7 @@ import { useIntentMutation } from "./use-create-intent-key";
 import { deliveryKeys } from "./use-deliveries";
 import { transportLegKeys } from "./use-transport-legs";
 import { chainOfCustodyKeys } from "./use-chain-of-custody";
-import { invalidateCertificationReadiness } from "./use-certification";
+import { invalidateCertificationReadiness } from "./stale-reads";
 /**
  * Customers React Query Hooks
  * Client-side state management for customer and customer location operations

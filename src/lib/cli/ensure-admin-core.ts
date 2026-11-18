@@ -2,7 +2,6 @@
  * Testable core for the admin and default-organization bootstrap.
  * Does not load dotenv or self-execute; the adjacent CLI entrypoint owns both.
  */
-import { isLastAdminDatabaseError } from '../auth/organization-role-policy';
 import { and, eq, sql } from 'drizzle-orm';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
@@ -26,8 +25,6 @@ const TEAMMATE_EMAIL = 'teammate@darkearthcarbon.dev';
 const TEAMMATE_NAME = 'Dev Teammate';
 const CREDENTIAL_PROVIDER = 'credential';
 
-export type BootstrapMode = 'development' | 'production';
-
 interface BootstrapEnvironment {
   NODE_ENV?: string;
   DATABASE_URL?: string;
@@ -36,18 +33,16 @@ interface BootstrapEnvironment {
 
 interface AdminCredentialResult {
   userId: string;
-  passwordHash: string | null;
+  passwordHash: string;
 }
 
-/**
- * Classify the bootstrap before any database mutation. Production mode is
- * explicit; a non-local target otherwise fails closed unless the operator opts
- * into the destructive development semantics for that invocation.
- */
-export function resolveBootstrapMode(
+/** Refuse production and require an explicit override for remote development. */
+export function assertDevelopmentBootstrapAllowed(
   environment: BootstrapEnvironment = process.env,
-): BootstrapMode {
-  if (environment.NODE_ENV === PRODUCTION_NODE_ENV) return 'production';
+): void {
+  if (environment.NODE_ENV === PRODUCTION_NODE_ENV) {
+    throw new Error('Admin CLI bootstrap is for local development, CI, and seeded staging only. Open /setup to choose the first Platform Admin in production.');
+  }
 
   const databaseUrl = environment.DATABASE_URL;
   if (!databaseUrl?.trim()) {
@@ -61,55 +56,30 @@ export function resolveBootstrapMode(
     throw new Error('DATABASE_URL environment variable is not a valid URL');
   }
 
-  if (isLocal) return 'development';
+  if (isLocal) return;
   if (environment.ALLOW_DEV_BOOTSTRAP === DEV_BOOTSTRAP_OVERRIDE) {
-    return 'development';
+    return;
   }
 
   throw new Error(
-    'Refusing development bootstrap against a non-local database. Set NODE_ENV=production for the safe production bootstrap, or ALLOW_DEV_BOOTSTRAP=1 only for an intentional development bootstrap.',
+    'Refusing development bootstrap against a non-local database. Use ALLOW_DEV_BOOTSTRAP=1 only for an intentional development bootstrap; use /setup for a plain first run.',
   );
 }
 
 /**
  * Ensure the default organization exists and remove the Platform Admin member
- * row unless production would lose its last Admin. Local/test resets also create
- * a dev teammate Admin; production never creates shared credentials.
+ * row after ensuring a dev teammate Admin for local development, CI and seeded staging.
  */
 export async function ensureOrgFoundation(
   db: EnsureAdminDb,
   adminUserId: string,
   passwordHash: string,
-  bootstrapMode: BootstrapMode = resolveBootstrapMode(),
 ): Promise<void> {
-  // A savepoint keeps a last-Admin refusal from aborting a caller's transaction.
-  async function removePlatformAdminMembership() {
-    await db.transaction(async (tx) => {
-      await tx.delete(schema.members).where(and(
-        eq(schema.members.organizationId, DEC_ORG_ID),
-        eq(schema.members.userId, adminUserId),
-      ));
-    });
-  }
-
-  const isProduction = bootstrapMode === 'production';
+  assertDevelopmentBootstrapAllowed();
   await db
     .insert(schema.organizations)
     .values({ id: DEC_ORG_ID, name: DEC_ORG_NAME, slug: DEC_ORG_SLUG })
     .onConflictDoNothing({ target: schema.organizations.id });
-
-  if (isProduction) {
-    try {
-      await removePlatformAdminMembership();
-    } catch (error) {
-      if (!isLastAdminDatabaseError(error)) throw error;
-      console.log(`Retained last Admin membership organizationId=${DEC_ORG_ID} userId=${adminUserId}`);
-    }
-    console.log(
-      `Skipping dev teammate in production organizationId=${DEC_ORG_ID}`,
-    );
-    return;
-  }
 
   let [teammate] = await db
     .select({ id: schema.users.id })
@@ -163,7 +133,10 @@ export async function ensureOrgFoundation(
       .where(eq(schema.members.id, teammateMembership.id));
   }
 
-  await removePlatformAdminMembership();
+  await db.delete(schema.members).where(and(
+    eq(schema.members.organizationId, DEC_ORG_ID),
+    eq(schema.members.userId, adminUserId),
+  ));
 
   console.log(
     `Ensured organization organizationId=${DEC_ORG_ID} with teammate admin`,
@@ -172,9 +145,8 @@ export async function ensureOrgFoundation(
 
 export async function ensureIsometricCredentials(
   db: EnsureAdminDb,
-  bootstrapMode: BootstrapMode = resolveBootstrapMode(),
 ): Promise<void> {
-  const isProduction = bootstrapMode === 'production';
+  assertDevelopmentBootstrapAllowed();
   const requiredValues = {
     ISOMETRIC_ACCESS_TOKEN: process.env.ISOMETRIC_ACCESS_TOKEN,
     ISOMETRIC_CLIENT_SECRET: process.env.ISOMETRIC_CLIENT_SECRET,
@@ -185,11 +157,6 @@ export async function ensureIsometricCredentials(
     .map(([name]) => name);
 
   if (missingNames.length > 0) {
-    if (isProduction) {
-      throw new Error(
-        `Missing or blank required environment variables: ${missingNames.join(', ')}`,
-      );
-    }
     console.log('Isometric credentials configured=false');
     return;
   }
@@ -205,34 +172,20 @@ export async function ensureIsometricCredentials(
     clientSecretEncrypted,
   };
 
-  if (isProduction) {
-    // Production values are bootstrap-only. Later operator rotations in the app
-    // must not be replaced by the original 1Password bootstrap pair.
-    await db
-      .insert(schema.certifierCredentials)
-      .values(values)
-      .onConflictDoNothing({
-        target: [
-          schema.certifierCredentials.organizationId,
-          schema.certifierCredentials.provider,
-        ],
-      });
-  } else {
-    await db
-      .insert(schema.certifierCredentials)
-      .values(values)
-      .onConflictDoUpdate({
-        target: [
-          schema.certifierCredentials.organizationId,
-          schema.certifierCredentials.provider,
-        ],
-        set: {
-          accessTokenEncrypted,
-          clientSecretEncrypted,
-          updatedAt: sql`now()`,
-        },
-      });
-  }
+  await db
+    .insert(schema.certifierCredentials)
+    .values(values)
+    .onConflictDoUpdate({
+      target: [
+        schema.certifierCredentials.organizationId,
+        schema.certifierCredentials.provider,
+      ],
+      set: {
+        accessTokenEncrypted,
+        clientSecretEncrypted,
+        updatedAt: sql`now()`,
+      },
+    });
   console.log('Isometric bootstrap credentials ensured=true');
 }
 
@@ -251,11 +204,9 @@ async function ensureAdminCredential(
   db: EnsureAdminDb,
   adminEmail: string,
   adminPassword: string,
-  bootstrapMode: BootstrapMode,
 ): Promise<AdminCredentialResult> {
   // The dev teammate reuses this hash, so validate before either credential is written.
   validatePassword('ADMIN_PASSWORD', adminPassword);
-  const isProduction = bootstrapMode === 'production';
   const [existing] = await db
     .select({ id: schema.users.id })
     .from(schema.users)
@@ -273,13 +224,6 @@ async function ensureAdminCredential(
         ),
       )
       .limit(1);
-
-    if (account && isProduction) {
-      console.log(
-        `Admin credential account already exists, password unchanged userId=${existing.id}`,
-      );
-      return { userId: existing.id, passwordHash: null };
-    }
 
     const passwordHash = await hashPassword(adminPassword);
     if (account) {
@@ -327,13 +271,12 @@ export async function ensureAdminUser(
   db: EnsureAdminDb,
   adminEmail: string,
   adminPassword: string,
-  bootstrapMode: BootstrapMode = resolveBootstrapMode(),
 ): Promise<string> {
+  assertDevelopmentBootstrapAllowed();
   const result = await ensureAdminCredential(
     db,
     adminEmail,
     adminPassword,
-    bootstrapMode,
   );
   return result.userId;
 }
@@ -348,15 +291,11 @@ function requireEnvironmentVariable(name: string): string {
 
 /** Validate the CLI environment, connect, and run the complete bootstrap. */
 export async function runEnsureAdmin(): Promise<void> {
+  assertDevelopmentBootstrapAllowed();
   const adminEmail = requireEnvironmentVariable('ADMIN_EMAIL');
   const adminPassword = requireEnvironmentVariable('ADMIN_PASSWORD');
   validatePassword('ADMIN_PASSWORD', adminPassword);
   const databaseUrl = requireEnvironmentVariable('DATABASE_URL');
-  const bootstrapMode = resolveBootstrapMode({
-    NODE_ENV: process.env.NODE_ENV,
-    DATABASE_URL: databaseUrl,
-    ALLOW_DEV_BOOTSTRAP: process.env.ALLOW_DEV_BOOTSTRAP,
-  });
   const pool = new Pool(getPgPoolConfig(databaseUrl));
   const db = drizzle(pool, { schema });
 
@@ -365,17 +304,9 @@ export async function runEnsureAdmin(): Promise<void> {
       db,
       adminEmail,
       adminPassword,
-      bootstrapMode,
     );
-    // A production foundation never consumes this hash because it skips the dev
-    // teammate. Non-production creates/updates always return the computed hash.
-    await ensureOrgFoundation(
-      db,
-      admin.userId,
-      admin.passwordHash ?? '',
-      bootstrapMode,
-    );
-    await ensureIsometricCredentials(db, bootstrapMode);
+    await ensureOrgFoundation(db, admin.userId, admin.passwordHash);
+    await ensureIsometricCredentials(db);
   } finally {
     await pool.end();
   }

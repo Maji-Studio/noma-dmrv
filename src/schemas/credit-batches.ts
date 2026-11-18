@@ -7,18 +7,6 @@ import { validateBatchPeriod } from "@/lib/certifier-policy";
 // Constants and Enums
 // ============================================
 
-/**
- * Credit batch status options
- */
-export const creditBatchStatuses = [
-  "draft",
-  "pending",
-  "verified",
-  "issued",
-  "rejected",
-] as const;
-export type CreditBatchStatus = (typeof creditBatchStatuses)[number];
-
 export const creditBatchSamplingChoices = ["sampled", "unsampled"] as const;
 export type CreditBatchSampling = (typeof creditBatchSamplingChoices)[number];
 
@@ -57,7 +45,7 @@ export const DURABILITY_TIER_FALLBACK: DurabilityOption = "1000_year";
 /**
  * Schema for credit batch form (client-side validation)
  * Form sections:
- * 1. Overview — name, facilityId, startDate, endDate, status
+ * 1. Overview: name, facilityId, startDate, endDate
  * 2. Production cohort — productionRunIds (membership via credit_batch_production_runs)
  * 3. Site management — siteManagementNotes
  */
@@ -153,20 +141,6 @@ export type UpdateCreditBatchData = z.infer<typeof updateCreditBatchSchema>;
 // ============================================
 // Formatting Helpers
 // ============================================
-
-/**
- * Format credit batch status for display
- */
-export function formatCreditBatchStatus(status: CreditBatchStatus): string {
-  const labels: Record<CreditBatchStatus, string> = {
-    draft: "Draft",
-    pending: "Pending",
-    verified: "Verified",
-    issued: "Issued",
-    rejected: "Rejected",
-  };
-  return labels[status];
-}
 
 /**
  * Format durability option for display

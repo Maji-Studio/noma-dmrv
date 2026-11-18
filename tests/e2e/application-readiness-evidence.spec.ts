@@ -18,7 +18,7 @@ import {
 import { createDbConnection } from "./fixtures/db";
 import * as schema from "../../src/db/schema";
 import { DEC_ORG_ID } from "../../src/db/org-defaults";
-import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "../../src/lib/certification/application-evidence";
+import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "@/lib/certification/application-evidence";
 import { fillStockMoisture } from "./helpers/stock-moisture";
 
 /**

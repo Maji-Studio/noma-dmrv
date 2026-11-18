@@ -26,7 +26,6 @@ vi.mock("@/hooks/use-facility-context", () => ({
   }),
 }));
 vi.mock("@/hooks/use-certification", () => ({
-  certificationKeys: { all: ["certification"] },
   useFacilityCertifierSummary: () => ({
     data: { isProduction: false, mapping: { externalProjectId: "prj_1", defaultSoilTemperatureC: null }, viewerCanManage: true },
     isLoading: false,

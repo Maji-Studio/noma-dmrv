@@ -1,3 +1,6 @@
+import { ENTRY_FILE_MISSING_INSTRUCTION } from "@/lib/certification/emission-entry-messages";
+import { deriveEmissionEntryFacts } from "./emission-entry-facts";
+import { ENTRY_FILE_CASES } from "./emission-entry-evidence-test-fixtures";
 import { buildCreditBatchOpenItems, openItemText } from "@/lib/credit-batches/open-items";
 import { readOnlyOpenItems } from "@/lib/credit-batches/batch-page";
 import { describe, expect, it } from "vitest";
@@ -101,7 +104,7 @@ it.each(["single-with-automatic-source", "foreign-automatic-source", "disallowed
 
 it.each([
   "Confirm this entry for the changed template component.",
-  "Enter the values again for the current template component.",
+  "Enter the values again for the current component.",
 ])("keeps stale entries visible with the action: %s", (reason) => {
   const f = facts();
   f.entries = [entry(f, { counts: false, reason })];
@@ -125,6 +128,8 @@ it.each(["0", "1"])("uses an automatic figure of %s instead of a Removal-owned z
   const f = facts();
   f.entries = [entry(f, { kind: "zero", confirmedForRemovalId: "removal", total: null, hasEvidence: false })];
   f.automaticFigures = { "run-electricity": { magnitude, unit: "kWh" } };
+  f.lineFiles = [{ anchor: { id: "anchor", componentId: f.entries[0].componentId, version: 2 },
+    documents: [{ id: "proof", fileName: "proof.pdf", version: 1 }] }];
   expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state: "filled", total: { magnitude, unit: "kWh" } });
 });
 
@@ -230,7 +235,6 @@ it("discards stale sample automatic facts while retaining additive entries", () 
   expect(deriveBatchEmissionLines(f)[0].state).toBe("empty");
 });
 
-
 it("records a biomass transport zero with no records when every linked trip is owned elsewhere", () => {
   const definition = normalizeTemplateDefinition(fixture as GhgEntryTemplate);
   const automaticFigures = batchAutomaticFigures([], {
@@ -249,12 +253,11 @@ it("records a biomass transport zero with no records when every linked trip is o
   expect(line.total).toEqual({ magnitude: "0", unit: "km * tonne" });
 });
 
-
 it("separates missing-file instructions without changing the blocker message", () => {
   const f = facts();
   f.entries = [entry(f, { hasEvidence: false })];
   const [line] = deriveBatchEmissionLines(f);
-  expect(line.blocker).toMatchObject({ code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", copy: { instruction: "Add a file for each emissions entry with a value." } });
+  expect(line.blocker).toMatchObject({ code: "entryMissingEvidence", message: ENTRY_FILE_MISSING_INSTRUCTION, copy: { instruction: ENTRY_FILE_MISSING_INSTRUCTION } });
   // Open items also accept a reviewed line carrying this evidence blocker.
   const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true,
     emissionLines: [{ ...line, state: "needsReview" }],
@@ -265,7 +268,6 @@ it("separates missing-file instructions without changing the blocker message", (
   expect(readOnly.title).toBe(`${line.displayName}: ${EMISSION_LINE_STATE_LABELS.needsReview}`);
   expect(readOnly.instruction).toBeUndefined();
 });
-
 
 it("leaves a supplied stale-entry reason unsplit", () => {
   const f = facts();
@@ -281,11 +283,47 @@ it("leaves a supplied stale-entry reason unsplit", () => {
   expect(readOnly.title).toBe(`${line.displayName}: ${EMISSION_LINE_STATE_LABELS.needsReview}`);
 });
 
-
 it("splits the stale-entry fallback instruction when no reason is supplied", () => {
   const f = facts();
   f.entries = [entry(f, { counts: false })];
   const [line] = deriveBatchEmissionLines(f);
-  expect(line.blocker?.message).toBe("Enter the values again for the current template component.");
+  expect(line.blocker?.message).toBe("Enter the values again for the current component.");
   expect(line.blocker?.copy).toEqual({ instruction: line.blocker?.message });
+});
+
+it.each(ENTRY_FILE_CASES)("applies the entry file requirement to $label", ({ magnitudes, keys: inputKeys, filePolicy, missing }) => {
+  const f = facts();
+  const component = f.definition.groups[0].components[0];
+  component.inputs = component.inputs.filter((input) => input.type === "monitored");
+  const paired = magnitudes.length > 1;
+  if (paired) {
+    component.blueprintKey = "metered_energy_based_ci_emissions";
+    component.inputs = (inputKeys ?? ["initial_readout", "final_readout"]).map((key) => ({ key, type: "monitored", quantityKind: key === "concentration" ? "mass_fraction" : key === "mass_flow" ? "mass_flow_rate" : "energy" }));
+    f.lineSources[component.id] = { scope: "operating", entryPolicy: "single", origin: "reviewed" };
+  }
+  if (filePolicy) f.lineSources[component.id].filePolicy = filePolicy;
+  const observation = { externalTemplateId: "template", definition: f.definition, lineSources: f.lineSources,
+    enrichment: { [component.id]: Object.fromEntries(component.inputs.map((input) => [input.key, { unit: "kWh" }])) } };
+  const stored = { ...entry(f, { hasEvidence: false }), observationId: "observation", documentCount: 0,
+    values: magnitudes.map((magnitude, index) => ({ inputKey: component.inputs[index].key, magnitude, unit: "kWh" })),
+  } as unknown as Parameters<typeof deriveEmissionEntryFacts>[0][number];
+  f.entries = deriveEmissionEntryFacts([stored], observation, new Map([["observation", observation]]));
+  f.entriesCanSubmit = true;
+  const [componentResult] = deriveBatchEmissionLines(f);
+  expect(componentResult.state).toBe(missing ? "missingEvidence" : "filled");
+  expect(componentResult.blocker?.code).toBe(missing ? "entryMissingEvidence" : undefined);
+});
+
+it.each([
+  ["a sent records amount", "1", false, 1],
+  ["a records amount of 0", "0", false, 0],
+  ["records claimed by another Removal", "1", true, 0],
+] as const)("counts the component files of %s for the review", (_case, magnitude, omitted, count) => {
+  const f = facts();
+  const componentId = deriveBatchEmissionLines(f)[0].componentId;
+  f.lineSources[componentId] = { ...f.lineSources[componentId], filePolicy: "lineFile" };
+  f.automaticFigures = { "run-electricity": { magnitude, unit: "kWh" } };
+  if (omitted) f.omittedAutomaticSources = ["run-electricity"];
+  f.lineFiles = [{ anchor: { id: "anchor", componentId, version: 2 }, documents: [{ id: "proof", fileName: "proof.pdf", version: 1 }] }];
+  expect(deriveBatchEmissionLines(f)[0].lineFileDocuments ?? []).toHaveLength(count);
 });

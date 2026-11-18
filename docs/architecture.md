@@ -7,6 +7,18 @@ a `fn/` action, a `data-access/` query, or a new route group. Form detail lives
 in [forms.md](./forms.md); naming and React rules in
 [code-style.md](./code-style.md); "why" decisions in [ADRs](./adr/).
 
+## Contracts with the marketing site
+
+The marketing site lives in the private `Maji-Studio/noma-site` repo (Vercel
+project `noma-site`). Its Log in link uses `PUBLIC_APP_URL`: Production
+`https://app.noma.maji.studio`, Preview `https://staging.app.noma.maji.studio`.
+
+Its walkthrough form POSTs to the app's `/api/walkthrough`. Allowed origins
+live in `src/config/walkthrough.ts`: `https://noma.maji.studio`, the preview-host
+regex, and local `http://localhost:3120` for site dev against a local app.
+Local origins are allowed only outside production. Changing either contract
+means updating both repos.
+
 ## Layers
 
 ```text
@@ -97,6 +109,9 @@ components (UI)
   are not exported from a `"use server"` file; the caller authenticates first.
   Today that caller is the `/api/reads/*` adapter; a `fn/` action that needs the
   same read wraps the core in `withAction` rather than duplicating it.
+- Shared certification context composition lives in directive-free
+  `src/lib/certification/` modules, below both read models and actions.
+  Read models import those helpers directly; `withAction` wrappers stay in `fn/`.
 - `data-access/` owns query composition **and** org-scope enforcement. A
   partial update reads `undefined` as omitted, `null` as an explicit clear,
   and `0` as zero; values the server owns (derived masses) and cross-field
@@ -404,6 +419,10 @@ runtime.
   an inline `useQuery` when a hook already covers the server action.
 - Query keys come from typed factories per hook (e.g.
   `facilityKeys.detailWithRelations(facilityId)`), not hand-built arrays.
+  Certification keys live in `src/hooks/certification-query-keys.ts`. A kind of
+  change that makes several reads stale gets one named function in
+  `src/hooks/stale-reads.ts`. Put new kinds there rather than hand-listing
+  keys in a mutation hook.
 - `src/app/providers.tsx` sets global query defaults:
   `staleTime: 30_000` and `refetchOnWindowFocus: false`. Hooks override
   `staleTime` deliberately where the data needs a different freshness window
@@ -474,6 +493,8 @@ answer with the same `ActionResult` envelope, `conflict` included. Route
 handlers stay thin: they name the read, its log context, and its fallback
 message. A migrated read has no Server Action wrapper left; adding one back
 means wrapping the same core in `withAction`, never a second copy of the query.
+Dashboard overview and batch scope use `/api/reads/dashboard/overview` and
+`/api/reads/dashboard/batch-scope`, with facility guards in their read cores.
 
 Status mapping belongs to the adapter alone: a denied org context answers 401
 when there is no session and 403 when the caller has no usable organization
@@ -700,7 +721,7 @@ is in an Application another Removal holds get a late-run style Check pointing t
 the Emissions tab, cleared by a later same-day entry. Sent batches keep the same
 hide rule for late runs. Unheld batches attach matching runs automatically and get
 no such Check. The list projects only Blocking and Check counts, health state and lines to decide from
-this core; its Removal, GHG Statement and lock fields remain in the list action.
+this core, plus whether any holding Removal has a submitted version. The newest holder supplies the list action's Removal status, with lock fields loaded there. The pure `credit-batch-statements` module aggregates statement status across all holders (verification failure, then issued, then verified, else the newest holder with a statement; holder ties use createdAt descending, nulls last, then id descending). The page lists every linked statement with this batch's dry mass, ordered by effective reporting-period end, start and id descending, with null dates last.
 `loadCreditBatchTodosFn` reads one batch through the same core; the batch page
 reads it through `useCreditBatchTodos` (`certificationKeys.batchTodos`, refetched
 on every mount, `staleTime: 0`) and shows no to-dos at all when it fails. Waiting
@@ -811,29 +832,51 @@ Facility-scoped operations dashboard at `/dashboard`
 - Fresh organizations first see the computed setup guide (or the member
   setup-in-progress state); it collapses to a strip and disappears as setup
   records are created. Setup steps are derived, not saved checklist state.
-- The current Flow Hero body is a four-stat KPI band, the traceability hero
-  (`Overview` · `Flow` · `Needs attention`), then Attention, Recent activity,
-  and Certification panels. Week/month/all only changes the range-scoped KPI
-  and mass-flow values. Each KPI counts by its own record date (runs by start
-  day, applications by application date, the CO₂e estimate by the batch's
-  period end), and its (i) says which.
-- One `getDashboardOverview` action supplies the page. Its aggregate lives in
+- The body is a four-stat KPI band, the stage band (landscape scene, six stage
+  cells with counts, open-items bubbles and record actions), then To do, Bins
+  and Recent activity. The header's credit batch filter (`?batch=`) scopes the
+  KPIs, stage counts, To do and activity to records traceable to one batch, or
+  to any unarchived batch ("All credit batches"); a Removal row stays when the
+  Removal holds one of those batches. Grouped rows carry every represented
+  record id and stay when any is in scope, with their count and `ids` list
+  link narrowed to those ids. One scoped record shows its own single row (its
+  own link) when available; otherwise it stays grouped. Structural gaps are
+  facility setup and stay out. Stage bubbles count scoped records (a grouped
+  row adds its count). For all credit batches the downstream run-forward walk
+  is best effort: if it fails closed, the read retries without it and returns
+  `downstreamComplete: false`, and the page says Biochar and Delivery may be
+  low. Bins stay facility-wide.
+  The figures come from one org-scoped read, `getDashboardBatchScope`
+  (`src/data-access/dashboard-batch-scope.ts`, projected by
+  `src/lib/dashboard-batch-scope.ts`), which walks every chosen batch in one
+  set-based `loadCreditBatchAccounting` call, so its round trips do not grow
+  with the batch count. Activity filters record ids before each entity's top
+  eight and the final newest-first merge. All-batches reads skip batches deleted
+  mid-read; a missing selected batch fails. A split application counts once and
+  adds both batches' slices; CO₂e needs an estimate for every chosen batch.
+- The overview read (`getDashboardOverview`) supplies To do rows with range
+  `all`; batch scope supplies activity directly. The overview's aggregate lives in
   `src/data-access/dashboard-overview.ts`, with shared predicates/loaders in
   `dashboard-attention.ts`, `dashboard-stations.ts`, and
   `dashboard-structural-gaps.ts`; `dashboard-station-attention.ts` puts GPS
   gaps and credit batch rows on their flow station (batches on Production).
   Draft, rejected and returned Removals need the operator too: the read core
   `src/lib/read-models/dashboard-overview.ts` loads them best effort
-  (`removal-attention-sources.ts`, worded by `removal-attention.ts`) and hands
-  them to the aggregate, which orders them (after interrupted submissions),
+  (`removal-attention-sources.ts`, worded by `removal-attention.ts`). The Removal
+  list and latest submissions load first; if either fails, there are no Removal
+  rows. A draft whose readiness cannot load stays as "Couldn't check. Open it
+  to see what is left." Shared facility-facts failure marks every draft;
+  context-build or readiness-derivation failure marks only that draft. Rejected
+  and returned rows remain best effort. The core hands the rows to the
+  aggregate, which orders them (after interrupted submissions),
   caps and counts them like any other check; one row per returned Removal
   replaces that Removal's per-credit-batch returned rows.
-- The Attention panel lists each check's records while there are at most two,
-  else one grouped "N affected" row (linking to the list filtered by `ids`
-  where the list takes it and the ids fit `EXACT_ID_FILTER_MAX`), and one row
-  per GPS gap. "N open" counts records: single rows, grouped counts and gap
-  counts, so every counted record is reachable from a row. A batch whose
-  Removal is submitted waits on the verifier and is left out entirely.
+- The overview lists each check's records while there are at most two, else one
+  grouped "N affected" row (linking to the list filtered by `ids` where the
+  list takes it and the ids fit `EXACT_ID_FILTER_MAX`), and one row per GPS
+  gap. The dashboard's To do shows the single and grouped rows the batch filter
+  keeps. A batch whose Removal is submitted waits on the verifier and is left
+  out entirely.
 - **Attention items** are computed from existing MRV records only. They have no
   independent lifecycle, assignee, or completion state; they disappear when the
   underlying record is fixed (see `GLOSSARY.md`).
@@ -927,6 +970,17 @@ key. See [testing.md](./testing.md) for local cache cleanup.
 CI secrets come from 1Password via `1password/load-secrets-action` plus the
 `OP_SERVICE_ACCOUNT_TOKEN` repo secret; only `CLAUDE_CODE_OAUTH_TOKEN` remains a
 plain Actions secret. See [security.md](./security.md) → Secrets Management.
+
+### Vercel builds
+
+Vercel builds only `staging` (the staging deployment) and `main` (Production).
+The root `vercel.json` `ignoreCommand` runs `scripts/vercel-ignore-build.sh`,
+which skips every other branch; feature-branch previews were most of the build
+bill and nothing consumed them. To get a preview for one branch, push a commit
+whose message contains `[preview]` (an empty commit works). Vercel reads the
+config from the commit it deploys, so a branch cut before this rule keeps
+building until it merges `staging`. The orphan `issue-assets` branch carries its
+own `vercel.json` with `git.deploymentEnabled: false`.
 
 ### Health failure response
 

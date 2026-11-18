@@ -35,14 +35,14 @@ const FALLBACK_NAME = "Emissions entry";
 const ROW_GRID =
   "grid grid-cols-[minmax(0,1fr)_auto] gap-x-12 gap-y-4 md:grid-cols-[minmax(0,1fr)_120px_120px_96px_minmax(0,180px)] md:items-start";
 
-function RecordedAfter({ entry, facilityId, newTab }: { entry: CarriedEntry; facilityId: string; newTab: boolean }) {
+function RecordedAfter({ entry, facilityId, newTab, onFix }: { entry: CarriedEntry; facilityId: string; newTab: boolean; onFix?: () => void }) {
   if (!entry.earlierRemovalCode || !entry.earlierRemovalId) return null;
   const href = recordHref("removal", entry.earlierRemovalId, { facilityId });
   return (
     <span className="body-caption text-[var(--color-text-secondary)]">
       Recorded after{" "}
       {newTab ? (
-        <NewTabLink href={href} mono tall className="text-[var(--color-text-primary)]">{entry.earlierRemovalCode}</NewTabLink>
+        <NewTabLink href={href} mono tall className="text-[var(--color-text-primary)]" onClick={onFix}>{entry.earlierRemovalCode}</NewTabLink>
       ) : (
         <Link href={href} className={RECORD_CODE_LINK}>{entry.earlierRemovalCode}</Link>
       )}{" "}
@@ -51,10 +51,10 @@ function RecordedAfter({ entry, facilityId, newTab }: { entry: CarriedEntry; fac
   );
 }
 
-function BatchLink({ entry, facilityId, newTab }: { entry: CarriedEntry; facilityId: string; newTab: boolean }) {
+function BatchLink({ entry, facilityId, newTab, onFix }: { entry: CarriedEntry; facilityId: string; newTab: boolean; onFix?: () => void }) {
   const href = recordHref("creditBatch", entry.creditBatchId, { facilityId });
   return newTab ? (
-    <NewTabLink href={href} mono tall>{entry.creditBatchCode}</NewTabLink>
+    <NewTabLink href={href} mono tall onClick={onFix}>{entry.creditBatchCode}</NewTabLink>
   ) : (
     <Link href={href} className={RECORD_CODE_LINK}>{entry.creditBatchCode}</Link>
   );
@@ -75,7 +75,8 @@ function Files({ entry }: { entry: CarriedEntry }) {
 }
 
 /** The submit step: a panel of its own below the component table. */
-export function CarriedEntriesPanel({ entries, facilityId }: { entries: readonly CarriedEntry[] | undefined; facilityId: string }) {
+/** `onFix`: a new-tab link was used, so the review is read again when the operator returns. */
+export function CarriedEntriesPanel({ entries, facilityId, onFix }: { entries: readonly CarriedEntry[] | undefined; facilityId: string; onFix?: () => void }) {
   if (!entries?.length) return null;
   return (
     <section aria-labelledby="carried-entries-title" className="flex flex-col bg-[var(--paper)] [border:var(--panel-border)]" data-carried-entries>
@@ -98,12 +99,12 @@ export function CarriedEntriesPanel({ entries, facilityId }: { entries: readonly
           <li key={entry.entryId} className={cn(ROW_GRID, "px-16 py-10 [border-top:var(--row-divider)]")} data-carried-entry>
             <span className="flex min-w-0 flex-col gap-2">
               <span className="body-small">{entry.componentName ?? FALLBACK_NAME}</span>
-              <RecordedAfter entry={entry} facilityId={facilityId} newTab />
+              <RecordedAfter entry={entry} facilityId={facilityId} newTab onFix={onFix} />
             </span>
             <span className="text-right font-mono body-small tabular-nums md:col-start-4 md:row-start-1 md:text-left">{formatFigure(entry.value)}</span>
             <span className="col-span-2 flex flex-wrap items-center gap-x-8 body-small md:col-span-1 md:col-start-2 md:row-start-1">
               <span className="text-[var(--color-text-secondary)] md:hidden">From</span>
-              <BatchLink entry={entry} facilityId={facilityId} newTab />
+              <BatchLink entry={entry} facilityId={facilityId} newTab onFix={onFix} />
               <span className="text-[var(--color-text-secondary)] md:hidden">{formatDayString(entry.occurredOn)}</span>
             </span>
             <span className="hidden body-small text-[var(--color-text-secondary)] md:col-start-3 md:row-start-1 md:block">{formatDayString(entry.occurredOn)}</span>

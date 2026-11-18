@@ -40,5 +40,6 @@ Hold the bar the template sets: open the URL before asking for its value, use `a
 
 - `bash -n <script>`; run `shellcheck` if available.
 - `chmod +x <script>`.
+- Run every non-interactive command the wizard calls in its dry form (`--dry-run`, `--check`, `--help`) from the checkout the human will use: syntax checks miss a script that exists only on another branch or imports that do not resolve there. Keep a run-once wizard in the repo's `.scratchpad/`. A wizard is interactive, so the human starts it directly; a non-interactive script for the human goes through the runner in the **pr** skill's Commands for Kenji.
 - Don't run it end-to-end yourself: it opens browsers and blocks on human input. Trace it statically instead: every value from step 1 is captured and lands where step 1 said, and every `set_secret` name exactly matches a `secrets.*` reference in CI.
 - Tell the user how to run it. If it's a repeatable setup path, commit it and link it from the README so the next person runs the script instead of asking an AI.

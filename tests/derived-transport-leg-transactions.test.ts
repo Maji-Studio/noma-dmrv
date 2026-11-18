@@ -2,7 +2,7 @@ import { customerLocationFacilityDistances, supplierLocationFacilityDistances } 
 import { createTestApplication } from "./helpers/application-writers";
 import { cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
-import { loadTransportLegsByCategory } from "@/fn/certification/shared";
+import { loadTransportLegsByCategory } from "@/lib/certification/shared";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
 import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
 import { aggregateBiocharTransportMassDistance } from "@/lib/isometric/utils/aggregation";

@@ -58,8 +58,19 @@ enforces the list and rejects stale entries.
   row that sign-out deletes, and writes no entity rows. The other
   `FORM_CAPTURE_*` knobs (label, output dir, family, surfaces, viewports,
   facility) and the output are documented at the top of
-  `tests/visual/form-capture.spec.ts`. `tests/visual/site-capture.spec.ts`
-  (`SITE_CAPTURE=1`) does the same for the marketing site's pages, with no sign-in.
+  `tests/visual/form-capture.spec.ts`.
+
+## Static checks
+
+`pnpm verify:static` includes `pnpm check:ux-copy` (banned dashes and retired
+GLOSSARY phrases) and `pnpm check:touch-targets`, which flags only unprefixed
+(phone-level) JSX control height/size classes below 44px without a shared hit-area
+recipe or reasoned exception, ignoring min-width breakpoint (including `min-`)
+and state variants; `max-*` variants count as phone-level.
+Scanner regression tests live in `tests/check-ux-copy.test.ts` and
+`tests/check-touch-targets.test.ts`. The height check reads literal className
+fragments, templates and cn/clsx arguments; it does not compute rendered CSS
+or follow arbitrary variables and component implementations.
 
 ## Static check caches
 
@@ -365,7 +376,7 @@ Parallel sessions each work in their own worktree, one writer per worktree.
 
 ```bash
 scripts/worktree.sh new <name> <type/branch>   # .claude/worktrees/<name>, cut from origin/staging
-scripts/worktree.sh status                      # owners, ports, servers, PR state, unmanaged leftovers
+scripts/worktree.sh status                      # owners, ports, servers, PR state, issue, unmanaged leftovers
 scripts/worktree.sh migrate <name>              # migrate both recorded dev and test databases
 scripts/worktree.sh teardown <name> [--force] [--dry-run] # only what `new` recorded for <name>
 ```
@@ -415,7 +426,13 @@ through GraphQL, and watches until MERGED. A drop from the queue prints the
 `teardown` from `scripts/worktree.sh` only after MERGED; `--dry-run` reads state and mutates
 nothing. `scripts/ci-failures.sh <pr>` lists failing checks and prints the Vitest and
 Playwright failing test names with their error lines from the failed Actions logs.
-Neither script runs tests or deletes branches itself; `--teardown` delegates to `teardown`, which deletes the branch once merged.
+`scripts/pr-status.sh <pr> [<pr>...]` reads PR state, required checks, merge queue
+position and local worktrees without changing anything. Each line labels the check
+buckets (`checks=pass=4,pending=6` or `checks=none`), merge state
+(`merge-state=BLOCKED`), and queue (`queue=3/QUEUED` or `queue=no`). Merged PRs
+also include `merge=<short-sha>` or `merge=unavailable` when GitHub has not provided the commit.
+A merged PR with a worktree still listed needs teardown; `pr-land.sh` exits 5 when the PR merged but requested teardown is still owed, for any cause (including an unavailable merge commit).
+These scripts do not run tests or delete branches themselves; `--teardown` delegates to `teardown`, which deletes the branch once merged.
 
 ## Stale mocks: lint rule and pre-push hook
 
@@ -601,9 +618,20 @@ comment-only `// @live` marker will **not** be excluded by `--grep-invert`.
   (`durability-readiness.spec.ts` documents itself as deliberately not `@live`).
   Don't push all new certification coverage behind the nightly.
 
+For the full sandbox submit in `certification-full-removal-submit.spec.ts`, set
+`E2E_LIVE_SUBMIT=1` and `ISOMETRIC_DEMO_FACILITY_ID` alongside the sandbox project
+credentials. Only `local-fs` storage is supported. Set
+`E2E_LIVE_SUBMIT_STORAGE_ROOT` to the absolute server storage root, normally
+`<worktree>/.storage` for a local `next dev` using the default storage root.
+The fixture verifies server readback before submitting. The committed spec skips
+unless `fetchSubmittableSandboxRemovalTemplate` finds a template with every fixed
+input bound and every component contract settled (none `proposed`), so it compiles
+on first read. It also skips unless `sandboxTemplateSupportsCurrent1000YearComponent`
+confirms support for the current 1,000-year component.
+
 ## Returned Removal screen specs (local only)
 
-`removal-correction-screen`, `removal-comparison-unavailable-screen` and
+`removal-correction-screen`, `removal-comparison-unavailable-screen`, `removal-missing-in-registry-screen` and
 `removal-lineage-correction-screen` need the app server to answer the registry reads with
 `tests/e2e/helpers/returned-removal-registry-stub.cjs`, so PR CI (hermetic, no preload) skips
 them with a reason. Run them with `pnpm test:e2e:returned` (needs `CREDENTIALS_ENCRYPTION_KEY`
@@ -617,14 +645,26 @@ Run the script after changing the Removal compile, comparison or submit checks.
 ## Isometric health workflow
 
 `isometric-health.yml` runs API read health, live template input coverage via
-`pnpm isometric:coverage-check -- --source=fixture`, and public OpenAPI drift
+`pnpm isometric:coverage-check -- --source=fixture`, and public OpenAPI compatibility
 independently after setup. Fixture source selects local project/template IDs and
-sandbox period-input exceptions; it still fetches live templates. It does not
+optional per-facility `reviewedLineSources` contracts keyed by component ID in
+`tests/fixtures/isometric-coverage.json`; it still fetches live templates. Reviews
+override proposals and pass through shared contract validation. Unknown fixture
+IDs fail, and new live lines without a settled contract still need review. It does not
 check Project Components. OpenAPI checking does not require sandbox credentials
 and still runs if credential loading or another health check fails. The coverage
 step needs only the registry credential pair and `ISOMETRIC_ENVIRONMENT`, because
 `client-env.ts` and the logger do not load app config. Registry credentials remain
 mandatory.
+
+The OpenAPI step regenerates Certify types and fails on fetch/generation errors.
+Unchanged types pass immediately. Changed types check for removed paths or methods
+and run `pnpm typecheck`, matching CI's static job without app env or route-type
+generation. Removed operations or compilation failures fail with operation names
+or tsc errors, a truncated diff when needed and repair instructions. Response-shape
+changes read only through caller-chosen generics are not detected. Compatible
+changes warn and pass, with a collapsible diff stat and diff, truncated when
+needed, in the summary. Run `pnpm regenerate-certify-types` and commit when convenient.
 
 The always-run step summary reports setup and check outcomes with repair commands.
 Any required setup or check that fails or is skipped prevents a green result.
@@ -635,6 +675,9 @@ Run the hermetic selection regression with
 It also runs in normal Vitest CI. It collects the real health command with Vitest
 and verifies only the health file is selected, a collection-only write sentinel
 is excluded, and missing opted-in credentials fail closed.
+It also runs the OpenAPI step in a temporary git repository with stubbed generation
+and typecheck commands. `tests/certify-removed-operations.test.ts` checks operation
+removals against the committed types and isolated fixtures.
 Collection uses an isolated config and a dotenv stub; no test bodies execute, no
 local env files are read, and placeholders are never sent to the API. A sentinel
 integration suite catches accidental broadening without loading database tests.

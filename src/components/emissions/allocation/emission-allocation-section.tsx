@@ -17,9 +17,9 @@ import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useEmissionAllocation } from "@/hooks/use-emission-allocation";
 import type { EmissionAllocationInput } from "@/types/emission-allocation";
 import { SECTION_TITLE, sectionHint } from "./allocation-copy";
-import { FlowView } from "./allocation-flow-view";
 import { ModeSwitch } from "./allocation-parts";
 import { buildFocus } from "./allocation-model";
+import { ShareBars } from "./allocation-share-bars";
 import { TableView } from "./allocation-table-view";
 
 const VIEWS = ["flow", "table"] as const;
@@ -74,7 +74,7 @@ export function EmissionAllocationSection(props: EmissionAllocationInput) {
       view === "table" ? (
         <TableView key={focus.owner.key} allocation={allocation} focus={focus} />
       ) : (
-        <FlowView key={focus.owner.key} allocation={allocation} focus={focus} />
+        <ShareBars key={focus.owner.key} allocation={allocation} focus={focus} />
       );
   }
 

@@ -11,7 +11,6 @@ export interface LabBatchRow {
   id: string;
   code: string;
   facilityId: string;
-  status: string;
   startDate: string;
   endDate: string;
   archivedAt: string | null;

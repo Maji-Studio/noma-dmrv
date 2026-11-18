@@ -5,6 +5,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "../utils";
 import { assertCarbonReconciliation } from "./carbon-reconciliation";
 import { assertSamplingTimeNotFuture } from "./future-time";
+import { normalizeSampleRealValues } from "./normalize-values";
 import { getSampleById } from "./sample-by-id";
 import { derivedRatioColumns, batchEntryWarnings, optionalColumns, type CreateSampleRequest, type EffectiveSampleValues, type SampleWriteResult } from "./write-values";
 import {
@@ -26,6 +27,7 @@ export async function createSampleInTransaction(
   options: { now?: Date; capture?: CaptureActivity } = {},
 ): Promise<SampleWriteResult> {
   requireOrgScope(ctx);
+  request = normalizeSampleRealValues(request);
   const scope = await lockSampleWriteScope(ctx, tx, {
     lineage: [{ target: { entityType: "creditBatch", entityId: request.creditBatchId }, mutation: "create", subjectEntityType: "sample" }],
     creditBatchIds: [request.creditBatchId],

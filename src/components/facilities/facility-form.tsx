@@ -115,7 +115,7 @@ export function FacilityForm({
           <FormInput
             id="name"
             type="text"
-            placeholder="e.g., Dark Earth Carbon Production Hub"
+            placeholder="e.g., North Plant"
             disabled={isSubmitting}
             error={!!errors.name}
             {...register("name")}

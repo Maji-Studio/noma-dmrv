@@ -70,7 +70,7 @@ The application implements the aggregate shape deliberately:
 
 1. `src/data-access/credit-batch-samples.ts` correctly loads the distinct noma
    Sample rows for a credit batch.
-2. `src/fn/certification/durability-measurement-samples.ts` sorts those rows,
+2. `src/lib/certification/durability-measurement-samples.ts` sorts those rows,
    maps them to replicate values, and passes the complete array to one builder.
 3. `src/lib/isometric/transformers/measurement-sample.ts` flattens every
    replicate into one `values` array and appends one product-mass value.
@@ -341,18 +341,18 @@ hermetic PR gates and tag any lasting Playwright live coverage with `@live`.
 
 Primary:
 
-- `src/fn/certification/durability-measurement-samples.ts`
-- `src/fn/certification/durability-measurement-sample-snapshot.ts`
+- `src/lib/certification/durability-measurement-samples.ts`
+- `src/lib/certification/durability-measurement-sample-snapshot.ts`
 - `src/lib/isometric/measurement-samples.ts`
 - `src/lib/isometric/transformers/measurement-sample.ts`
 - `src/lib/isometric/transformers/sequestration-binding.ts`
-- `src/fn/certification/removal-submission-build.ts`
+- `src/lib/certification/removal-submission-build.ts`
 - `src/lib/certification/measurement-sample-journal.ts` if the journal schema
   needs explicit local Sample provenance
 
 Tests:
 
-- `src/fn/certification/durability-measurement-samples.test.ts`
+- `src/lib/certification/durability-measurement-samples.test.ts`
 - `src/lib/isometric/transformers/measurement-sample.test.ts`
 - `src/lib/isometric/measurement-samples.test.ts`
 - `src/fn/certification/durability-measurement-recovery.test.ts`

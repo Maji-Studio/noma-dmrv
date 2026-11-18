@@ -176,12 +176,17 @@ waiting for the cookie cache.
 
 Tokens expire after 1 hour. Verify the email was sent, that `NEXT_PUBLIC_APP_URL` matches the real app URL, and clear stale rows from the `verification` table.
 
-### Can't Create Admin User
+### First Admin Setup
 
-`ADMIN_EMAIL` and `ADMIN_PASSWORD` must both be set; there is no default password (`src/lib/cli/ensure-admin-core.ts` throws). Emails are matched case-sensitively; restart after changing `ADMIN_EMAIL`.
+For a plain database, open `/setup` and choose the first Platform Admin's email
+and password. Setup is closed once any user exists; sign in instead.
+`pnpm db:reset:plain` is the destructive local path back to an empty first run.
+The empty-staging and production workflow resets use the same plain path.
 
-For staging/prod, run admin bootstrap through the `migrate.yml` workflow;
-`pnpm env:run` does not provide `ADMIN_EMAIL` there (see `docs/security.md`).
+`ADMIN_EMAIL` and `ADMIN_PASSWORD` are only for local development, CI and seeded
+staging (`reset-seed-staging`). Both must be set for `db:ensure-admin`; there is
+no default password. The CLI refuses production and directs you to `/setup`.
+A committed admin whose automatic sign-in failed can sign in at `/login`.
 
 ## Build & Deployment Issues
 

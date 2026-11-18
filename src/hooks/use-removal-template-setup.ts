@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { applyRemovalTemplateSetup, loadRemovalTemplateSetup } from "@/fn/certification/removal-template-setup";
 import type { ApplyRemovalTemplateSetupInput } from "@/schemas/removal-template-setup";
-import { certificationKeys } from "./use-certification";
+import { certificationKeys } from "./certification-query-keys";
+import { invalidateCertificationReadiness } from "./stale-reads";
 import { creditBatchKeys } from "./credit-batch-query-keys";
 import { activityKeys } from "./activity-query-keys";
 import { invalidateOnboardingProgress } from "./use-onboarding";
@@ -24,7 +25,7 @@ export function useApplyRemovalTemplateSetup() {
     onSuccess: async (_data, input) => {
       invalidateOnboardingProgress(client, input.facilityId);
       await Promise.all([
-        client.invalidateQueries({ queryKey: certificationKeys.all }),
+        invalidateCertificationReadiness(client),
         client.invalidateQueries({ queryKey: creditBatchKeys.all }),
         client.invalidateQueries({ queryKey: activityKeys.all }),
       ]);

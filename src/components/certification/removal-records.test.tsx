@@ -47,6 +47,15 @@ describe("RemovalRecordsList", () => {
     expect(screen.getByText("Production runs")).toBeTruthy();
   });
 
+  it("shows the code as the disclosure label, not a link, when the host links it already", () => {
+    render(<RemovalRecordsList batches={[batch(1, 0)]} facilityId="f1" codeLink={false} />);
+    expect(screen.queryByRole("link", { name: /CB-26-001/ })).toBeNull();
+    const toggle = screen.getByRole("button", { name: /Records of CB-26-001/ });
+    expect(toggle.textContent).toContain("CB-26-001");
+    open();
+    expect(screen.getByText("Production runs")).toBeTruthy();
+  });
+
   it("shows the first three by date and offers Show all N for a longer group only", () => {
     render(<RemovalRecordsList batches={[batch(5, RECORDS_SHOWN_FIRST)]} facilityId="f1" />);
     open();

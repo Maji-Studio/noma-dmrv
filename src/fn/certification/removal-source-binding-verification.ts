@@ -8,12 +8,12 @@ import {
   type RemovalSourceBindingVerification,
 } from "@/lib/isometric/source-binding-verification";
 import { sanitizeErrorMessage, type Logger } from "@/lib/log";
-import { readRemovalSourceBindingPlan } from "./removal-snapshot-readers";
+import { readRemovalSourceBindingPlan } from "@/lib/certification/removal-snapshot-readers";
 import {
   appendSyncEventBestEffort,
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
-} from "./shared";
+} from "@/lib/certification/shared";
 
 function storedPlanEntryCount(row: CertificationSubmissionRow): number {
   const snapshot = row.payloadSnapshot as {

@@ -1,6 +1,8 @@
-import { buildTransportCoverage } from "./certify-transport-coverage";
+import { lineFileEvidenceFacts } from "../../../tests/helpers/line-file-evidence-facts";
+import { deriveBatchEmissionLines } from "@/lib/certification/emission-lines";
+import { buildTransportCoverage } from "@/lib/certification/certify-transport-coverage";
 import { removalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
-import { buildSelectableBatchesData } from "./selectable-batches";
+import { buildSelectableBatchesData } from "@/lib/certification/selectable-batches";
 import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
 import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -34,7 +36,7 @@ vi.mock("@/lib/log", () => ({
   },
 }));
 
-vi.mock("@/fn/certification/certify-context-core", () => ({
+vi.mock("@/lib/certification/certify-context-core", () => ({
   buildCreditBatchContexts: mocks.buildCreditBatchContexts,
   loadFacilityCertifierFacts: mocks.loadFacilityCertifierFacts,
 }));
@@ -115,7 +117,7 @@ it.each([
   const result = await createRemovalWithBatchesAction({ facilityId: FACILITY_ID, creditBatchIds: [CREDIT_BATCH_ID] });
   expect(result).toEqual({ success: true, data: { removalId: "removal-1" } });
   const selectable = await buildSelectableBatchesData(ORG_CONTEXT, FACILITY_ID,
-    facts as unknown as import("./facility-certifier-facts").FacilityCertifierFacts, mocks.buildCreditBatchContexts);
+    facts as unknown as import("@/lib/certification/facility-certifier-facts").FacilityCertifierFacts, mocks.buildCreditBatchContexts);
   expect(selectable.facilitySetupGaps).toEqual([]);
   expect(selectable.facilitySetupComplete).toBe(true);
   expect(selectable.batches[0].health.state).toBe("ready");
@@ -132,7 +134,7 @@ it("rejects an unready pin even when the facility default is clean", async () =>
   expect(mocks.createRemovalWithCreditBatches).not.toHaveBeenCalled();
   mocks.listUngroupedCreditBatches.mockResolvedValue([{ id: CREDIT_BATCH_ID }]);
   const selectable = await buildSelectableBatchesData(ORG_CONTEXT, FACILITY_ID,
-    CONNECTED as unknown as import("./facility-certifier-facts").FacilityCertifierFacts, mocks.buildCreditBatchContexts);
+    CONNECTED as unknown as import("@/lib/certification/facility-certifier-facts").FacilityCertifierFacts, mocks.buildCreditBatchContexts);
   expect(selectable.facilitySetupComplete).toBe(true);
   expect(selectable.batches[0].health.state).toBe("incomplete");
 });
@@ -177,6 +179,27 @@ it.each([
     expect(mocks.createRemovalWithCreditBatches).toHaveBeenCalledWith(ORG_CONTEXT, FACILITY_ID, [CREDIT_BATCH_ID]);
   } else {
     expect(result).toEqual({ success: false, error: "CB-1 isn't ready to certify (1 unresolved issue)." });
+    expect(mocks.createRemovalWithCreditBatches).not.toHaveBeenCalled();
+  }
+});
+
+it.each([false, true])("checks remaining-mass readiness with claimed production proof locked=%s", async recordsFileLocked => {
+  vi.clearAllMocks();
+  mocks.requireOrgContext.mockResolvedValue(ORG_CONTEXT);
+  mocks.loadFacilityCertifierFacts.mockResolvedValue(CONNECTED);
+  const { observation, batch } = lineFileEvidenceFacts();
+  const emissionLines = deriveBatchEmissionLines({ ...observation, ...batch, lineFiles: [],
+    recordsFileLocked, problems: [], enrichmentComplete: true });
+  const context = { ...batchContext(), emissionLines,
+    emissionLinesByBatchId: { [CREDIT_BATCH_ID]: emissionLines } };
+  mocks.buildCreditBatchContexts.mockResolvedValue(contexts(context));
+  mocks.createRemovalWithCreditBatches.mockResolvedValue("later-removal");
+  const result = await createRemovalWithBatchesAction({ facilityId: FACILITY_ID, creditBatchIds: [CREDIT_BATCH_ID] });
+  if (recordsFileLocked) {
+    expect(result).toEqual({ success: true, data: { removalId: "later-removal" } });
+    expect(mocks.createRemovalWithCreditBatches).toHaveBeenCalledOnce();
+  } else {
+    expect(result.success).toBe(false);
     expect(mocks.createRemovalWithCreditBatches).not.toHaveBeenCalled();
   }
 });

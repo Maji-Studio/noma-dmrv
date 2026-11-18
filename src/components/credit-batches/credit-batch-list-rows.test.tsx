@@ -61,7 +61,7 @@ describe("CreditBatchListRow", () => {
   it("keeps the interrupted status and the batch page's open to-do count together", () => {
     const view = creditBatchStateOf({
       state: "incomplete", issueCount: 2, checkCount: 1, linesToDecide: 0,
-      removalId: "interrupted", removalCode: "RM-26-001", removalStatus: null, removalInterrupted: true,
+      removalId: "interrupted", removalCode: "RM-26-001", removalStatus: null, removalInterrupted: true, hasSubmittedRemoval: false,
       productionEmissionsClaimedByRemovalCode: null, ghgStatementId: null, ghgStatementStatus: null,
     });
     const { row } = renderRow({ view });

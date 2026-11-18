@@ -12,6 +12,7 @@ const harness = vi.hoisted(() => ({
   stats: vi.fn(),
 }));
 
+vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => undefined }));
 vi.mock("@/hooks/use-facilities", async (importOriginal) => (await import("../../../tests/helpers/facility-lookup-mocks")).activeFacilityLookupModule(await importOriginal()));
 vi.mock("nuqs", () => ({
   parseAsString: { withOptions: () => ({}) },

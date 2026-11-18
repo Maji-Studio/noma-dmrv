@@ -10,7 +10,7 @@
  * aggregates for every count, one `union all` for the newest rows per entity;
  * the merge sort and labelling happen in JS.
  */
-import { facilityListHref, plural } from "@/lib/dashboard-links";
+import { facilityListHref, plural, STATION_COUNT_WORDS } from "@/lib/dashboard-links";
 import { recordHref } from "@/lib/record-links";
 import { db } from "@/db";
 import { countRows } from "@/db/aggregate";
@@ -36,7 +36,7 @@ import {
   type SQL,
   type SQLWrapper,
 } from "drizzle-orm";
-import { unionAll } from "drizzle-orm/pg-core";
+import { unionAll, type AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   applicationEvidenceGapWhere,
   runsMissingMassWhere,
@@ -103,22 +103,13 @@ export interface DashboardActivityItem {
   href: string;
 }
 
-export type DashboardCreditBatchStatus =
-  | "draft"
-  | "pending"
-  | "verified"
-  | "issued"
-  | "rejected";
-
 export interface DashboardCertificationBatch {
   id: string;
   code: string;
-  status: DashboardCreditBatchStatus;
 }
 
 export interface DashboardCertification {
   totalBatches: number;
-  pendingBatches: number;
   /** Latest batches, newest first. */
   batches: DashboardCertificationBatch[];
   /** Batches with zero pooled lab samples — the classic certification blocker. */
@@ -253,7 +244,6 @@ async function loadStationAggregates(
   const batchAgg = db
     .select({
       total: countRows().as("batch_total"),
-      pending: countRows(eq(creditBatches.status, "pending")).as("batch_pending"),
       withoutSamples: countRows(
         sql`coalesce(${sampleCounts.sampleCount}, 0) = 0`,
       ).as("batch_without_samples"),
@@ -282,7 +272,6 @@ async function loadStationAggregates(
       applicationTotal: applicationAgg.total,
       evidenceGaps: applicationAgg.evidenceGaps,
       batchTotal: batchAgg.total,
-      pendingBatches: batchAgg.pending,
       batchesWithoutSamples: batchAgg.withoutSamples,
     })
     .from(feedstockAgg)
@@ -309,36 +298,42 @@ interface ActivityRow {
   kind: ActivityKind;
   id: string;
   code: string;
-  /** Credit batch status; null for every other kind. */
-  status: string | null;
   /** Never null in practice: every branch filters its date column not-null. */
   sortMs: number | null;
 }
 
 /**
+ * `id = any($1::uuid[])`: one array parameter however many records the scope
+ * holds, so "All credit batches" never hits the bind-parameter limit.
+ */
+function idInScope(column: AnyPgColumn, recordIds: readonly string[]): SQL {
+  return sql`${column} = any(${sql.param([...recordIds])}::uuid[])`;
+}
+
+/**
  * Newest events per entity, fetched as one `union all` so the merge sort in
- * JS sees each entity's own top-N. The batch rows double as the
- * certification block's recent-batch list (same filter, same order).
+ * JS sees each entity's own top-N. Optional `recordIds` scope each branch
+ * before its cap, so older in-scope events remain eligible.
  */
 async function loadActivityRows(
   ctx: OrgContext,
   facilityId: string,
+  recordIds?: readonly string[],
 ): Promise<ActivityRow[]> {
   const orgId = ctx.organizationId;
-  const noStatus = sql<string | null>`null::text`;
   return unionAll(
     db
       .select({
         kind: activityKind("feedstock"),
         id: feedstocks.id,
         code: feedstocks.code,
-        status: noStatus,
         sortMs: epochMs(feedstocks.deliveryDate),
       })
       .from(feedstocks)
       .where(
         and(
           eq(feedstocks.organizationId, orgId),
+          recordIds ? idInScope(feedstocks.id, recordIds) : undefined,
           eq(feedstocks.facilityId, facilityId),
           isNull(feedstocks.archivedAt),
           isNotNull(feedstocks.deliveryDate),
@@ -351,13 +346,13 @@ async function loadActivityRows(
         kind: activityKind("run"),
         id: productionRuns.id,
         code: productionRuns.code,
-        status: noStatus,
         sortMs: epochMs(productionRuns.endTime),
       })
       .from(productionRuns)
       .where(
         and(
           eq(productionRuns.organizationId, orgId),
+          recordIds ? idInScope(productionRuns.id, recordIds) : undefined,
           eq(productionRuns.facilityId, facilityId),
           isNull(productionRuns.archivedAt),
           eq(productionRuns.status, "complete"),
@@ -371,13 +366,13 @@ async function loadActivityRows(
         kind: activityKind("delivery"),
         id: deliveries.id,
         code: deliveries.code,
-        status: noStatus,
         sortMs: epochMs(deliveries.deliveryDate),
       })
       .from(deliveries)
       .where(
         and(
           eq(deliveries.organizationId, orgId),
+          recordIds ? idInScope(deliveries.id, recordIds) : undefined,
           eq(deliveries.facilityId, facilityId),
           isNull(deliveries.archivedAt),
           eq(deliveries.status, "delivered"),
@@ -391,7 +386,6 @@ async function loadActivityRows(
         kind: activityKind("application"),
         id: applications.id,
         code: applications.code,
-        status: noStatus,
         sortMs: epochMs(applications.applicationDate),
       })
       .from(applications)
@@ -405,6 +399,7 @@ async function loadActivityRows(
       .where(
         and(
           eq(applications.organizationId, orgId),
+          recordIds ? idInScope(applications.id, recordIds) : undefined,
           eq(deliveries.facilityId, facilityId),
           isNull(deliveries.archivedAt),
           // "Biochar applied to soil" — only applications actually applied,
@@ -420,13 +415,13 @@ async function loadActivityRows(
         kind: activityKind("batch"),
         id: creditBatches.id,
         code: creditBatches.code,
-        status: sql<string | null>`${creditBatches.status}::text`,
         sortMs: epochMs(creditBatches.createdAt),
       })
       .from(creditBatches)
       .where(
         and(
           eq(creditBatches.organizationId, orgId),
+          recordIds ? idInScope(creditBatches.id, recordIds) : undefined,
           eq(creditBatches.facilityId, facilityId),
           isNull(creditBatches.archivedAt),
         ),
@@ -487,13 +482,23 @@ function buildActivity(
     }));
 }
 
+/** Apply the record scope before every entity's top-N, in one round trip. */
+export async function getDashboardScopedActivity(
+  ctx: OrgContext,
+  facilityId: string,
+  recordIds: readonly string[],
+): Promise<DashboardActivityItem[]> {
+  requireOrgScope(ctx);
+  if (recordIds.length === 0) return [];
+  return buildActivity(await loadActivityRows(ctx, facilityId, recordIds), facilityId);
+}
+
 function buildRecentBatches(rows: ActivityRow[]): DashboardCertificationBatch[] {
   return newestFirst(rows.filter((row) => row.kind === "batch"))
     .slice(0, CERTIFICATION_BATCH_ROWS)
     .map((row) => ({
       id: row.id,
       code: row.code,
-      status: row.status as DashboardCreditBatchStatus,
     }));
 }
 
@@ -530,7 +535,7 @@ export async function getDashboardStations(
       key: "suppliers",
       name: "Suppliers",
       total: supplierCount,
-      totalLabel: plural(supplierCount, "supplier"),
+      totalLabel: plural(supplierCount, ...STATION_COUNT_WORDS.suppliers),
       attention: 0,
       reasons: [],
       href: facilityListHref("/suppliers", facilityId),
@@ -539,7 +544,7 @@ export async function getDashboardStations(
       key: "feedstock",
       name: "Feedstock",
       total: feedstockTotal,
-      totalLabel: plural(feedstockTotal, "feedstock"),
+      totalLabel: plural(feedstockTotal, ...STATION_COUNT_WORDS.feedstock),
       attention: feedstockMissing,
       reasons:
         feedstockMissing > 0
@@ -551,7 +556,7 @@ export async function getDashboardStations(
       key: "production",
       name: "Production",
       total: runTotal,
-      totalLabel: plural(runTotal, "run"),
+      totalLabel: plural(runTotal, ...STATION_COUNT_WORDS.production),
       attention: runsMissingMass,
       reasons: [
         ...(runsMissingMass > 0
@@ -567,7 +572,7 @@ export async function getDashboardStations(
       key: "products",
       name: "Biochar",
       total: productTotal,
-      totalLabel: plural(productTotal, "product"),
+      totalLabel: plural(productTotal, ...STATION_COUNT_WORDS.products),
       attention: 0,
       reasons: [],
       href: facilityListHref("/biochar-products", facilityId),
@@ -576,7 +581,7 @@ export async function getDashboardStations(
       key: "deliveries",
       name: "Delivery",
       total: deliveryTotal,
-      totalLabel: plural(deliveryTotal, "delivery", "deliveries"),
+      totalLabel: plural(deliveryTotal, ...STATION_COUNT_WORDS.deliveries),
       attention: 0,
       reasons: [],
       href: facilityListHref("/deliveries", facilityId),
@@ -585,7 +590,7 @@ export async function getDashboardStations(
       key: "applications",
       name: "Application",
       total: applicationTotal,
-      totalLabel: plural(applicationTotal, "application"),
+      totalLabel: plural(applicationTotal, ...STATION_COUNT_WORDS.applications),
       attention: evidenceGaps,
       reasons:
         evidenceGaps > 0
@@ -601,7 +606,6 @@ export async function getDashboardStations(
     activity: buildActivity(activityRows, facilityId),
     certification: {
       totalBatches: counts.batchTotal,
-      pendingBatches: counts.pendingBatches,
       batches: buildRecentBatches(activityRows),
       batchesWithoutSamples: counts.batchesWithoutSamples,
     },

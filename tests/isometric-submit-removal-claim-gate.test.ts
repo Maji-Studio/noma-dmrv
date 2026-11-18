@@ -19,13 +19,14 @@ import { makeTestOrgContext } from "./helpers/test-org";
 import * as ledger from "@/data-access/certification";
 import * as productionBatchesDA from "@/data-access/certifier-production-batches";
 import * as ledgerClaim from "@/data-access/certification-submissions";
-import * as certifyContext from "@/fn/certification/certify-context-core";
+import * as certifyContext from "@/lib/certification/certify-context-core";
 import * as removalsDA from "@/data-access/certifier-removals";
 import { assertRegisteredProductionBatchesMatch } from "@/fn/certification/production-batch-precheck";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import * as isometric from "@/lib/isometric";
 import { SafeError } from "@/lib/errors";
 import { buildMassAccounting } from "@/lib/certification/mass-accounting";
+import { INTERRUPTED_REMOVAL_CHANGED_MESSAGE } from "@/lib/certification/interrupted-removal-copy";
 
 vi.mock("@/fn/certification/production-batch-precheck", () => ({
   assertRegisteredProductionBatchesMatch: vi.fn(async () => undefined),
@@ -668,7 +669,7 @@ describe("submitRemoval — stale-revision resume gate (ADR 0020)", () => {
 
     await expect(
       submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
-    ).rejects.toThrow(/ask support to reconcile/i);
+    ).rejects.toThrow(INTERRUPTED_REMOVAL_CHANGED_MESSAGE);
 
     expect(staleRow.status).toBe("draft");
     expect(staleRow.metadata).toMatchObject({

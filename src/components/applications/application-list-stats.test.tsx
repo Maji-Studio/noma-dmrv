@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { STAT_CARD_ERROR_VALUE } from "@/components/ui/stat-card";
 import { ApplicationList } from "./application-list";
@@ -16,6 +16,13 @@ const state = vi.hoisted(() => ({
   stats: { data: undefined as unknown, isLoading: false, isError: false },
   search: null as string | null,
   pageSize: 10,
+  openCreate: null as null | (() => void),
+  sheet: null as null | { open: boolean; mode: string },
+}));
+vi.mock("@/hooks/use-open-create-intent", () => ({
+  useOpenCreateIntent: (open: () => void) => {
+    state.openCreate = open;
+  },
 }));
 
 vi.mock("nuqs", () => ({
@@ -59,7 +66,12 @@ vi.mock("@/hooks/use-create-with-evidence", () => ({
 vi.mock("@/hooks/use-file-upload", () => ({ useFileUpload: () => ({ upload: vi.fn() }) }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 vi.mock("@/components/ui/delete-confirm-dialog", () => ({ DeleteConfirmDialog: () => null }));
-vi.mock("@/components/ui/entity-side-sheet", () => ({ EntitySideSheet: () => null }));
+vi.mock("@/components/ui/entity-side-sheet", () => ({
+  EntitySideSheet: (props: { open: boolean; mode: string }) => {
+    state.sheet = { open: props.open, mode: props.mode };
+    return null;
+  },
+}));
 vi.mock("@/components/forms", () => ({ ServerError: () => null }));
 vi.mock("@/components/ui/data-table", () => {
   const Slot = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
@@ -112,5 +124,14 @@ describe("ApplicationList summary cards", () => {
     renderList();
     expect(screen.getAllByText(STAT_CARD_ERROR_VALUE)).toHaveLength(2);
     expect(screen.queryByText("0")).toBeNull();
+  });
+});
+
+describe("ApplicationList create link", () => {
+  it("opens the create sheet when the page is opened with ?create=true", () => {
+    renderList();
+    expect(state.sheet?.open).toBe(false);
+    act(() => state.openCreate?.());
+    expect(state.sheet).toEqual({ open: true, mode: "create" });
   });
 });

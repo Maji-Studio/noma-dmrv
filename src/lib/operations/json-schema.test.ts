@@ -12,6 +12,8 @@ import {
   requiredPositiveMassKgSchema,
 } from "@/schemas/helpers";
 import { toOperationJsonSchema, type JsonSchema } from "./json-schema";
+import { toToolSchema } from "./mcp-schema";
+import { numberBoundsOf } from "@/schemas/published-json-schema";
 
 /** Drop keys a hand-written expectation should not have to spell out. */
 function contract(schema: z.ZodType): JsonSchema {
@@ -54,6 +56,18 @@ const TEXT_2000 = { type: "string", maxLength: 2000 };
 const DISTANCE_NOTE = { type: "string", maxLength: 500 };
 
 describe("toOperationJsonSchema: shared helpers", () => {
+  it("preserves nullable primitive types and bounds in operation and MCP schemas", () => {
+    const minimum = 0;
+    const maximum = 100;
+    const schema = z.number().nullable().meta({ minimum, maximum });
+    const expected = { type: ["number", "null"], minimum, maximum };
+    expect(contract(schema)).toEqual(expected);
+    expect(numberBoundsOf(schema)).toEqual({ minimum, maximum });
+    const converters = toToolSchema(schema)["~standard"].jsonSchema;
+    expect(converters.input({ target: "draft-2020-12" })).toMatchObject(expected);
+    expect(converters.output({ target: "draft-2020-12" })).toMatchObject(expected);
+  });
+
   it("keeps the bounds of a piped mass helper", () => {
     expect(contract(requiredPositiveMassKgSchema())).toEqual(POSITIVE_MASS_KG);
   });
@@ -210,7 +224,7 @@ describe("toOperationJsonSchema: lab sample", () => {
   const createProperties = created.properties as Record<string, JsonSchema>;
   const patched = contract(updateLabSampleApiInput);
   const patchProperties = patched.properties as Record<string, JsonSchema>;
-  const NULLABLE_PERCENT = { minimum: 0, maximum: 100, anyOf: [{ type: "number" }, { type: "null" }] };
+  const NULLABLE_PERCENT = { minimum: 0, maximum: 100, type: ["number", "null"] };
 
   it("requires the batch, sampling time and both carbon figures, and nothing else", () => {
     expect(created.required).toEqual(["creditBatchId", "samplingTime", "totalCarbonPercent", "organicCarbonPercent"]);
@@ -240,7 +254,7 @@ describe("toOperationJsonSchema: lab sample", () => {
     expect(patchProperties.totalCarbonPercent).toEqual({ type: "number", minimum: 0, maximum: 100 });
     expect(createProperties.totalHydrogenPercent).toEqual(NULLABLE_PERCENT);
     expect(patchProperties.totalHydrogenPercent).toEqual(NULLABLE_PERCENT);
-    expect(createProperties.oToCOrgRatio).toEqual({ minimum: 0, maximum: RATIO_INPUT_MAX, anyOf: [{ type: "number" }, { type: "null" }] });
+    expect(createProperties.oToCOrgRatio).toEqual({ minimum: 0, maximum: RATIO_INPUT_MAX, type: ["number", "null"] });
     expect(createProperties.r0MeasurementCount).toEqual({ anyOf: [{ type: "integer", minimum: 0, maximum: 2_147_483_647 }, { type: "null" }] });
   });
 

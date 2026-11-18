@@ -16,11 +16,10 @@
  *   pnpm isometric:coverage-check -- --source=db           # DB mode
  */
 import { formatUnbindableTemplateInputs } from "../src/lib/isometric/template-binding-coverage";
-import { evaluateTemplateCoverage } from "./isometric-coverage-core";
+import { coverageFixtureSchema, evaluateTemplateCoverage, resolveCoverageLineSources, type FacilityFixtureEntry } from "./isometric-coverage-core";
 import { config } from "dotenv";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { z } from "zod";
 
 config({ path: ".env.local" });
 
@@ -36,22 +35,6 @@ if (!process.env.NODE_ENV) {
 const FIXTURE_PATH = "tests/fixtures/isometric-coverage.json";
 
 type Source = "fixture" | "db";
-
-// Runtime validation for the fixture file — CI gates on the script's exit
-// code, so a typo in the fixture (e.g. `externalProjctId`) must fail loud
-// here rather than silently let downstream Isometric calls receive
-// `undefined`.
-const facilityFixtureSchema = z.object({
-  label: z.string().min(1),
-  externalProjectId: z.string().min(1),
-  removalTemplateId: z.string().min(1),
-});
-
-const fixtureFileSchema = z.object({
-  facilities: z.array(facilityFixtureSchema).min(1),
-});
-
-type FacilityFixtureEntry = z.infer<typeof facilityFixtureSchema>;
 
 function parseArgs(): { source: Source } {
   const args = process.argv.slice(2);
@@ -70,7 +53,7 @@ function parseArgs(): { source: Source } {
 
 async function loadFromFixture(): Promise<FacilityFixtureEntry[]> {
   const raw = await readFile(join(process.cwd(), FIXTURE_PATH), "utf8");
-  const parsed = fixtureFileSchema.safeParse(JSON.parse(raw));
+  const parsed = coverageFixtureSchema.safeParse(JSON.parse(raw));
   if (!parsed.success) {
     console.error(
       `Fixture ${FIXTURE_PATH} failed validation:\n${parsed.error.issues
@@ -166,7 +149,8 @@ async function main(): Promise<void> {
       continue;
     }
 
-    const { failures, entryOnly } = evaluateTemplateCoverage(template);
+    const lineSources = resolveCoverageLineSources(template, facility.reviewedLineSources);
+    const { failures, entryOnly } = evaluateTemplateCoverage(template, { lineSources });
     for (const finding of entryOnly) {
       console.warn(
         `  ⚠ entry-only: ${finding.componentDisplayName} (${finding.componentId}). Supply values from emissions entries.`,

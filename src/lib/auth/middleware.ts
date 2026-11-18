@@ -12,6 +12,7 @@ import { homePathFor } from "./home-path";
 const PUBLIC_ROUTES = [
   "/schema",
   "/login",
+  "/setup",
   "/forgot-password",
   "/reset-password",
   "/set-password",
@@ -23,7 +24,7 @@ const PUBLIC_ROUTES = [
   "/api/ghg-statement-reports",
 ];
 
-const AUTH_ROUTES = ["/login", "/forgot-password"];
+const AUTH_ROUTES = ["/login", "/forgot-password", "/setup"];
 
 // Public submissions enforce their own origin, input and abuse checks. Exact paths only.
 const PUBLIC_SUBMISSION_ROUTES = new Set(["/api/walkthrough"]);

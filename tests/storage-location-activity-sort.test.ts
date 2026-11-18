@@ -59,6 +59,8 @@ const T4_PRODUCT_FROM_BIN = new Date("2026-05-05T08:00:00Z");
 const T5_MULTI_RUN_PRODUCT = new Date("2026-06-01T08:00:00Z");
 const T5_PRODUCT_STORED = new Date("2026-06-20T08:00:00Z");
 const T6_STOCK_TAKE = new Date("2026-07-25T08:00:00Z");
+const ORIGINAL_LOSS_KG = 120;
+const REPLACEMENT_LOSS_KG = 80;
 
 /**
  * Bin D's own production run. Older than every other event on purpose: if the
@@ -607,6 +609,72 @@ describe("storage-location lastActivityAt sort", () => {
         },
       });
       expect(items[0].lastActivity?.date).toEqual(expectedActivityDate);
+    } finally {
+      await cleanupFixture(fixture);
+    }
+  });
+
+  it.each([
+    { action: "delete", replacementIdFirst: false },
+    { action: "edit", replacementIdFirst: true },
+    { action: "edit", replacementIdFirst: false },
+  ])("labels a Lost mass $action (replacement UUID first: $replacementIdFirst)", async ({ action, replacementIdFirst }) => {
+    const runId = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const fixture = await createFixture(runId);
+
+    try {
+      const [original] = await db.insert(binMovements).values({
+        organizationId: TEST_ORG_ID,
+        storageLocationId: fixture.quietBinId,
+        lane: "feedstock",
+        movementType: "loss",
+        massDeltaKg: -ORIGINAL_LOSS_KG,
+        occurredAt: T5_PRODUCT_STORED,
+        createdAt: T5_PRODUCT_STORED,
+        reason: "Spillage",
+      }).returning();
+      // Match the writer: insert the reversal before the replacement, sharing
+      // created_at. Exercise both UUID orders so an id tiebreaker cannot pass.
+      const lowId = `0${crypto.randomUUID().slice(1)}`;
+      const highId = `f${crypto.randomUUID().slice(1)}`;
+      const [reversal] = await db.insert(binMovements).values({
+        id: replacementIdFirst ? highId : lowId,
+        organizationId: TEST_ORG_ID,
+        storageLocationId: fixture.quietBinId,
+        lane: "feedstock",
+        movementType: "adjustment",
+        massDeltaKg: ORIGINAL_LOSS_KG,
+        occurredAt: original.occurredAt,
+        createdAt: T6_STOCK_TAKE,
+        correctsMovementId: original.id,
+        reason: "Corrected scale reading",
+      }).returning();
+      if (action === "edit") {
+        const [replacement] = await db.insert(binMovements).values({
+          id: replacementIdFirst ? lowId : highId,
+          organizationId: TEST_ORG_ID,
+          storageLocationId: fixture.quietBinId,
+          lane: "feedstock",
+          movementType: "loss",
+          massDeltaKg: -REPLACEMENT_LOSS_KG,
+          occurredAt: T5_PRODUCT_STORED,
+          createdAt: T6_STOCK_TAKE,
+          correctsMovementId: original.id,
+          reason: "Corrected scale reading",
+        }).returning();
+        expect(replacement.createdAt).toEqual(reversal.createdAt);
+        expect(replacement.postingSequence).toBeGreaterThan(reversal.postingSequence);
+      }
+
+      const { items } = await getStorageLocations(makeTestOrgContext(TEST_USER_ID), {
+        facilityId: fixture.facilityId,
+        pageSize: PAGE_SIZE,
+      });
+      expect(items.find(bin => bin.id === fixture.quietBinId)?.lastActivity).toMatchObject({
+        label: action === "edit" ? "Lost mass corrected" : "Lost mass deleted",
+        type: action === "edit" ? "out" : "in",
+        massKg: action === "edit" ? REPLACEMENT_LOSS_KG : ORIGINAL_LOSS_KG,
+      });
     } finally {
       await cleanupFixture(fixture);
     }

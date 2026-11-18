@@ -144,7 +144,6 @@ export async function getEnergyInputs(
         code: creditBatches.code,
         startDate: creditBatches.startDate,
         endDate: creditBatches.endDate,
-        status: creditBatches.status,
       })
       .from(creditBatches)
       .where(

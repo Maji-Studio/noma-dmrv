@@ -2,7 +2,7 @@ import { API_DOCUMENT_OWNERS, type ApiDocumentOwnerType } from "@/lib/documents/
 import { storageLocationTypes } from "@/schemas/storage-locations";
 import { PRODUCTION_RUN_STATUSES } from "@/lib/production-runs/lifecycle";
 import { biocharProductStatusValues } from "@/schemas/biochar-products";
-import { creditBatchSamplingChoices, creditBatchStatuses } from "@/schemas/credit-batches";
+import { creditBatchSamplingChoices } from "@/schemas/credit-batches";
 import { z } from "zod";
 import { offsetInstantSchema } from "@/schemas/event-instant";
 import { publishedJsonSchemas } from "@/schemas/published-json-schema";
@@ -76,7 +76,6 @@ export const labSampleListSchema = z.strictObject({
 export const creditBatchListSchema = z.strictObject({
   q: prefixSchema.describe("Case-insensitive literal prefix search on credit batch code."),
   ...paginationShape, facilityId: facilityIdSchema, code: codeSchema,
-  status: z.enum(creditBatchStatuses).optional().describe("Credit batch status filter."),
   sampling: z.enum(creditBatchSamplingChoices).optional().describe("Credit batch sampling filter."),
 });
 export const customerLocationListSchema = supplierLocationListSchema.extend({

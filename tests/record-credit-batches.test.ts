@@ -94,7 +94,7 @@ describe("saved record credit batches (real database)", () => {
     }))).returning();
     const runs = await db.insert(productionRuns).values(["A", "B", "C"].map((label, index) => ({
       ...org, facilityId: facility.id, reactorId: reactor.id, code: `PR-${label}-${tag}`,
-      status: "complete" as const,
+      status: "complete" as const, outputPostedAt: new Date(RUN_END.getTime() + index * RUN_SPACING_MS),
       startTime: new Date(RUN_START.getTime() + index * RUN_SPACING_MS),
       endTime: new Date(RUN_END.getTime() + index * RUN_SPACING_MS),
       biocharStorageLocationId: outputBin.id, biocharOutputKg: MASS_KG,

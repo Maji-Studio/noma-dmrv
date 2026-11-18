@@ -25,7 +25,7 @@ async function withMissedRun(
   mode: "none" | "removal" | "ghgStatement" = "none",
 ) {
   await withLineageFixture(async f => {
-    await db.update(productionRuns).set({ status: "complete", endTime: new Date("2026-06-13T12:00:00Z") })
+    await db.update(productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-06-13T12:00:00Z"), endTime: new Date("2026-06-13T12:00:00Z") })
       .where(eq(productionRuns.id, f.productionRunId));
     await withUnassignedRun(f, async runId => {
       const [batch] = await db.select().from(creditBatches).where(eq(creditBatches.id, f.batchId));

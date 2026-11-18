@@ -44,7 +44,7 @@ import { getDeliveries } from "@/data-access/deliveries";
 import { getFeedstocks } from "@/data-access/feedstocks";
 import { getOrders } from "@/data-access/orders";
 import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
-import { buildApplicationEvidenceGaps } from "@/fn/certification/application-evidence-readiness";
+import { buildApplicationEvidenceGaps } from "@/lib/certification/application-evidence-readiness";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { applications } from "@/db/schema/application";
 import { documents } from "@/db/schema/documentation";

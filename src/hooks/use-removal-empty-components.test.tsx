@@ -13,7 +13,7 @@ vi.mock("@/fn/certification/emission-zeros", () => ({
 }));
 
 import { useRemovalLanding } from "./use-removal-empty-components";
-import { certificationKeys } from "./use-certification";
+import { certificationKeys } from "./certification-query-keys";
 
 const OPEN = { removalVersion: 1, editable: true, batches: [{ creditBatchId: "b", code: "CB-1", lines: [{ componentId: "a" }], zeros: [] }] };
 const CONFIRMED = { removalVersion: 2, editable: true, batches: [{ creditBatchId: "b", code: "CB-1", lines: [], zeros: [{ id: "z", componentId: "a" }] }] };

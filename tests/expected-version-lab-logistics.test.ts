@@ -236,7 +236,7 @@ async function seedFixture(): Promise<Fixture> {
         biocharStorageLocationId: outputBin.id, biocharMoisturePercent: 0,
         biocharOutputKg: RUN_DRY_OUTPUT_KG,
         biocharDryMassKg: RUN_DRY_OUTPUT_KG,
-        status: "complete",
+        status: "complete", outputPostedAt: RUN_END,
       })
       .returning({ id: productionRuns.id });
 

@@ -16,6 +16,7 @@ const EXCLUDED: Record<string, string> = {
   "auth/login-form.tsx": "Better Auth result, not ActionError",
   "auth/reset-password-form.tsx": "Better Auth result, not ActionError",
   "auth/set-password-form.tsx": "Better Auth result, not ActionError",
+  "auth/setup-form.tsx": "Pre-account setup action; the client schema validates fields and the only server refusal is a form-level message",
   "oauth/organization-picker.tsx": "Non-RHF organization selection",
   "forms/entity-select/quick-add-dialog.tsx": "Non-RHF quick-add shell delegates to entity forms",
   "certification/new-removal-dialog/index.tsx": "Non-RHF New Removal flow uses toast results",

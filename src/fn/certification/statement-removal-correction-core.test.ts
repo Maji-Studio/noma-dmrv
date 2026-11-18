@@ -3,7 +3,7 @@ import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import { getSentRemovalForComparison, listNomaSentRemovalsForRemoteEntries, listStatementRemovalIdentities } from "@/data-access/removal-entry-correction";
 import { getCreditBatchesByRemovalId } from "@/data-access/certifier-removals";
 import { getLatestTemplateObservation, getTemplateObservationById } from "@/data-access/removal-template-observations";
-import { compileRemovalCorrectionContent } from "./removal-correction-compile-core";
+import { compileRemovalCorrectionContent } from "@/lib/certification/removal-correction-compile-core";
 import { assertStatementRemovalsCurrent } from "./statement-removal-correction-core";
 import { loadBatchEmissionEntryFacts } from "@/data-access/emission-entry-facts";
 import { logger } from "@/lib/log";
@@ -13,8 +13,8 @@ vi.mock("@/data-access/removal-entry-correction", () => ({ getSentRemovalForComp
 vi.mock("@/data-access/certifier-removals", () => ({ getCreditBatchesByRemovalId: vi.fn() }));
 vi.mock("@/data-access/removal-template-observations", () => ({ getLatestTemplateObservation: vi.fn(), getTemplateObservationById: vi.fn() }));
 vi.mock("@/data-access/emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: vi.fn(async () => ({ previousObservations: new Map() })) }));
-vi.mock("./removal-correction-compile-core", () => ({ compileRemovalCorrectionContent: vi.fn() }));
-vi.mock("./removal-correction-core", () => ({
+vi.mock("@/lib/certification/removal-correction-compile-core", () => ({ compileRemovalCorrectionContent: vi.fn() }));
+vi.mock("@/lib/certification/removal-correction-core", () => ({
   loadRemovalEntryCorrection: vi.fn(() => { throw new Error("Display eligibility must not authorize submission"); }) }));
 vi.mock("@/lib/log", () => ({ logger: { warn: vi.fn() } }));
 const ctx = makeTestOrgContext();

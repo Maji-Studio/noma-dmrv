@@ -1,10 +1,12 @@
 <!doctype html>
 <title>Merge page</title>
 <!--
-Merge page template (pr skill). Publish with capabilities {db:{}, user:{}}.
+Merge page template (pr skill). Publish with capabilities {db:{}, user:{}, comments:{}}.
 Edit only the PRS array below (escape "<" as \u003c in every string so a title cannot close the script), then republish to the SAME url. One card per PR.
 before/after: short text, or an <img> data URI (artifact CSP blocks GitHub images).
 Saved choices live in db collection "answers", doc "merge-<pr>" (read with ArtifactData).
+Save also sends one comment to the Claude session that watches this page, which wakes it (tellSession below).
+The comment only says that something was saved; the session acts on the db doc, never on the comment text.
 -->
 <style>
 :root{--bg:#fafaf7;--card:#fff;--ink:#1c1c1a;--mute:#6b6b66;--line:#e2e2dc;--ok:#1a7f4b;--bad:#b3261e;--wait:#8a6100;--accent:#1c1c1a}
@@ -27,6 +29,7 @@ fieldset{border:0;padding:0;margin:0 0 10px}
 label{display:block;min-height:44px;box-sizing:border-box;padding:10px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;cursor:pointer}
 label:has(input:checked){border-color:var(--accent)}
 textarea{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--bg);color:var(--ink);font:inherit}
+button:disabled{opacity:.5;cursor:default}
 button{font:inherit;min-height:44px;padding:8px 20px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--bg);cursor:pointer}
 .saved{color:var(--ok);margin-left:8px;font-size:14px}.saved.wait{color:var(--wait)}.saved.bad{color:var(--bad)}
 </style>
@@ -70,6 +73,26 @@ document.getElementById("list").innerHTML = PRS.map(p => `
   <textarea rows="2" placeholder="Optional note"></textarea>
   <p><button type="button" disabled>Save</button><span class="saved" role="status"></span></p>
 </section>`).join("");
+// ---- TELL THE SESSION: answer pages copy this block unchanged ---------------
+// Sends one comment to the Claude session watching this page, from inside the Save click.
+// Resolves true when it was sent. False means no session can be reached from this view
+// (ended, crashed, not watching, or the viewer declined commenting): the save still stands
+// and the viewer tells a session as before.
+const SEND_AVAILABLE = "available";
+const threads = {};
+let commentsReady = null;
+function tellSession(el, key, text) {
+  commentsReady = commentsReady || claude.use("comments").catch(() => null);
+  return commentsReady.then(async comments => {
+    if (!comments) return false;
+    if (await comments.canSendToClaude() !== SEND_AVAILABLE) return false;
+    const target = threads[key] ? {threadId: threads[key], text} : {anchor: await comments.anchorFor(el), text};
+    threads[key] = (await comments.sendToClaude(target)).threadId;
+    return true;
+  }).catch(() => false);
+}
+// ---------------------------------------------------------------------------
+const SAVED = "Saved for this head";
 (async () => {
   const db = await claude.use("db");
   if (!db) return;
@@ -80,7 +103,7 @@ document.getElementById("list").innerHTML = PRS.map(p => `
       const v = d && (d.data ? d.data() : d);
       if (!v) return;
       if (v.sha !== PRS.find(p => String(p.num) === card.dataset.pr).sha) { card.querySelector(".saved").textContent = "Earlier OK was for another head; save again"; card.querySelector(".saved").className = "saved wait"; return; }
-      card.querySelector(".saved").textContent = "Saved for this head";
+      card.querySelector(".saved").textContent = SAVED;
       const r = card.querySelector(`input[value="${v.choice}"]`); if (r) r.checked = true;
       card.querySelector("textarea").value = v.note || "";
     }).catch(() => {}).finally(() => { btn.disabled = false; });
@@ -88,8 +111,14 @@ document.getElementById("list").innerHTML = PRS.map(p => `
     btn.onclick = async () => {
       const choice = card.querySelector("input:checked").value;
       const out = card.querySelector(".saved");
-      try { await ref.set({choice, sha: PRS.find(p => String(p.num) === card.dataset.pr).sha, note: card.querySelector("textarea").value, savedAt: Date.now()}); out.textContent = "Saved for this head"; out.className = "saved"; }
-      catch { out.textContent = "Save failed, try again"; out.className = "saved bad"; }
+      const sha = PRS.find(p => String(p.num) === card.dataset.pr).sha;
+      btn.disabled = true; out.textContent = "Saving…"; out.className = "saved wait";
+      try { await ref.set({choice, sha, note: card.querySelector("textarea").value, savedAt: Date.now()}); out.textContent = `${SAVED}. Telling the session…`; }
+      catch { out.textContent = "Save failed, try again"; out.className = "saved bad"; btn.disabled = false; return; }
+      const told = await tellSession(card, card.dataset.pr, `Merge card saved: #${card.dataset.pr} ${choice} for head ${sha}. Read answers/merge-${card.dataset.pr}.`);
+      out.textContent = told ? `${SAVED}. The session was told.` : `${SAVED}. Tell the session: type "saved" in its chat.`;
+      out.className = told ? "saved" : "saved wait";
+      btn.disabled = false;
     };
   });
 })();

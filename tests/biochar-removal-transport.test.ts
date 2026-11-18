@@ -7,8 +7,8 @@ import { db } from "@/db";
 import { applicationOutputAllocations, applications, biocharProducts, creditBatchApplications, deliveries, orders, productionRuns, transportLegs } from "@/db/schema";
 import { buildMassAccounting } from "@/lib/certification/mass-accounting";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
-import { resolveScopeForRemoval } from "@/fn/certification/certify-context-core";
-import { loadTransportLegsByCategory } from "@/fn/certification/shared";
+import { resolveScopeForRemoval } from "@/lib/certification/certify-context-core";
+import { loadTransportLegsByCategory } from "@/lib/certification/shared";
 import { updateTransportLeg } from "@/data-access/transport-legs";
 
 import { previewOutputStock } from "@/data-access/output-stock-operations";
@@ -119,7 +119,7 @@ describe("Removal delivery transport", () => {
     await withLineageFixture(async (fixture) => {
       // Leave stock for a later posting while retaining the original owned slice.
       await db.update(productionRuns).set({
-        status: "complete", endTime: new Date("2026-06-13T12:00:00Z"),
+        status: "complete", outputPostedAt: new Date("2026-06-13T12:00:00Z"), endTime: new Date("2026-06-13T12:00:00Z"),
         biocharOutputKg: PRODUCT_WET_KG, biocharDryMassKg: PRODUCT_DRY_KG,
       }).where(eq(productionRuns.id, fixture.productionRunId));
       await db.update(biocharProducts).set({

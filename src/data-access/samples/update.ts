@@ -12,6 +12,7 @@ import { assertRowVersion, nextVersion } from "../row-version";
 import { requireOrgScope } from "../utils";
 import { assertCarbonReconciliation } from "./carbon-reconciliation";
 import { assertSamplingTimeNotFuture } from "./future-time";
+import { normalizeSampleRealValues } from "./normalize-values";
 import { getSampleById } from "./sample-by-id";
 import { derivedRatioColumns, batchEntryWarnings, mergeOverLocked, optionalColumns, type SampleWriteResult, type UpdateSampleRequest } from "./write-values";
 import {
@@ -36,6 +37,7 @@ export async function updateSampleInTransaction(
   options: { now?: Date; capture?: CaptureActivity } = {},
 ): Promise<SampleWriteResult> {
   requireOrgScope(ctx);
+  request = normalizeSampleRealValues(request);
   // Unlocked read for the batches to lock; the locked row below is authoritative.
   const links = await readSampleLinks(ctx, tx, sampleId);
   if (!links) throw sampleNotFound();

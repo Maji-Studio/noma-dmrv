@@ -38,7 +38,7 @@ import {
   supplierRefLookup,
   type PerformRegistryCreateArgs,
   type ReconcileLookup,
-} from "@/fn/certification/registry-create";
+} from "@/lib/certification/registry-create";
 
 const USER_ID = "user-test-1";
 const ENTITY_ID = "rem-test-1";

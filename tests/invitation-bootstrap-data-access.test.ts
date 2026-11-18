@@ -1,8 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SafeError } from "@/lib/errors";
+import { InvitationAccountExistsError } from "@/data-access/invitation-bootstrap-errors";
+import { INVITATION_SET_PASSWORD_RATE_LIMIT } from "@/config/auth";
 
 const mockSelect = vi.fn();
-const mockCreateOAuthUser = vi.fn();
+const mockCreateUser = vi.fn();
+const mockConsumeRateLimit = vi.fn();
+const mockRefundRateLimit = vi.fn();
+
+vi.mock("@/data-access/api-rate-limits", () => ({
+  consumeRateLimit: (...args: unknown[]) => mockConsumeRateLimit(...args),
+  refundRateLimit: (...args: unknown[]) => mockRefundRateLimit(...args),
+}));
 
 vi.mock("@/db", () => ({
   db: {
@@ -14,18 +23,19 @@ vi.mock("@/lib/auth/better-auth", () => ({
   auth: {
     $context: Promise.resolve({
       internalAdapter: {
-        createOAuthUser: (...args: unknown[]) => mockCreateOAuthUser(...args),
+        createUser: (...args: unknown[]) => mockCreateUser(...args),
       },
     }),
   },
 }));
 
-import { createInvitedAccount } from "@/data-access/invitation-bootstrap";
+import { createInvitedAccount, getInvitationBootstrapState, consumeInvitationSetPasswordRateLimit } from "@/data-access/invitation-bootstrap";
 
 const INVITATION_ID = "invitation-123";
 const ORGANIZATION_ID = "organization-123";
 const USER_ID = "user-123";
-const PASSWORD_HASH = "password-hash";
+const DEBIT_REFILLED_AT = "2026-10-08 12:00:00.123456+00";
+const DEBIT_TOKENS = 0;
 
 function queueSelectResults(...results: unknown[][]) {
   for (const result of results) {
@@ -33,7 +43,7 @@ function queueSelectResults(...results: unknown[][]) {
       from: () => ({
         where: () => ({
           limit: vi.fn().mockResolvedValue(result),
-        }),
+      }),
       }),
     }));
   }
@@ -52,32 +62,26 @@ function validInvitation() {
 describe("createInvitedAccount", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCreateOAuthUser.mockResolvedValue({
-      user: { id: USER_ID },
-      account: { id: "account-123" },
+    mockCreateUser.mockResolvedValue({
+      id: USER_ID,
     });
   });
 
-  it("re-checks the invitation and creates the credential through Better Auth", async () => {
+  it("creates an unverified invited user without a credential account", async () => {
     queueSelectResults([validInvitation()], []);
 
     const result = await createInvitedAccount({
       invitationId: INVITATION_ID,
       name: "Invitee",
-      passwordHash: PASSWORD_HASH,
     });
 
-    expect(mockCreateOAuthUser).toHaveBeenCalledWith(
+    expect(mockCreateUser).toHaveBeenCalledWith(
       {
         email: "invitee@example.com",
         name: "Invitee",
-        emailVerified: true,
+        emailVerified: false,
       },
-      {
-        accountId: "invitee@example.com",
-        providerId: "credential",
-        password: PASSWORD_HASH,
-      },
+      { method: "invitation" },
     );
     expect(result).toEqual({
       userId: USER_ID,
@@ -93,14 +97,9 @@ describe("createInvitedAccount", () => {
       createInvitedAccount({
         invitationId: INVITATION_ID,
         name: "Invitee",
-        passwordHash: PASSWORD_HASH,
       })
-    ).rejects.toEqual(
-      new SafeError(
-        "An account already exists for this invitation. Sign in instead."
-      )
-    );
-    expect(mockCreateOAuthUser).not.toHaveBeenCalled();
+    ).rejects.toEqual(new InvitationAccountExistsError());
+    expect(mockCreateUser).not.toHaveBeenCalled();
   });
 
   it("rejects an expired invitation during the creation re-check", async () => {
@@ -112,19 +111,18 @@ describe("createInvitedAccount", () => {
       createInvitedAccount({
         invitationId: INVITATION_ID,
         name: "Invitee",
-        passwordHash: PASSWORD_HASH,
       })
     ).rejects.toEqual(
       new SafeError(
         "This invitation is invalid, expired, or already used. Ask an Admin for a new invitation.",
       )
     );
-    expect(mockCreateOAuthUser).not.toHaveBeenCalled();
+    expect(mockCreateUser).not.toHaveBeenCalled();
   });
 
   it("maps a concurrent normalized-email insert to existing-user behavior", async () => {
     queueSelectResults([validInvitation()], []);
-    mockCreateOAuthUser.mockRejectedValue({
+    mockCreateUser.mockRejectedValue({
       code: "23505",
       constraint: "users_email_unique",
     });
@@ -133,12 +131,48 @@ describe("createInvitedAccount", () => {
       createInvitedAccount({
         invitationId: INVITATION_ID,
         name: "Invitee",
-        passwordHash: PASSWORD_HASH,
       })
-    ).rejects.toEqual(
-      new SafeError(
-        "An account already exists for this invitation. Sign in instead."
-      )
-    );
+    ).rejects.toEqual(new InvitationAccountExistsError());
+  });
+});
+
+
+describe("invitation account state", () => {
+  it.each([
+    [[], "none"],
+    [[{ id: USER_ID, emailVerified: false }], "pending"],
+    [[{ id: USER_ID, emailVerified: true }], "confirmed"],
+  ] as const)("returns %j as %s", async (rows, account) => {
+    queueSelectResults([validInvitation()], [...rows]);
+    expect(await getInvitationBootstrapState(INVITATION_ID)).toMatchObject({ account });
+  });
+  it("consumes the password setup bucket for the invited user", async () => {
+    queueSelectResults([validInvitation()], [{ id: USER_ID, emailVerified: false }]);
+    mockConsumeRateLimit.mockResolvedValue({ allowed: true, debitRefilledAt: DEBIT_REFILLED_AT, debitTokens: DEBIT_TOKENS });
+    const reservation = await consumeInvitationSetPasswordRateLimit(INVITATION_ID);
+    const bucket = {
+      key: `invitation-set-password:${USER_ID}`,
+      ...INVITATION_SET_PASSWORD_RATE_LIMIT,
+    };
+    expect(mockConsumeRateLimit).toHaveBeenCalledExactlyOnceWith(bucket);
+    expect(reservation).not.toBe(false);
+    if (!reservation) throw new Error("Expected a password setup reservation.");
+    const readsBeforeRefund = mockSelect.mock.calls.length;
+    await reservation.refund();
+    expect(mockRefundRateLimit).toHaveBeenCalledExactlyOnceWith(bucket, { refilledAt: DEBIT_REFILLED_AT, tokens: DEBIT_TOKENS });
+    expect(mockSelect).toHaveBeenCalledTimes(readsBeforeRefund);
+  });
+  it("returns no refund handle when the cooldown refuses a debit", async () => {
+    queueSelectResults([validInvitation()], [{ id: USER_ID, emailVerified: false }]);
+    mockConsumeRateLimit.mockResolvedValue({ allowed: false });
+    mockRefundRateLimit.mockClear();
+    expect(await consumeInvitationSetPasswordRateLimit(INVITATION_ID)).toBe(false);
+    expect(mockRefundRateLimit).not.toHaveBeenCalled();
+  });
+  it("does not allow sending for an invited address without a user", async () => {
+    queueSelectResults([validInvitation()], []);
+    mockConsumeRateLimit.mockClear();
+    expect(await consumeInvitationSetPasswordRateLimit(INVITATION_ID)).toBe(false);
+    expect(mockConsumeRateLimit).not.toHaveBeenCalled();
   });
 });

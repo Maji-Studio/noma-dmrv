@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
-import { certificationKeys } from "./use-certification";
+import { certificationKeys } from "./certification-query-keys";
 import { productionRunKeys } from "./use-production-runs";
 import { sampleKeys } from "./use-samples";
 import {

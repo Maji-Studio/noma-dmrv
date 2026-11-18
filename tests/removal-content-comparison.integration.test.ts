@@ -1,7 +1,8 @@
-import { normalizeCarriedEntriesForHash } from "@/fn/certification/removal-entry-hash";
-import * as contextBuilder from "@/fn/certification/removal-context-build";
-import { generatedEvidenceFacts } from "@/fn/certification/generated-evidence-facts";
-import { loadRemovalCarriedEntries } from "@/data-access/removal-carried-entries";
+import { ENTRY_FILE_MISSING_INSTRUCTION } from "@/lib/certification/emission-entry-messages";
+import { normalizeCarriedEntriesForHash } from "@/lib/certification/removal-entry-hash";
+import * as contextBuilder from "@/lib/certification/removal-context-build";
+import { generatedEvidenceFacts } from "@/lib/certification/generated-evidence-facts";
+import { loadRemovalCarriedEntries } from "@/lib/certification/removal-carried-entries";
 /**
  * Real-DB regression for the one Removal comparison. The "sent" baseline is the
  * semantic payload the REAL compile produced from the sent entries, stored as the
@@ -29,19 +30,19 @@ import { insertDocument } from "@/data-access/documents";
 import { recordEmissionZeros } from "@/data-access/emission-zeros";
 import { createEmissionEntry } from "@/data-access/emission-entries";
 import { withGhgVerifierSubmissionLock } from "@/data-access/ghg-verifier-submission-lock";
-import * as sources from "@/fn/certification/source-candidates";
+import * as sources from "@/lib/certification/source-candidates";
 import { emissionEntrySourceCandidates } from "@/lib/certification/emission-entry-source-bindings";
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations";
-import { loadRemovalEntryCorrection } from "@/fn/certification/removal-correction-core";
-import { compareRemovalCurrentContent } from "@/fn/certification/removal-content-comparison-core";
-import { compileRemovalCorrectionContent } from "@/fn/certification/removal-correction-compile-core";
+import { loadRemovalEntryCorrection } from "@/lib/certification/removal-correction-core";
+import { compareRemovalCurrentContent } from "@/lib/certification/removal-content-comparison-core";
+import { compileRemovalCorrectionContent } from "@/lib/certification/removal-correction-compile-core";
 import { assertStatementRemovalsCurrent } from "@/fn/certification/statement-removal-correction-core";
 
 const { ORIGINAL_EXTERNAL_ID } = vi.hoisted(() => ({ ORIGINAL_EXTERNAL_ID: `original-${crypto.randomUUID()}` }));
 
 // Same registry/Source edge the other DB-backed submission tests stub. Everything else is real.
-vi.mock("@/fn/certification/source-candidates", async original => ({
-  ...await original<typeof import("@/fn/certification/source-candidates")>(),
+vi.mock("@/lib/certification/source-candidates", async original => ({
+  ...await original<typeof import("@/lib/certification/source-candidates")>(),
   collectCandidateSourceDocumentsForRemoval: vi.fn(),
   resolveSourceBindingCandidates: vi.fn(),
 }));
@@ -181,10 +182,10 @@ it("says unavailable everywhere when a blocker stops the compile, and the guard 
 
   const comparison = await compareRemovalCurrentContent(org, f.removalId);
   expect(comparison).toMatchObject({ kind: "unavailable", reason: "compile_refused",
-    unavailableMessages: ["Add a file for each emissions entry with a value."],
+    unavailableMessages: [ENTRY_FILE_MISSING_INSTRUCTION],
     state: { comparison: "unavailable", message: NOTICE_UNAVAILABLE } });
   expect(await loadRemovalEntryCorrection(org, f.removalId)).toMatchObject({ comparison: "unavailable", message: NOTICE_UNAVAILABLE,
-    unavailableMessages: ["Add a file for each emissions entry with a value."] });
+    unavailableMessages: [ENTRY_FILE_MISSING_INSTRUCTION] });
   await expect(guard()).rejects.toThrow(/noma could not compare Removal .* with what it sent/);
 });
 

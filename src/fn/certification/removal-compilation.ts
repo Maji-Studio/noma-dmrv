@@ -1,5 +1,7 @@
 "use server";
 
+import { getSentRemovalForComparison } from "@/data-access/removal-entry-correction";
+import { buildRemovalResendComparison, type RemovalResendComparison } from "@/lib/certification/removal-resend-comparison";
 import { getCertifierRemovalById } from "@/data-access/certifier-removals";
 import { getCo2eStoredPreviews } from "@/data-access/credit-batch-accounting";
 import { requireOrgFacility } from "@/data-access/utils";
@@ -7,19 +9,20 @@ import { logger } from "@/lib/log";
 import { SafeError } from "@/lib/errors";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
-import { loadRemovalSubmissionContext } from "./certify-context-core";
+import { loadRemovalSubmissionContext } from "@/lib/certification/certify-context-core";
 import {
   compileRemovalSubmission,
   REMOVAL_COMPILATION_FAILED_MESSAGE,
   type CompiledRemovalSubmission,
   type RemovalSubmissionReview,
-} from "./removal-submission-build";
+} from "@/lib/certification/removal-submission-build";
 import { evaluateRemovalBlockers } from "./removal-blockers-gate";
 import { legacyBlocker, type RemovalAdvisory, type RemovalBlocker } from "@/lib/certification/removal-blockers";
-import { prepareRemovalSubmission } from "./removal-submission-prepare";
+import { prepareRemovalSubmission } from "@/lib/certification/removal-submission-prepare";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 
 export interface RemovalCompilationView {
+  resendComparison?: RemovalResendComparison | null;
   /** Null when preparation is blocked before anything could be compiled. */
   review: RemovalSubmissionReview | null;
   blockers: string[];
@@ -45,6 +48,7 @@ export async function loadRemovalCompilation(
     }
 
     const ctx = await loadRemovalSubmissionContext(orgCtx, removalId, { refreshEnrichment: true });
+    const previous = await getSentRemovalForComparison(orgCtx, removalId);
     const preparation = prepareRemovalSubmission(ctx);
     let removalBlockers: RemovalBlocker[];
     try {
@@ -60,6 +64,7 @@ export async function loadRemovalCompilation(
     const blockers = removalBlockers.map((blocker) => blocker.message);
     if (!preparation.prepared) {
       return {
+        resendComparison: buildRemovalResendComparison(previous, null),
         review: null,
         blockers,
         removalBlockers,
@@ -105,6 +110,7 @@ export async function loadRemovalCompilation(
     ];
 
     return {
+      resendComparison: buildRemovalResendComparison(previous, compiled.snapshot?.semanticPayload),
       review: compiled.review,
       blockers,
       removalBlockers,

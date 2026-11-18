@@ -14,7 +14,7 @@ import {
 import { MISSING_PRODUCTION_RUN_TITLE, READ_ONLY_MISSING_PRODUCTION_RUN_TITLE, openItemText, type CreditBatchOpenItem } from "./open-items";
 
 type Removal = CreditBatchPageModel["removals"][number];
-type Statement = NonNullable<CreditBatchPageModel["milestones"]["ghgStatement"]>;
+type Statement = CreditBatchPageModel["milestones"]["ghgStatements"][number];
 
 const DRAFT_STATUS: DerivedStatus = { kind: "not-submitted", value: "draft", label: "Not submitted", isActionable: true, isTerminal: false };
 const SUBMITTED_STATUS: DerivedStatus = { kind: "submitted", value: "running", label: "Submitted", isActionable: false, isTerminal: true };
@@ -41,6 +41,7 @@ function statement(kind: Statement["status"]["kind"], overrides: Partial<Stateme
   const status: Statement["status"] = { kind, value: "pending", label: STATEMENT_LABELS[kind] ?? kind, isActionable: false, isTerminal: false };
   return {
     id: "statement",
+    dryKg: 800,
     reportingPeriodStartOn: "2026-07-01",
     reportingPeriodEndOn: "2026-09-30",
     hasMissingPeriod: false,
@@ -69,7 +70,7 @@ function model(overrides: { removals?: Removal[]; mass?: Partial<CreditBatchPage
     milestones: {
       firstRemovalSubmittedAt: null,
       firstRemovalSubmittedCode: null,
-      ghgStatement: null,
+      ghgStatements: [],
       ...overrides.milestones,
     },
   };
@@ -97,7 +98,7 @@ describe("creditBatchMilestones", () => {
         mass: { inSubmittedDryKg: 800 },
         milestones: {
           firstRemovalSubmittedAt: at, firstRemovalSubmittedCode: "RM-26-001",
-          ghgStatement: statement("issued", { creditsIssuedAt: at.toISOString() }),
+          ghgStatements: [statement("issued", { creditsIssuedAt: at.toISOString() })],
         },
       }),
     });
@@ -144,7 +145,7 @@ describe("creditBatchMilestones", () => {
       pageModel: model({
         removals: [removal({ phase: "submitted", status: SUBMITTED_STATUS, submittedAt, dryKg: 800 })],
         mass: { inSubmittedDryKg: 800, notInRemovalDryKg: 0 },
-        milestones: { firstRemovalSubmittedAt: submittedAt, firstRemovalSubmittedCode: "RM-26-001", ghgStatement: statement("verified") },
+        milestones: { firstRemovalSubmittedAt: submittedAt, firstRemovalSubmittedCode: "RM-26-001", ghgStatements: [statement("verified")] },
       }),
     });
     expect(steps[1].caption).toBe("RM-26-001, Oct 12, 2026");
@@ -154,11 +155,66 @@ describe("creditBatchMilestones", () => {
 
   it("dates issued credits and marks failed verification", () => {
     const base = { firstRemovalSubmittedAt: new Date("2026-10-12T00:00:00Z"), firstRemovalSubmittedCode: "RM-26-001" };
-    const issued = creditBatchMilestones({ timeZone: UNKNOWN_FACILITY_TIMEZONE, blockingCount: 0, openCount: 0, pageModel: model({ milestones: { ...base, ghgStatement: statement("issued", { creditsIssuedAt: "2026-11-03" }) } }) });
+    const issued = creditBatchMilestones({ timeZone: UNKNOWN_FACILITY_TIMEZONE, blockingCount: 0, openCount: 0, pageModel: model({ milestones: { ...base, ghgStatements: [statement("issued", { creditsIssuedAt: "2026-11-03" })] } }) });
     expect(issued.map((step) => step.state)).toEqual(["done", "done", "done", "done"]);
     expect(issued[3].caption).toBe("Nov 3, 2026");
-    const failed = creditBatchMilestones({ timeZone: UNKNOWN_FACILITY_TIMEZONE, blockingCount: 0, openCount: 0, pageModel: model({ milestones: { ...base, ghgStatement: statement("verification-failed") } }) });
+    const failed = creditBatchMilestones({ timeZone: UNKNOWN_FACILITY_TIMEZONE, blockingCount: 0, openCount: 0, pageModel: model({ milestones: { ...base, ghgStatements: [statement("verification-failed")] } }) });
     expect(failed[2]).toMatchObject({ state: "failed", caption: "Verification failed" });
+  });
+
+  it.each([
+    { kinds: ["issued", "in-verification"], verified: "0.30 t of 0.80 t", issued: "0.30 t of 0.80 t" },
+    { kinds: ["verified", "in-verification"], verified: "0.30 t of 0.80 t", issued: null },
+    { kinds: ["verified", "issued"], verified: null, issued: "0.50 t of 0.80 t" },
+  ] as const)("shows partial shares for $kinds", ({ kinds, verified, issued }) => {
+    const steps = creditBatchMilestones({ timeZone: "UTC", blockingCount: 0, openCount: 0, pageModel: model({
+      milestones: {
+        firstRemovalSubmittedAt: new Date("2026-10-12T00:00:00Z"),
+        ghgStatements: [statement(kinds[0], { dryKg: 300 }), statement(kinds[1], { id: "other", dryKg: 500 })],
+      },
+    }) });
+    expect(steps[2]).toMatchObject({ state: "done", caption: verified });
+    expect(steps[3]).toMatchObject({ state: kinds.some(kind => kind === "issued") ? "done" : "current", caption: issued });
+  });
+
+  it("lets failed verification win over issued, even while another step blocks", () => {
+    const pageModel = model({ milestones: { ghgStatements: [statement("issued"), statement("verification-failed", { id: "failed" })] } });
+    const steps = creditBatchMilestones({ timeZone: "UTC", blockingCount: 1, openCount: 1, pageModel });
+    expect(steps[2]).toMatchObject({ state: "failed", caption: "Verification failed" });
+    expect(steps[3].state).toBe("done");
+  });
+
+  it("uses the newest caption kind when no statement is verified or issued", () => {
+    const pageModel = model({ milestones: {
+      firstRemovalSubmittedAt: new Date("2026-10-12T00:00:00Z"),
+      ghgStatements: [statement("draft"), statement("pending-changes", { id: "pending", status: { ...DRAFT_STATUS, kind: "pending-changes", label: "Pending changes" } }), statement("in-verification", { id: "older" })],
+    } });
+    expect(creditBatchMilestones({ timeZone: "UTC", blockingCount: 0, openCount: 0, pageModel })[2])
+      .toMatchObject({ state: "current", caption: "Pending changes" });
+  });
+
+  it("uses the latest issuance instant across issued statements, regardless of period order", () => {
+    const steps = creditBatchMilestones({ timeZone: "Africa/Dar_es_Salaam", blockingCount: 0, openCount: 0, pageModel: model({
+      milestones: { ghgStatements: [
+        statement("issued", { dryKg: 300, creditsIssuedAt: "2026-11-02T22:00:00Z" }),
+        statement("issued", { id: "older", dryKg: 500, creditsIssuedAt: "2026-11-03T22:00:00Z" }),
+      ] },
+    }) });
+    expect(steps[2]).toMatchObject({ state: "done", caption: null });
+    expect(steps[3]).toMatchObject({ state: "done", caption: "Nov 4, 2026" });
+  });
+
+  it.each([
+    { appliedDryKg: 800, dryKg: 799.999, partial: false },
+    { appliedDryKg: 800, dryKg: 799.998, partial: true },
+    { appliedDryKg: 240, dryKg: 239.999, partial: false },
+  ])("respects the same-mass tolerance at $dryKg kg", ({ appliedDryKg, dryKg, partial }) => {
+    const steps = creditBatchMilestones({ timeZone: "UTC", blockingCount: 0, openCount: 0, pageModel: model({
+      mass: { appliedDryKg },
+      milestones: { ghgStatements: [statement("issued", { dryKg, creditsIssuedAt: "2026-11-03" })] },
+    }) });
+    expect(steps[2].caption).toBe(partial ? "0.80 t of 0.80 t" : null);
+    expect(steps[3].caption).toBe(partial ? "0.80 t of 0.80 t" : "Nov 3, 2026");
   });
 
   it("names the data step without a verdict while the health loads or failed", () => {

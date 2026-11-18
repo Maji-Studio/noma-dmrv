@@ -59,11 +59,9 @@ Keep the two hook kinds distinct: **UI-state** hooks (search, filters, local
 selection) sit with the feature, while **server-data** hooks belong in
 `src/hooks/` and are the only ones that touch React Query.
 
-## The Marketing Site Is Its Own Package
+## Marketing Site
 
-`site/` (Astro) is a standalone pnpm package with its own lockfile, not part of
-the root workspace, and its files follow its own conventions. See
-[site.md](./site.md) before adding anything there.
+The marketing site lives in the private [Maji-Studio/noma-site](https://github.com/Maji-Studio/noma-site) repo.
 
 ## Documentation Hygiene
 

@@ -32,7 +32,6 @@ vi.mock("@/hooks/use-facility-context", () => ({
   }),
 }));
 vi.mock("@/hooks/use-certification", () => ({
-  certificationKeys: { all: ["certification"] },
   useFacilityCertifierSummary: () => ({
     data: { mapping: state.summaryMapping, viewerCanManage: true, isProduction: false },
     isLoading: false,

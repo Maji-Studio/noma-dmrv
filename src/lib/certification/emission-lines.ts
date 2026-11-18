@@ -1,19 +1,19 @@
-import { EMPTY_REMOVAL_LINE } from "@/lib/certification/emission-entry-messages";
+import { LINE_FILE_MISSING_INSTRUCTION, EMPTY_REMOVAL_LINE, REENTER_EMISSION_ENTRY, ENTRY_FILE_MISSING_INSTRUCTION } from "@/lib/certification/emission-entry-messages";
 import { DomainError } from "@/lib/domain-errors";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
 import type { AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
+import { effectiveFilePolicy, recordsNeedFile, type FilePolicy } from "@/lib/isometric/template-observations/file-policies";
 import { effectiveContract, validateLineSources, type LineSources, type LineSourceProblem } from "@/lib/isometric/template-observations/line-sources";
 import type { TemplateDefinition } from "@/lib/isometric/template-observations/types";
 import { canonicalDecimal } from "@/lib/isometric/template-observations/units";
 import type { EntryCarryDisposition, EntryCarryDestination, EntryRevisionDestination } from "./emission-entry-carry";
+import { entryFileMissing } from "./emission-entry-evidence";
 import { emissionLineBindingDecision } from "./emission-line-binding";
 import type { BlockerCopy } from "./removal-template-blockers";
 import type { RemovalBlocker } from "./removal-blockers";
 
 const UNIT_MISMATCH_COPY = { detail: "Emissions values use different units.", instruction: "Use the same unit before adding them." };
 const UNIT_MISMATCH_MESSAGE = `${UNIT_MISMATCH_COPY.detail} ${UNIT_MISMATCH_COPY.instruction}`;
-const REENTER_EMISSION_ENTRY = "Enter the values again for the current template component.";
-const MISSING_EVIDENCE_INSTRUCTION = "Add a file for each emissions entry with a value.";
 
 export const EMISSION_LINE_STATE_LABELS = {
   filled: "Recorded", empty: "Not recorded", missingEvidence: "File missing",
@@ -51,6 +51,7 @@ export interface EmissionLineEntryFact {
   occurredOn?: string;
   documentCount?: number;
   componentId: string; kind: "value" | "zero"; hasEvidence: boolean;
+  isZero?: boolean;
   confirmedForRemovalId?: string | null;
   total: EmissionFigure | null; counts: boolean; reason?: string | null; unitMismatch?: boolean;
 }
@@ -58,6 +59,9 @@ export interface BatchEmissionLineFacts {
   definition: TemplateDefinition; lineSources: LineSources; problems: readonly LineSourceProblem[];
   enrichmentComplete: boolean;
   entriesCanSubmit?: boolean;
+  recordsFileLocked?: boolean;
+  recordsFileReplaceable?: boolean;
+  lineFiles?: readonly { anchor: { id: string; componentId: string; version: number; retiredAt?: Date | null }; documents: { id: string; fileName: string; version: number }[] }[];
   automaticFigures: Partial<Record<AutomaticSourceId, EmissionFigure | null>>;
   /** The batches counting this batch's linked feedstock transport, when every leg is owned elsewhere. */
   feedstockTransportCountedOn?: readonly CountedOnBatch[];
@@ -95,11 +99,12 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
   return facts.definition.groups.flatMap((group, groupIndex) => group.components.map((component, componentIndex) => {
     const stored = ownValue(facts.lineSources, component.id);
     const contract = stored ? effectiveContract(stored) : undefined;
+    const filePolicy: FilePolicy = contract ? effectiveFilePolicy(contract) : "entryFiles";
     const decision = emissionLineBindingDecision({ component, groupKey: group.key, contract: stored, problems, enrichmentComplete: facts.enrichmentComplete, entriesCanSubmit: facts.entriesCanSubmit });
     const entries = facts.entries.filter((entry) => entry.componentId === component.id);
     const counting = entries.filter((entry) => entry.counts);
     const values = counting.filter((entry) => entry.kind === "value");
-    const automaticFigure = contract?.automaticSource ? ownValue(facts.automaticFigures, contract.automaticSource) ?? null : null;
+    const automaticFigure = contract?.automaticSource && !facts.omittedAutomaticSources?.includes(contract.automaticSource) ? ownValue(facts.automaticFigures, contract.automaticSource) ?? null : null;
     const calculatedByIsometric = contract?.automaticSource === "sequestration" && (facts.automaticRecordCounts?.sequestration ?? 0) > 0;
     const records: EmissionLineRecords | null = contract?.automaticSource ? {
       source: RECORD_SOURCES[contract.automaticSource],
@@ -112,9 +117,16 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     let state: EmissionLineState;
     let blocker: (RemovalBlocker & { copy?: BlockerCopy }) | undefined = decision?.blocker;
     if (decision && decision.state !== "empty") { state = decision.state; blocker = decision.blocker; }
-    else if (values.some((entry) => !entry.hasEvidence)) {
+    else if (values.some((entry) => entryFileMissing(filePolicy, entry))) {
       state = "missingEvidence";
-      blocker = { code: "entryMissingEvidence", message: MISSING_EVIDENCE_INSTRUCTION, copy: { instruction: MISSING_EVIDENCE_INSTRUCTION }, fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+      blocker = { code: "entryMissingEvidence", message: ENTRY_FILE_MISSING_INSTRUCTION, copy: { instruction: ENTRY_FILE_MISSING_INSTRUCTION }, fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+    } else if (recordsNeedFile(filePolicy, automaticFigure?.magnitude ?? "0") &&
+      !facts.recordsFileLocked &&
+      !facts.lineFiles?.some(({ anchor, documents }) => !anchor.retiredAt && anchor.componentId === component.id && documents.length > 0)) {
+      state = "missingEvidence";
+      const instruction = LINE_FILE_MISSING_INSTRUCTION;
+      blocker = { code: "lineMissingEvidence", message: instruction, copy: { instruction }, fixTarget: "emissions",
+        lineRef: { componentId: component.id, displayName: component.displayName } };
     } else if (automaticFigure || values.length) state = "filled";
     else if (counting.some((entry) => entry.kind === "zero")) state = "confirmedZero";
     // Display completeness only: preserve the binding decision's submission blocker.
@@ -140,12 +152,17 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
       blocker = { code: "lineNeedsReview", message: stale.reason ?? REENTER_EMISSION_ENTRY, ...(stale.reason == null ? { copy: { instruction: REENTER_EMISSION_ENTRY } } : {}), fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     }
     const total = unitMismatch || values.some((entry) => entry.total === null) ? null : sumFigures(figures);
+    // The files of the From records amount, for the review's file counts: only when that amount is sent with a file
+    // (not claimed by another Removal, not 0), the same rule as deriveLineFileEvidence.
+    const lineFileDocuments = recordsNeedFile(filePolicy, automaticFigure?.magnitude ?? "0")
+      ? (facts.lineFiles ?? []).filter(({ anchor }) => !anchor.retiredAt && anchor.componentId === component.id).flatMap(({ documents }) => documents.map(({ id, fileName }) => ({ id, fileName })))
+      : [];
     return { componentId: component.id, displayName: component.displayName, groupKey: group.key,
       groupName: group.displayName,
       groupPosition: stored?.templateOrder?.groupPosition ?? fallbackGroupOffset + groupIndex,
       position: stored?.templateOrder?.position ?? componentIndex,
       blueprintKey: component.blueprintKey, description: component.description,
-      entryPolicy: contract?.entryPolicy ?? "none", records, contract, state, automaticFigure, entries, total, ...(blocker ? { blocker } : {}) };
+      entryPolicy: contract?.entryPolicy ?? "none", filePolicy, ...(lineFileDocuments.length ? { lineFileDocuments } : {}), records, contract, state, automaticFigure, entries, total, ...(blocker ? { blocker } : {}) };
   })).sort((a, b) => a.groupPosition - b.groupPosition || a.position - b.position);
 }
 export type BatchEmissionLine = ReturnType<typeof deriveBatchEmissionLines>[number];

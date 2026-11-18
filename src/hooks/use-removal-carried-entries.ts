@@ -2,7 +2,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRemovalCarriedEntriesFn } from "@/fn/certification/removal-carried-entries";
 import { unwrap } from "@/hooks/types";
-import { certificationKeys } from "./use-certification";
+import { certificationKeys } from "./certification-query-keys";
 
 /** Frozen carries and live late entries for the Removal revision. */
 export function useRemovalCarriedEntries(removalId: string | null, options: { enabled?: boolean } = {}) {

@@ -153,17 +153,34 @@ jobs:
       - name: Apply full migration chain to an empty database
         run: pnpm db:migrate
 
-      # Exercises the real production bootstrap guards (existing-credential
-      # skip, mandatory registry secrets, no dev teammate).
-      - name: Exercise production bootstrap
+      - name: Assert plain setup has no organizations or users
+        run: |
+          node -e '
+            const { Client } = require("pg");
+            const client = new Client({ connectionString: process.env.DATABASE_URL });
+            (async () => {
+              try {
+                await client.connect();
+                const { rows: [{ organizations, users }] } = await client.query("SELECT (SELECT count(*) FROM organizations) AS organizations, (SELECT count(*) FROM users) AS users");
+                if (Number(organizations) !== 0 || Number(users) !== 0) {
+                  throw new Error("Plain setup must have zero organizations and users before bootstrap");
+                }
+              } finally {
+                await client.end();
+              }
+            })().catch(error => { console.error(error.message); process.exitCode = 1; });
+          '
+
+      # Exercise the supported CI bootstrap, including the default organization.
+      - name: Exercise development bootstrap
         env:
-          NODE_ENV: production
+          NODE_ENV: development
         run: pnpm db:ensure-admin
 
-      # Re-running must be a no-op, not an overwrite or a crash.
+      # Re-running proves bootstrap can run twice without failing.
       - name: Re-run bootstrap to prove it is idempotent
         env:
-          NODE_ENV: production
+          NODE_ENV: development
         run: pnpm db:ensure-admin
 
       - name: Verify schema

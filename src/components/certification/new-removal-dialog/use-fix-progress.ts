@@ -19,10 +19,12 @@ export interface FixEntry {
  * Open items plus the ones fixed since the step opened, in the order first seen.
  * `holdNew` is true while part of the review is being read again (the build after a fix): what is shown
  * may then be older than the readiness beside it, so it must not introduce an item. A stale refusal
- * would otherwise show as a new row, and be counted as fixed once the fresh read drops it.
+ * would otherwise show as a new row, and be counted as fixed once the fresh read drops it. The same holds for
+ * the first items: read before the first build lands, a check may move into a blocked row once it does, and
+ * would be counted as fixed without the operator doing anything, so nothing is seeded while `holdNew`.
  */
 export function useFixProgress(items: readonly ReviewItem[], holdNew = false): FixEntry[] {
-  const [seen, setSeen] = useState<readonly ReviewItem[]>(items);
+  const [seen, setSeen] = useState<readonly ReviewItem[]>(holdNew ? [] : items);
   const unseen = holdNew ? [] : items.filter((item) => !seen.some((known) => known.id === item.id));
   // Derived state: the list can only grow here, so this settles in one more render.
   if (unseen.length > 0) setSeen([...seen, ...unseen]);

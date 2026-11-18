@@ -4,6 +4,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { SubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
+import { CONTEXT, findButton, findLink } from "./submit-step-test-helpers";
 import { SubmitStep } from "./submit-step";
 
 const state = vi.hoisted(() => ({
@@ -12,7 +13,7 @@ const state = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
   discardMutate: vi.fn(),
   discardReset: vi.fn(),
-  attempts: [] as Array<{ errorMessage: string | null; outcome: { kind: string } }>,
+  attempts: [] as Array<{ id: string; errorMessage: string | null; outcome: { kind: string } }>,
   deleteAccess: {
     viewerCanDeleteRegistryRemovals: true as boolean | null,
     hasRegisteredProductionBatches: false as boolean | null,
@@ -79,8 +80,11 @@ vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityClock: () => ({ timeZone: "Africa/Dar_es_Salaam", hint: "" }),
 }));
 
-vi.mock("../submission-outcome-notice", () => ({
-  SubmissionOutcomeNotice: ({ outcome }: { outcome: { kind: string } }) => <div>{`Outcome notice: ${outcome.kind}`}</div>,
+vi.mock("../submission-outcome-notice", async (importOriginal) => ({
+  deleteAccessFor: (await importOriginal<typeof import("../submission-outcome-notice")>()).deleteAccessFor,
+  SubmissionOutcomeNotice: ({ outcome, deleteAccess }: { outcome: { kind: string }; deleteAccess?: string }) => (
+    <div>{`Outcome notice: ${outcome.kind}${deleteAccess ? ` (${deleteAccess})` : ""}`}</div>
+  ),
 }));
 
 vi.mock("@/hooks/use-certification", () => ({
@@ -152,33 +156,6 @@ vi.mock("./debug-drawer", () => ({
 vi.mock("../submit-confirm-dialog", () => ({
   SubmitConfirmDialog: () => null,
 }));
-
-const CONTEXT = {
-  isProduction: false,
-  latestSubmission: null,
-  linkedGhgStatement: null,
-  mapping: null,
-  emissionsLedger: {
-    inputs: [],
-    inputsUnavailable: true,
-    claims: [],
-    creditBatches: [],
-    productionRuns: [],
-    applications: [],
-  },
-} as unknown as RemovalCertifyContext;
-
-function findButton(renderer: ReactTestRenderer, label: string) {
-  return renderer.root
-    .findAllByType("button")
-    .find((button) => button.props.children === label);
-}
-
-function findLink(renderer: ReactTestRenderer, label: string) {
-  return renderer.root
-    .findAllByType("a")
-    .find((link) => link.props.children?.[0] === label);
-}
 
 beforeAll(() => {
   (
@@ -264,48 +241,6 @@ describe("SubmitStep", () => {
       await act(async () => { renderer!.unmount(); });
     },
   );
-
-  it.each([
-    ["differs", true],
-    ["no-answer", false],
-  ])("shows the %s outcome notice for the attempt that just ended (close only: %s)", async (kind, closeOnly) => {
-    state.attempts = [{ errorMessage: "Registry check failed", outcome: { kind } }];
-    const mutation = {
-      mutate: vi.fn(), isPending: false, isSuccess: false, isError: true, data: undefined,
-      error: new Error("Registry check failed"), reset: vi.fn(),
-    };
-    let renderer: ReactTestRenderer | undefined;
-    await act(async () => {
-      renderer = create(
-        <SubmitStep removalId="removal-1" facilityId="facility-1" ctx={CONTEXT}
-          onDone={vi.fn()} submitMutation={mutation as never} />,
-      );
-    });
-    const text = JSON.stringify(renderer!.toJSON());
-    expect(text).toContain(`Outcome notice: ${kind}`);
-    expect(findButton(renderer!, "Close") !== undefined).toBe(closeOnly);
-    expect(findButton(renderer!, "Try again") !== undefined).toBe(!closeOnly);
-    await act(async () => renderer?.unmount());
-  });
-
-  it("keeps the plain error when the newest attempt is an older failure", async () => {
-    state.attempts = [{ errorMessage: "An older failure", outcome: { kind: "differs" } }];
-    const mutation = {
-      mutate: vi.fn(), isPending: false, isSuccess: false, isError: true, data: undefined,
-      error: new Error("Registry check failed"), reset: vi.fn(),
-    };
-    let renderer: ReactTestRenderer | undefined;
-    await act(async () => {
-      renderer = create(
-        <SubmitStep removalId="removal-1" facilityId="facility-1" ctx={CONTEXT}
-          onDone={vi.fn()} submitMutation={mutation as never} />,
-      );
-    });
-    const text = JSON.stringify(renderer!.toJSON());
-    expect(text).toContain("Registry check failed");
-    expect(text).not.toContain("Outcome notice");
-    await act(async () => renderer?.unmount());
-  });
 
   describe("footer", () => {
     const idle = { mutate: vi.fn(), isPending: false, isSuccess: false, isError: false, data: undefined, error: null, reset: vi.fn() };

@@ -12,6 +12,8 @@ import type {
 import type { CertifierProjectRow } from "@/data-access/certification";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { OnboardingStatus } from "@/data-access/onboarding";
+import type { DashboardBatchScope } from "@/data-access/dashboard-batch-scope";
+import type { DashboardBatchScopeInput } from "@/lib/read-models/dashboard-batch-scope";
 import type { DashboardOverview } from "@/data-access/dashboard-overview";
 import type { OnboardingStatusInput, DashboardOverviewInput, CreditBatchActivityInput, CreditBatchActivitySummaryInput } from "@/lib/read-models";
 import type { Facility, Organization } from "@/db/schema";
@@ -19,6 +21,8 @@ import { missingRecordMessage } from "@/lib/errors";
 import type { FacilityCertifierSummary } from "@/lib/read-models";
 import type { RecordLocksReadInput } from "@/lib/read-models/record-locks";
 import type { RecordLockViews } from "@/lib/record-lock-view";
+import type { RecordUsedByChainReadInput } from "@/lib/read-models/record-used-by-chain";
+import type { RecordUsedByChain } from "@/lib/record-used-by-chain";
 import { facilityIdSchema } from "@/lib/read-models/facility-id";
 import type { FacilityFilterData } from "@/schemas/facilities";
 import type { ProductionRunFilterData } from "@/schemas/production-runs";
@@ -388,6 +392,42 @@ export function getDashboardOverviewRead(
   return requestRead<DashboardOverview>("/api/reads/dashboard/overview", input, options);
 }
 
+const dashboardBatchScopeSchema = z.object({
+  batchIds: z.array(z.string()),
+  recordIds: z.array(z.string()),
+  stationTotals: z.object({
+    suppliers: z.number().int().nonnegative(),
+    feedstock: z.number().int().nonnegative(),
+    production: z.number().int().nonnegative(),
+    products: z.number().int().nonnegative(),
+    deliveries: z.number().int().nonnegative(),
+    applications: z.number().int().nonnegative(),
+  }),
+  kpis: z.object({
+    feedstockProcessedDryTonnes: z.number().nullable(),
+    biocharProducedDryTonnes: z.number().nullable(),
+    appliedToSoilDryTonnes: z.number().nullable(),
+    co2eStoredTonnes: z.number().nullable(),
+  }),
+  activity: z.array(z.object({
+    id: z.string(), code: z.string(), title: z.string(),
+    dateIso: z.iso.datetime(), calendarDay: z.boolean().optional(), href: z.string(),
+  })),
+  downstreamComplete: z.boolean(),
+});
+
+export async function getDashboardBatchScopeRead(
+  input: DashboardBatchScopeInput,
+  options?: ReadRequestOptions,
+): Promise<ActionResult<DashboardBatchScope>> {
+  const result = await requestRead<DashboardBatchScope>("/api/reads/dashboard/batch-scope", input, options);
+  if (!result.success) return result;
+  const parsed = dashboardBatchScopeSchema.safeParse(result.data);
+  return parsed.success
+    ? { success: true, data: parsed.data }
+    : { success: false, error: INVALID_ENVELOPE_ERROR };
+}
+
 export async function getCreditBatchActivityRead(
   input: CreditBatchActivityInput,
   options?: ReadRequestOptions,
@@ -416,4 +456,12 @@ export function getRecordLocksRead(
   options?: ReadRequestOptions,
 ): Promise<ActionResult<RecordLockViews>> {
   return requestRead<RecordLockViews>("/api/reads/record-locks", input, options);
+}
+
+/** Lineage dates are already ISO instants or calendar date strings. */
+export function getRecordUsedByChainRead(
+  input: RecordUsedByChainReadInput,
+  options?: ReadRequestOptions,
+): Promise<ActionResult<RecordUsedByChain | null>> {
+  return requestRead<RecordUsedByChain | null>("/api/reads/record-used-by-chain", input, options);
 }

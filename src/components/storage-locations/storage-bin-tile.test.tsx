@@ -152,3 +152,22 @@ it("shows bin activity on its facility calendar and clock", async () => {
   expect(activity?.children.join("")).toBe("Last activity: Oct 22, 2026");
   await act(async () => renderer.unmount());
 });
+
+it.each([
+  { label: "Lost mass deleted", type: "in" as const, massKg: 120, expected: "Lost mass deleted · +120 kg" },
+  { label: "Lost mass corrected", type: "out" as const, massKg: 80, expected: "Lost mass corrected · −80 kg" },
+  { label: "Stock-take adjustment", type: "out" as const, massKg: 5, expected: "Stock-take adjustment · −5 kg" },
+])("keeps the signed mass and separator for $label", async ({ label, type, massKg, expected }) => {
+  const feedstockBin: StorageLocationWithFacility = {
+    ...bin,
+    type: "feedstock_bin",
+    feedstockInventory: { batchCount: 1, pendingBatchCount: 0, feedstockTypes: [],
+      currentWetMassKg: 400, estimatedDryMassKg: null, pendingWetMassKg: 0, estimatedMoisturePercent: null },
+    lastActivity: { label, type, massKg, massDryKg: null, date: new Date("2026-10-21T21:30:00Z") },
+  };
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<StorageBinTile bin={feedstockBin} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
+  const activity = renderer.root.findAllByType("p").find(node => node.props.title?.startsWith(label));
+  expect(activity?.props.title).toBe(`${expected} · Oct 22, 2026, 00:30`);
+  await act(async () => renderer.unmount());
+});

@@ -122,7 +122,7 @@ these areas; the entry rules and invariants live in
 - **B3:** Keep both diagnostic views, only the trace view, or replace the pane with the CLI report? **Anchor:** `src/components/certification/removal-template-diagnostic-panel.tsx:RemovalTemplateDiagnosticPanel`.
 - **B4:** Wire the two protocol constants, or retire them after registry verification? Contaminant results stay outside noma (#942 q6). **Anchor:** `src/lib/isometric/utils/constants.ts`.
 - **B5:** Batch hub shared facts with per-row retry and polling, or use a blocking facility-wide load? **Anchor:** `src/hooks/use-certification.ts:useRemovalPreflightSummaries`.
-- **B6:** Keep the three submission builds, or use an immutable guarded snapshot? **Anchor:** `src/fn/certification/biochar-application-intents.ts:compileBiocharApplicationIntents`.
+- **B6:** Keep the three submission builds, or use an immutable guarded snapshot? **Anchor:** `src/lib/certification/biochar-application-intents.ts:compileBiocharApplicationIntents`.
 - **B7:** Preserve each existence-check message, or standardize the copy? **Anchor:** `src/data-access/utils.ts:assertSameOrg`.
 - **B8:** Standardize or preserve amber versus red unmet checks, six deep-link toast strings, Escape dismissal, and shared party fields? **Anchor:** `src/components/credit-batches/credit-batch-list.tsx:CreditBatchList`, `src/components/ui/data-table/index.tsx:DataTableColumnVisibility`.
 - **B9:** Apply the facility phone regex everywhere, or keep entity-specific validation and update nullability? **Anchor:** `src/schemas/facilities.ts:contactPhoneSchema`.

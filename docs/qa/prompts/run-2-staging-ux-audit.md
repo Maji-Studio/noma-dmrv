@@ -24,7 +24,7 @@ Repository (read code/docs only — do not edit):
 /Users/kenji/Dropbox/Maji/18 Dark Earth Carbon/noma-dmrv
 
 Application under test (REMOTE STAGING — not localhost):
-https://staging.noma.maji.studio
+https://staging.app.noma.maji.studio
 
 Isometric sandbox registry (for any cross-surface consistency check):
 https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/overview

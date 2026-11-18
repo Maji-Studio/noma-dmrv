@@ -1,9 +1,9 @@
 import { expect, it } from "vitest";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import type { RemovalCertifyContext } from "./certify-context";
-import type { FacilityCertifierFacts } from "./facility-certifier-facts";
-import type { BatchEmissionContext } from "./batch-emission-context";
-import { resolveRemovalTemplate } from "./resolve-removal-template";
+import type { FacilityCertifierFacts } from "@/lib/certification/facility-certifier-facts";
+import type { BatchEmissionContext } from "@/lib/certification/batch-emission-context";
+import { resolveRemovalTemplate } from "@/lib/certification/resolve-removal-template";
 import { normalizeTemplateDefinition, validateLineSources, type GhgEntryTemplate, type LineSources } from "@/lib/isometric/template-observations";
 import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";

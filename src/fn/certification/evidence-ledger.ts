@@ -13,7 +13,9 @@
  * document on a member credit batch, and mirrors it to an Isometric Source so it
  * rides into the removal's `source_ids`.
  */
-import { transportLedgerModel } from "./evidence-ledger-models";
+import { transportLedgerModel, stableLedgerContentHash } from "@/lib/certification/evidence-ledger-models";
+import { getActiveOrganization } from "@/data-access/organizations";
+import { SafeError } from "@/lib/errors";
 import { getFacilityById } from "@/data-access/facilities";
 import type { OrgContext } from "@/lib/auth/server";
 import { renderEvidenceLedgerPdf } from "@/lib/certification/evidence-ledger/pdf";
@@ -24,10 +26,9 @@ import {
 import { logger } from "@/lib/log";
 import {
   type RemovalSubmissionContext,
-} from "./certify-context-core";
+} from "@/lib/certification/certify-context-core";
 import {
   ensureLedgerSource,
-  stableLedgerContentHash,
   type EnsureLedgerResult,
 } from "./evidence-ledger-core";
 
@@ -55,8 +56,12 @@ export async function ensureTransportEvidenceLedgerSourceFromContext(
     return { status: "skipped", reason: "no-batches" };
   }
 
-  const facility = await getFacilityById(orgCtx, ctx.facilityId);
-  const model = transportLedgerModel(ctx, facility?.name ?? null, new Date().toISOString());
+  const [facility, organization] = await Promise.all([
+    getFacilityById(orgCtx, ctx.facilityId),
+    getActiveOrganization(orgCtx),
+  ]);
+  if (!organization) throw new SafeError("Organization not found.");
+  const model = transportLedgerModel(ctx, facility?.name ?? null, new Date().toISOString(), organization.name);
 
   const metadata: TransportEvidenceLedgerDocMetadata = {
     kind: TRANSPORT_EVIDENCE_LEDGER_KIND,

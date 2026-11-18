@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import { SubmissionProgress } from "@/components/certification/submission-progress";
 import * as biocharApplications from "@/fn/certification/biochar-applications";
-import * as certifyContext from "@/fn/certification/certify-context-core";
+import * as certifyContext from "@/lib/certification/certify-context-core";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
 import * as isometric from "@/lib/isometric";

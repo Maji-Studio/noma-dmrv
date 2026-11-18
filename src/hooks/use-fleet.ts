@@ -33,7 +33,7 @@ import type {
 import type { ActionResult } from "@/types/actions";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import { formatVehicleType } from "@/schemas/vehicles";
-import { certificationKeys } from "./use-certification";
+import { certificationKeys } from "./certification-query-keys";
 import { chainOfCustodyKeys } from "./use-chain-of-custody";
 import { deliveryKeys } from "./use-deliveries";
 import { entityKeys, invalidateEntityTypeQueries } from "./entity-query-keys";

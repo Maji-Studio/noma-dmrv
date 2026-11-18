@@ -60,7 +60,7 @@ async function addBatch(
   const [application] = await db.insert(applications).values({ organizationId, code: `E2E-LAB-A-${suffix}`, deliveryId: delivery.id,
     applicationDate: new Date(DELIVERY_TIME), biocharAppliedTons: APPLIED_TONNES, biocharAppliedDryTons: APPLIED_TONNES, ...FIELD }).returning();
   const [batch] = await db.insert(creditBatches).values({ organizationId, code: `E2E-LAB-CB-${suffix}`, facilityId: f.facility.id,
-    feedstockTypeId: args.feedstockTypeId, productionProcessId: args.processId, status: "pending",
+    feedstockTypeId: args.feedstockTypeId, productionProcessId: args.processId,
     startDate: args.startDate, endDate: args.endDate, certifier: "isometric" }).returning();
   const [removal] = await insertRemovalFixture(db, { organizationId, facilityId: f.facility.id });
   await db.insert(creditBatchProductionRuns).values({ organizationId, creditBatchId: batch.id, productionRunId: args.runId });

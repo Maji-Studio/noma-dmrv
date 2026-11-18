@@ -1,5 +1,7 @@
 import type { PgTable } from "drizzle-orm/pg-core";
 import { emissionLineComments } from "@/db/schema/emission-line-comments";
+import { emissionLineFiles } from "@/db/schema/emission-line-files";
+import { removalTemplateObservations } from "@/db/schema/removal-template-observations";
 import { emissionEntries, formulations, suppliers, supplierLocations, customers, customerLocations, feedstocks, productionRuns, biocharProducts, samples, orders, deliveries, applications, documents, transportLegs, creditBatches, binMovements, certifierRemovals, certifierGhgStatements } from "@/db/schema";
 
 export type ActivityFieldPolicy = "value" | "name" | "ignore" | { link: string };
@@ -19,6 +21,18 @@ export const activityFieldPolicies: Record<string, ActivityEntityPolicy> = {
     id: "ignore", organizationId: "ignore", creditBatchId: { link: "credit_batch" },
     componentId: "value", body: "value", createdBy: "ignore", updatedBy: "ignore",
     version: "ignore", createdAt: "ignore", updatedAt: "ignore",
+  } },
+  emission_line: { table: emissionLineFiles, fields: {
+    id: "ignore", organizationId: "ignore", creditBatchId: { link: "credit_batch" },
+    componentId: "value", createdBy: "ignore", updatedBy: "ignore",
+    version: "ignore", createdAt: "ignore", updatedAt: "ignore", retiredAt: "value", retiredBy: "ignore",
+  } },
+  // The proof setting writer records its own filePolicy change; the jsonb columns are not diffed.
+  removal_template_observation: { table: removalTemplateObservations, fields: {
+    id: "ignore", organizationId: "ignore", provider: "ignore", externalProjectId: "ignore", externalTemplateId: "value",
+    semanticFingerprint: "ignore", fullFingerprint: "ignore", definition: "ignore", enrichment: "ignore", lineSources: "ignore",
+    reviewedAt: "ignore", reviewedByUserId: "ignore", version: "ignore", firstObservedAt: "ignore", lastObservedAt: "ignore",
+    enrichedAt: "ignore", createdAt: "ignore", updatedAt: "ignore",
   } },
   emission_entry: { table: emissionEntries, fields: {
     id: "ignore",
@@ -108,6 +122,7 @@ export const activityFieldPolicies: Record<string, ActivityEntityPolicy> = {
     cancellationReason: "name",
     startTime: "value",
     endTime: "value",
+    outputPostedAt: "ignore",
     stockPostingSequence: "ignore",
     reactorId: { link: "reactor" },
     operatorId: { link: "operator" },
@@ -323,7 +338,6 @@ export const activityFieldPolicies: Record<string, ActivityEntityPolicy> = {
     feedstockTypeId: { link: "feedstock_type" },
     productionProcessId: { link: "production_process" },
     removalTemplateId: { link: "removal_template" },
-    status: "value",
     sampling: "value",
     startDate: "value",
     endDate: "value",

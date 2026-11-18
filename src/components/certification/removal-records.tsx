@@ -10,11 +10,11 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { CaretDownIcon, StackIcon } from "@phosphor-icons/react/dist/ssr";
-import { Button, EmptyState } from "@/components/ui";
+import { Button, EmptyState, TextAction } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { Notice } from "@/components/ui/notice";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
-import { INLINE_HIT_AREA, INLINE_HIT_AREA_FROM_SM } from "@/components/ui/touch-target";
+import { INLINE_HIT_AREA } from "@/components/ui/touch-target";
 import { useRemovalRecords } from "@/hooks/use-removal-records";
 import type { RemovalBatchRecords, RemovalRecord } from "@/lib/certification/removal-records";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
@@ -35,11 +35,6 @@ const RECORD_KIND_LINK: Record<RemovalRecord["kind"], RecordKind> = {
   feedstock: "feedstock",
 };
 
-const TEXT_LINK = cn(
-  "inline-flex min-h-44 shrink-0 items-center self-start body-small text-[var(--color-text-primary)] underline underline-offset-4 sm:min-h-0",
-  INLINE_HIT_AREA_FROM_SM,
-  "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]",
-);
 /** 44px tall on a phone, text height from sm; the sibling rows keep their own spacing, so targets never overlap. */
 const PHONE_TARGET = "inline-flex min-h-44 items-center sm:min-h-0";
 const ROW_DIVIDER = "[border-top:var(--row-divider)] first:[border-top:none]";
@@ -116,10 +111,10 @@ export function RecordGroup({ title, records, facilityId, mode }: { title: strin
         ))}
       </ul>
       {!showAll && hidden > 0 && (
-        <button type="button" onClick={revealRest} className={TEXT_LINK}>
+        <TextAction onClick={revealRest}>
           Show all {records.length}
           <span className="sr-only"> {title.toLowerCase()}</span>
-        </button>
+        </TextAction>
       )}
     </div>
   );
@@ -132,22 +127,31 @@ function batchDryKg(batch: RemovalBatchRecords): number | null {
 }
 
 /** `summarize`: with several batches the row tells them apart by dates and dry mass; a lone batch repeats the Removal's own figures. */
-function BatchRow({ batch, facilityId, summarize, mode }: { batch: RemovalBatchRecords; facilityId: string; summarize: boolean; mode?: RecordLinkMode }) {
+function BatchRow({ batch, facilityId, summarize, mode, codeLink }: { batch: RemovalBatchRecords; facilityId: string; summarize: boolean; mode?: RecordLinkMode; codeLink: boolean }) {
   const [open, setOpen] = useState(false);
   const dryKg = batchDryKg(batch);
   return (
     <li className={cn("flex flex-col", ROW_DIVIDER)}>
       <div className="flex items-center gap-12">
-        <Link href={recordHref("creditBatch", batch.creditBatchId, { facilityId })} {...linkAttrs(mode)} className={cn(RECORD_CODE_LINK, PHONE_TARGET, "shrink-0")}>
-          <CodeLabel code={batch.code} mode={mode} />
-        </Link>
+        {codeLink && (
+          <Link href={recordHref("creditBatch", batch.creditBatchId, { facilityId })} {...linkAttrs(mode)} className={cn(RECORD_CODE_LINK, PHONE_TARGET, "shrink-0")}>
+            <CodeLabel code={batch.code} mode={mode} />
+          </Link>
+        )}
         <button
           type="button"
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
           className="flex min-h-44 min-w-0 flex-1 items-center gap-12 text-left body-small focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
         >
-          <span className="sr-only">Records of {batch.code}, </span>
+          {codeLink ? (
+            <span className="sr-only">Records of {batch.code}, </span>
+          ) : (
+            <>
+              <span className="sr-only">Records of</span>{" "}
+              <span className="shrink-0 whitespace-nowrap font-mono">{batch.code}</span>
+            </>
+          )}
           {summarize ? (
             <span className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-16 text-[var(--color-text-secondary)]">
               <span className="whitespace-nowrap">{formatDateRange(batch.startDate, batch.endDate)}</span>
@@ -171,21 +175,24 @@ function BatchRow({ batch, facilityId, summarize, mode }: { batch: RemovalBatchR
   );
 }
 
-/** `showSummary: false` leaves the dates and dry mass out of the batch rows, for a host that already names them. */
-export function RemovalRecordsList({ batches, facilityId, mode, showSummary = true }: { batches: RemovalBatchRecords[]; facilityId: string; mode?: RecordLinkMode; showSummary?: boolean }) {
+/**
+ * `showSummary: false` leaves the dates and dry mass out of the batch rows, for a host that already names them.
+ * `codeLink: false` shows the credit batch code as the disclosure's label instead of a link, for a host that already links it.
+ */
+export function RemovalRecordsList({ batches, facilityId, mode, showSummary = true, codeLink = true }: { batches: RemovalBatchRecords[]; facilityId: string; mode?: RecordLinkMode; showSummary?: boolean; codeLink?: boolean }) {
   if (batches.length === 0) {
     return <EmptyState padding="sm" icon={<StackIcon size={32} aria-hidden />} title="No credit batches yet" description="Records appear here once this Removal holds one." />;
   }
   return (
     <ul className="flex flex-col">
       {batches.map((batch) => (
-        <BatchRow key={batch.creditBatchId} batch={batch} facilityId={facilityId} summarize={showSummary && batches.length > 1} mode={mode} />
+        <BatchRow key={batch.creditBatchId} batch={batch} facilityId={facilityId} summarize={showSummary && batches.length > 1} mode={mode} codeLink={codeLink} />
       ))}
     </ul>
   );
 }
 
-export function RemovalRecords({ removalId, facilityId, enabled, mode, showSummary }: { removalId: string; facilityId: string; enabled: boolean; mode?: RecordLinkMode; showSummary?: boolean }) {
+export function RemovalRecords({ removalId, facilityId, enabled, mode, showSummary, codeLink }: { removalId: string; facilityId: string; enabled: boolean; mode?: RecordLinkMode; showSummary?: boolean; codeLink?: boolean }) {
   const query = useRemovalRecords(removalId, { enabled });
   if (query.isLoading) return <div role="status" aria-busy="true" aria-label="Loading records"><Skeleton className="h-96 w-full" /></div>;
   if (query.isError || !query.data) {
@@ -198,5 +205,5 @@ export function RemovalRecords({ removalId, facilityId, enabled, mode, showSumma
       </Notice>
     );
   }
-  return <RemovalRecordsList batches={query.data} facilityId={facilityId} mode={mode} showSummary={showSummary} />;
+  return <RemovalRecordsList batches={query.data} facilityId={facilityId} mode={mode} showSummary={showSummary} codeLink={codeLink} />;
 }

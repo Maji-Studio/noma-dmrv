@@ -17,7 +17,7 @@ import { conflictCode } from '@/lib/conflict-ref';
 import { STOCK_CONFLICT_ENTITY } from '@/lib/stock-conflict-entities';
 import { ActionConflictError, SafeError } from '@/lib/errors';
 import { and, eq, sql } from 'drizzle-orm';
-import { createHash } from 'node:crypto';
+import { fingerprint } from '@/lib/crypto/fingerprint';
 import { requireOrgScope } from './utils';
 
 const IDEMPOTENCY_LOCK_SEED = 0;
@@ -31,7 +31,7 @@ const REQUEST_LOCK_NAMESPACE = 'output-request';
 
 /** Stable digest of a request payload, used to detect a reused key. */
 export function requestFingerprint(value: unknown): string {
-  return createHash('sha256').update(JSON.stringify(value, (_, v) => typeof v === 'bigint' ? v.toString() : v)).digest('hex');
+  return fingerprint(JSON.stringify(value, (_, v) => typeof v === 'bigint' ? v.toString() : v));
 }
 
 /** Serializes a request even if a reused key names a different bin. */

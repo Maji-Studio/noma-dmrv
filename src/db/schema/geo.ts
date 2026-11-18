@@ -1,8 +1,8 @@
+import { realColumn } from "./real-column";
 import {
   doublePrecision,
   jsonb,
   pgTable,
-  real,
   text,
   timestamp,
   uniqueIndex,
@@ -35,7 +35,7 @@ export const geoRouteCache = pgTable(
     /** Route polyline as [lng, lat] pairs (GeoJSON order). */
     coordinates: jsonb("coordinates").$type<[number, number][]>().notNull(),
     /** Routed distance of the polyline, km (display only — never credit math). */
-    distanceKm: real("distance_km").notNull(),
+    distanceKm: realColumn("distance_km").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [

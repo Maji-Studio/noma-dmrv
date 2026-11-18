@@ -90,7 +90,7 @@ export async function readOutputStockBrowserFixture(f: Awaited<ReturnType<typeof
 export async function seedPureBrowserSource(f: Awaited<ReturnType<typeof seedOutputStockBrowserFixture>>) {
   await db.insert(productionRuns).values({
     organizationId: f.ctx.organizationId, facilityId: f.facility.id,
-    reactorId: f.runs[0].reactorId, code: `E2E-FIFO-PURE-R-${f.tag}`, status: "complete",
+    reactorId: f.runs[0].reactorId, code: `E2E-FIFO-PURE-R-${f.tag}`, status: "complete", outputPostedAt: new Date("2026-09-13T12:00:00Z"),
     startTime: new Date("2026-09-13T08:00:00Z"), endTime: new Date("2026-09-13T12:00:00Z"),
     biocharStorageLocationId: f.source.id, biocharOutputKg: 200,
     biocharMoisturePercent: 50, biocharDryMassKg: 100,

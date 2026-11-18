@@ -45,7 +45,6 @@ import {
 export interface CreditBatchChainBatch {
   id: string;
   code: string;
-  status: string | null;
   startDate: string;
   endDate: string;
 }
@@ -86,7 +85,6 @@ async function resolveBatchScope(
     .select({
       id: creditBatches.id,
       code: creditBatches.code,
-      status: creditBatches.status,
       startDate: creditBatches.startDate,
       endDate: creditBatches.endDate,
       facilityId: creditBatches.facilityId,
@@ -165,7 +163,6 @@ export async function getCreditBatchChainData(
     batch: {
       id: batch.id,
       code: batch.code,
-      status: batch.status,
       startDate: batch.startDate,
       endDate: batch.endDate,
     },

@@ -1,8 +1,6 @@
-// Plain string-literal constants shared between the server-only fn/ layer
-// and the lower-level lib/isometric/utils helpers. Lives here (rather than
-// in `src/fn/certification/shared.ts`) so non-server callers like
-// `source-lock.ts` can reference them without pulling env / data-access
-// modules through a `"use server"` boundary.
+// Plain string-literal constants shared by certification orchestration and
+// lib/isometric helpers. Keep them free of env and data-access imports so
+// callers like `source-lock.ts` can use them without loading server modules.
 export const ISOMETRIC_PROVIDER = "isometric" as const;
 export const REMOVAL_SUBMISSION_TYPE = "removal" as const;
 export const REMOVAL_SCOPED_SUBMISSION_TYPES = [REMOVAL_SUBMISSION_TYPE] as const;

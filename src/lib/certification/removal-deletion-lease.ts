@@ -8,7 +8,7 @@ export function removalDeletionLeaseTimestamp(metadata: unknown): string | null 
   return typeof value === "string" ? value : null;
 }
 
-export function hasFreshRemovalDeletionLease(metadata: unknown): boolean {
+export function hasFreshRemovalDeletionLease(metadata: unknown, nowMs = Date.now()): boolean {
   const timestamp = removalDeletionLeaseTimestamp(metadata);
-  return timestamp !== null && Date.now() - Date.parse(timestamp) < LOCK_TTL_MS;
+  return timestamp !== null && nowMs - Date.parse(timestamp) < LOCK_TTL_MS;
 }

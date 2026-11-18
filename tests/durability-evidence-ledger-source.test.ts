@@ -1,6 +1,6 @@
-import { makeTestOrgContext } from "./helpers/test-org";
+import { makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { RemovalSubmissionContext } from "@/fn/certification/certify-context-core";
+import type { RemovalSubmissionContext } from "@/lib/certification/certify-context-core";
 
 const USER = "user-1";
 const REMOVAL = "removal-1";
@@ -23,7 +23,7 @@ vi.mock("@/db", () => ({
 vi.mock("@/lib/certification/submission-lock", () => ({
   acquireCertificationArtifactLocksSorted: vi.fn(async () => {}),
 }));
-vi.mock("@/fn/certification/certify-context-core", () => ({
+vi.mock("@/lib/certification/certify-context-core", () => ({
   loadRemovalSubmissionContext: vi.fn(),
 }));
 vi.mock("@/lib/certification/evidence-ledger/durability-pdf", () => ({
@@ -36,6 +36,7 @@ vi.mock("@/lib/certification/evidence-ledger/durability-1000-pdf", () => ({
 }));
 vi.mock("@/lib/certification/evidence-ledger/durability-build-model", () => ({
   buildDurabilityLedgerModel: vi.fn(() => ({
+    organizationName: "Example Carbon",
     memberBatchCodes: "CB-26-001",
     facilityName: "Dark Earth Hub",
     externalProjectId: "prj_TEST",
@@ -50,6 +51,7 @@ vi.mock(
   "@/lib/certification/evidence-ledger/durability-1000-build-model",
   () => ({
     buildThousandYearDurabilityLedgerModel: vi.fn(() => ({
+      organizationName: "Example Carbon",
       memberBatchCodes: "CB-26-001",
       facilityName: "Dark Earth Hub",
       externalProjectId: "prj_TEST",
@@ -59,6 +61,9 @@ vi.mock(
     })),
   }),
 );
+vi.mock("@/data-access/organizations", () => ({
+  getActiveOrganization: vi.fn(async () => ({ id: TEST_ORG_ID, name: "Example Carbon" })),
+}));
 vi.mock("@/data-access/facilities", () => ({
   getFacilityById: vi.fn(async () => ({ id: FACILITY, name: "Dark Earth Hub" })),
 }));
@@ -102,6 +107,7 @@ import { renderDurabilityLedgerPdf } from "@/lib/certification/evidence-ledger/d
 import { renderThousandYearDurabilityLedgerPdf } from "@/lib/certification/evidence-ledger/durability-1000-pdf";
 import { mirrorDocumentToSourceForUser } from "@/fn/certification/sources-mirror-core";
 import { ensureDurabilityEvidenceLedgerSourceFromContext } from "@/fn/certification/durability-evidence-ledger";
+import { getActiveOrganization } from "@/data-access/organizations";
 import { buildThousandYearDurabilityLedgerModel } from "@/lib/certification/evidence-ledger/durability-1000-build-model";
 import {
   CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
@@ -167,6 +173,7 @@ describe("ensureDurabilityEvidenceLedgerSourceFromContext", () => {
 
     expect(result).toMatchObject({ status: "created", documentId: "doc-new" });
     expect(renderDurabilityLedgerPdf).toHaveBeenCalledOnce();
+    expect(getActiveOrganization).toHaveBeenCalledWith(makeTestOrgContext(USER));
     expect(mirrorDocumentToSourceForUser).toHaveBeenCalledWith(
       makeTestOrgContext(USER),
       {
@@ -189,6 +196,7 @@ describe("ensureDurabilityEvidenceLedgerSourceFromContext", () => {
     expect(renderThousandYearDurabilityLedgerPdf).toHaveBeenCalledOnce();
     expect(buildThousandYearDurabilityLedgerModel).toHaveBeenCalledWith(
       expect.objectContaining({
+        organizationName: "Example Carbon",
         componentKey: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
       }),
     );

@@ -1,7 +1,13 @@
+import { startSubmissionRegistryAttempt } from "./submission-attempt-start";
 import { ATTEMPT_SUMMARY_OPERATION } from "@/lib/certification/submission-attempts";
 import { isNoAnswerError } from "@/lib/isometric/error-utils";
+import type { SubmissionFailureDetails } from "@/lib/certification/submission-error";
+import {
+  CHANGED_SINCE_REVIEW_FAILURE_KIND,
+  InterruptedRemovalChangedError,
+} from "@/lib/certification/interrupted-removal-copy";
 import { REMOVAL_SUBMISSION_CLAIM_POLICY } from "@/lib/isometric/utils/submission-claim";
-import { readRemovalEntrySnapshot } from "./removal-snapshot-readers";
+import { readRemovalEntrySnapshot } from "@/lib/certification/removal-snapshot-readers";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import type { OrgContext } from "@/lib/auth/server";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
@@ -25,29 +31,29 @@ import {
   type IsometricGhgEntryTemplate,
   type IsometricClient,
 } from "@/lib/isometric";
+import { DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE } from "@/lib/certification/removal-submission-conditions";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
 import {
   bindSequestrationDatapointsToTemplate,
 } from "@/lib/isometric/transformers/sequestration-binding";
-import { loadRemovalSubmissionContext } from "./certify-context-core";
+import { loadRemovalSubmissionContext } from "@/lib/certification/certify-context-core";
 import {
   DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
-  DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE,
   submitDurabilityMeasurementSamples,
   type DurabilityMeasurementSampleSubmission,
-} from "./durability-measurement-samples";
+} from "@/lib/certification/durability-measurement-samples";
 import {
   bindProductionBatchesToMeasurementSamples,
   ensureProductionBatchesForCreditBatches,
 } from "./production-batches";
 import { assertRegisteredProductionBatchesMatch } from "./production-batch-precheck";
-import { readRemovalDurabilityMeasurementSamples } from "./durability-measurement-sample-snapshot";
+import { readRemovalDurabilityMeasurementSamples } from "@/lib/certification/durability-measurement-sample-snapshot";
 import {
   assertProductionClaimGateFresh,
   assertResumedSnapshotRevisionCurrent,
 } from "./production-claim-gate";
-import { includesProductionInputs } from "./production-claim-policy";
+import { includesProductionInputs } from "@/lib/certification/production-claim-policy";
 import { ensureEvidenceLedgersFromContext } from "./ensure-evidence-ledgers";
 import {
   readRemovalBiocharApplicationIntents,
@@ -57,13 +63,13 @@ import {
   readRemovalTransport,
   type ResolvedFixedInput,
   type RemovalTransportSnapshot,
-} from "./removal-snapshot-readers";
-import type { BiocharApplicationIntent } from "./biochar-application-intents";
-import { readRemovalReportingWindow } from "./removal-reporting-window";
+} from "@/lib/certification/removal-snapshot-readers";
+import type { BiocharApplicationIntent } from "@/lib/certification/biochar-application-intents";
+import { readRemovalReportingWindow } from "@/lib/certification/removal-reporting-window";
 import {
   assertRemovalRegistryConnection,
   requirePreparedRemovalSubmission,
-} from "./removal-submission-prepare";
+} from "@/lib/certification/removal-submission-prepare";
 import {
   finalizeRemovalSubmission,
   pinnedRemovalTemplateId,
@@ -75,13 +81,13 @@ import {
 import {
   compileRemovalSubmission,
   materializeRemovalSubmissionSnapshot,
-} from "./removal-submission-build";
-import { assertClaimedRemovalPayloadFresh } from "./removal-submission-freshness";
+} from "@/lib/certification/removal-submission-build";
+import { assertClaimedRemovalPayloadFresh, assertRemovalPreflightBlockers } from "./removal-submission-freshness";
 import { checkProtocolVersionAtSubmit } from "./protocol-version-preflight";
 import {
   performRegistryCreate,
   supplierRefLookup,
-} from "./registry-create";
+} from "@/lib/certification/registry-create";
 import {
   recordClaimedRemovalSubmissionFailureBestEffort,
   recordRemovalExternalMutation,
@@ -89,7 +95,7 @@ import {
   safeRemovalSubmissionError,
   type RemovalExternalMutation,
 } from "./removal-submission-failure";
-import { resolveSourceBindingCandidates } from "./source-candidates";
+import { resolveSourceBindingCandidates } from "@/lib/certification/source-candidates";
 import { mirrorCandidateSourcesForSubmission } from "./sources-mirror-core";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 import { collectContextRemovalBlockers, evaluateRemovalBlockers } from "./removal-blockers-gate";
@@ -100,7 +106,7 @@ import {
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
   REMOVAL_SUBMISSION_TYPE,
-} from "./shared";
+} from "@/lib/certification/shared";
 
 // Domain wording for the claim module's blocked outcomes (the module owns
 // only the mapping-guard wording; claim decisions are translated here).
@@ -137,6 +143,14 @@ interface RemovalSubmitAttempt {
   externalMutation: RemovalExternalMutation;
 }
 
+function removalSubmissionFailureKind(error: unknown) {
+  return isNoAnswerError(error)
+    ? "no_answer" as const
+    : error instanceof InterruptedRemovalChangedError
+      ? CHANGED_SINCE_REVIEW_FAILURE_KIND
+      : null;
+}
+
 // The submission unit: one Isometric Removal == one certifierRemovals row.
 // Loads the removal's full context (every member credit batch's deduped run
 // union + applied-biochar attribution), aggregates ALL runs together with
@@ -154,6 +168,7 @@ export async function submitRemoval(
   };
   let outcome: "succeeded" | "refused" | "failed" = "failed";
   let attemptError: unknown = null;
+  let failureKind: ReturnType<typeof removalSubmissionFailureKind> = null;
 
   try {
     const result = await submitRemovalCore(args, attempt);
@@ -161,10 +176,33 @@ export async function submitRemoval(
     return result;
   } catch (error) {
     attemptError = error;
+    failureKind = removalSubmissionFailureKind(error);
     outcome =
       attempt.externalMutation === "none" && error instanceof SafeError
         ? "refused"
         : "failed";
+    const failure: SubmissionFailureDetails = {
+      // Unexpected and validation errors stay uncorrelated on purpose so the dialog keeps the plain error.
+      ...(error instanceof SafeError ? { attemptId: attempt.id } : {}),
+      // no_answer is stored but not streamed because the dialog reads it from the attempt.
+      failureKind: failureKind === "no_answer" ? null : failureKind,
+    };
+    // Preserve the thrown value for safe copy and server-side handling.
+    if (typeof error === "object" && error !== null) {
+      try {
+        for (const [key, value] of Object.entries(failure)) {
+          if (value === undefined) continue;
+          Object.defineProperty(error, key, {
+            value,
+            enumerable: false,
+            configurable: true,
+            writable: true,
+          });
+        }
+      } catch {
+        // Failure details must not replace the original error.
+      }
+    }
     throw error;
   } finally {
     const safeError = safeRemovalSubmissionError(attemptError);
@@ -182,7 +220,7 @@ export async function submitRemoval(
         error_class: safeError.errorClass,
         error_message: safeError.errorMessage,
         // Read back by the Removal sheet to say "Isometric did not answer".
-        failure_kind: isNoAnswerError(attemptError) ? "no_answer" : null,
+        failure_kind: failureKind,
         ghg_entry_external_mutation: attempt.externalMutation,
       },
       errorMessage: safeError.errorMessage,
@@ -252,10 +290,10 @@ async function submitRemovalCore(
   // Preserve the user-input confirmation boundary between the context prefix
   // and the member/tier/build checks. Both passes use the same pure collector.
   const contextBlockers = collectContextRemovalBlockers(ctx, { beforeConfirmation: true });
-  if (contextBlockers.length) throw new SafeError(contextBlockers[0].message);
+  assertRemovalPreflightBlockers(ctx.latestSubmission, contextBlockers);
   assertProductionConfirmed(confirmProduction);
   const blockers = await evaluateRemovalBlockers({ orgCtx, removalId, ctx });
-  if (blockers.length) throw new SafeError(blockers[0].message);
+  assertRemovalPreflightBlockers(ctx.latestSubmission, blockers);
   const prepared = requirePreparedRemovalSubmission(ctx);
   const { removalTemplate, blueprintsByKey, externalProjectId, hasDurabilityComponents } = prepared;
   // The gate refuses an unresolved tier; this narrows the mapping claim guard.
@@ -529,6 +567,11 @@ async function submitRemovalCore(
           removalId,
           submissionId: claimed.row.id,
           creditBatchIds: productionClaimBatchIds,
+          // The saved plan contains exactly the lineFileEvidence used by this payload,
+          // including on resume. Several documents can share the same anchor revision.
+          frozenLineFileSet: [...new Map(readRemovalSourceBindingPlan(claimed.row)
+            .filter(file => file.nomaRole === "emission_line_file" && file.lineFile && productionClaimBatchIds.includes(file.lineFile.creditBatchId))
+            .map(file => [file.lineage.entityId, { anchorId: file.lineage.entityId, version: file.lineFile!.anchorVersion }])).values()],
           entryClaim: { memberBatchIds: ctx.memberBatches.map((batch) => batch.id), frozenEntrySet: readRemovalEntrySnapshot(claimed.row).frozenEntrySet },
         });
         if (claimed.reason === "rejected-hash-changed") {
@@ -687,6 +730,7 @@ async function runRemovalSubmission({
   if (durabilityMeasurementSubmissions && !DURABILITY_MEASUREMENT_SAMPLES_ENABLED) {
     throw new SafeError(DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE);
   }
+  await startSubmissionRegistryAttempt(orgCtx, row);
   const boundSubmissions = durabilityMeasurementSubmissions
     ? await bindProductionBatchesToMeasurementSamples({
         orgCtx,

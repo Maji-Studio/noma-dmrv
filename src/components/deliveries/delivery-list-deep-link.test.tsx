@@ -24,6 +24,12 @@ const harness = vi.hoisted(() => ({
   formDelivery: null as Record<string, unknown> | null,
   fetch: vi.fn(),
   onDistanceRefreshed: null as null | (() => Promise<void>),
+  openCreate: null as null | (() => void),
+}));
+vi.mock("@/hooks/use-open-create-intent", () => ({
+  useOpenCreateIntent: (open: () => void) => {
+    harness.openCreate = open;
+  },
 }));
 
 vi.mock("@/hooks/use-facilities", async (importOriginal) => (await import("../../../tests/helpers/facility-lookup-mocks")).activeFacilityLookupModule(await importOriginal()));
@@ -261,6 +267,22 @@ describe("DeliveryList deep-linked sheet", () => {
 
     await act(async () => { await harness.onSubmit?.({ distanceNote: "Updated" }, (_error, fallback) => fallback); });
     expect(harness.update).toHaveBeenCalledWith(expect.objectContaining({ deliveryId: DELIVERY_ID, expectedVersion: refreshed.version }));
+    renderer?.unmount();
+  });
+});
+
+describe("DeliveryList create link", () => {
+  it("opens the create sheet when the page is opened with ?create=true", async () => {
+    harness.query = {};
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(<DeliveryList />);
+    });
+    expect(harness.sheet.open).toBe(false);
+    await act(async () => {
+      harness.openCreate?.();
+    });
+    expect(harness.sheet).toEqual({ open: true, mode: "create" });
     renderer?.unmount();
   });
 });

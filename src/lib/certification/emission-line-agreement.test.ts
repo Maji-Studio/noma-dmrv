@@ -1,11 +1,11 @@
-import { resolveRemovalTemplate } from "@/fn/certification/resolve-removal-template";
-import type { FacilityCertifierFacts } from "@/fn/certification/facility-certifier-facts";
+import { resolveRemovalTemplate } from "@/lib/certification/resolve-removal-template";
+import type { FacilityCertifierFacts } from "@/lib/certification/facility-certifier-facts";
 import { expect, it } from "vitest";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import enrichment from "../../../tests/fixtures/isometric/sandbox-enrichment-2026-10-15.json";
 import { normalizeTemplateDefinition, resolveLineSources, validateLineSources, type GhgEntryTemplate, type LineSources } from "@/lib/isometric/template-observations";
 import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
-import { resolveTemplateInputs } from "@/fn/certification/removal-template-inputs";
+import { resolveTemplateInputs } from "@/lib/certification/removal-template-inputs";
 import { aggregateProductionRuns, type AggregatedProductionData, type ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import type { IsometricComponentBlueprint } from "@/lib/isometric";
 import { buildCreateDatapointRequest } from "@/lib/isometric/transformers/datapoint";
@@ -13,7 +13,7 @@ import { SafeError } from "@/lib/errors";
 import { deriveBatchEmissionLines } from "./emission-lines";
 import { buildRemovalRequirementsChecklist, deriveRemovalReadiness, type RemovalReadinessFacts } from "./readiness";
 import { timeBasedEmissionsFixture } from "@/lib/isometric/template-observations/test-support";
-import { storedRemovalTemplateFacts } from "@/fn/certification/stored-removal-template";
+import { storedRemovalTemplateFacts } from "@/lib/certification/stored-removal-template";
 import type { RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
 
 it.each(["live", "stored"])("submits time entries as REPORTED hours using the %s template contract", (source) => {

@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { test, expect } from "./fixtures";
 import { createDbConnection } from "./fixtures/db";
-import { accounts, invitations, organizations, sessions, users } from "../../src/db/schema";
+import { accounts, apiRateLimitBuckets, invitations, organizations, sessions, users, verifications } from "../../src/db/schema";
+import { AUTH_PASSWORD_MIN_LENGTH } from "../../src/config/auth";
 import { DEC_ORG_ID } from "../../src/db/org-defaults";
 
 const VALIDITY_MS = 60_000;
@@ -32,13 +33,13 @@ test("anonymous invitation onboarding reaches new-account setup and rejects expi
   const path = await invite(`new-${randomUUID()}@e2e.local`, testUsers.admin.id);
   await page.goto(path);
   await expect(page).toHaveURL(path);
-  await expect(page.getByRole("button", { name: "Create account and join" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Email me a link" })).toBeVisible();
   await expect(page.getByLabel("Name", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Password", { exact: true })).toHaveCount(0);
   await db.update(invitations).set({ expiresAt: new Date(Date.now() - VALIDITY_MS) }).where(eq(invitations.id, ids[0]));
   await page.reload();
   await expect(page.getByText("This invitation is invalid, expired, or already used.", { exact: false })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Create account and join" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Email me a link" })).toHaveCount(0);
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/login\?from=%2Fdashboard/);
 });
@@ -50,7 +51,7 @@ test("existing invitee reaches sign-in while the wrong signed-in user remains re
   await operatorPage.goto(path);
   await expect(operatorPage.getByText("Sign out, then sign in with the invited email address.", { exact: true })).toBeVisible();
   await expect(operatorPage.getByRole("button", { name: "Accept invitation", exact: true })).toHaveCount(0);
-  await expect(operatorPage.getByRole("button", { name: "Create account and join" })).toHaveCount(0);
+  await expect(operatorPage.getByRole("button", { name: "Email me a link" })).toHaveCount(0);
 });
 
 for (const role of ["admin", "member"] as const) {
@@ -67,11 +68,27 @@ for (const role of ["admin", "member"] as const) {
       });
       await page.goto(`/accept-invitation/${invitationId}`);
       // Client-side validation is a hydration signal before entering the draft.
-      await page.getByRole("button", { name: "Create account and join" }).click();
+      await page.getByRole("button", { name: "Email me a link" }).click();
       await expect(page.getByText("Name is required.", { exact: true })).toBeVisible();
       await page.getByRole("textbox", { name: "Name", exact: true }).fill(`E2E Invited ${role}`);
+      await page.getByRole("button", { name: "Email me a link" }).click();
+      await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
+      // The emailed link carries the Better Auth reset token; read it from the store.
+      const [invitee] = await db.select({ id: users.id, emailVerified: users.emailVerified }).from(users).where(eq(users.email, email));
+      expect(invitee.emailVerified).toBe(false);
+      const [row] = await db.select({ identifier: verifications.identifier }).from(verifications)
+        .where(eq(verifications.value, invitee.id));
+      expect(row.identifier.startsWith("reset-password:")).toBe(true);
+      const token = row.identifier.slice("reset-password:".length);
+      await page.goto(`/set-password?invitation=${invitationId}&token=${token}`);
+      // Wait for client-side validation before entering the passwords.
+      await page.getByRole("button", { name: "Set password and continue" }).click();
+      await expect(page.getByText(`Password must be at least ${AUTH_PASSWORD_MIN_LENGTH} characters.`, { exact: true }).first()).toBeVisible();
       await page.getByLabel("Password", { exact: true }).fill("TestPassword123!");
-      await page.getByRole("button", { name: "Create account and join" }).click();
+      await page.getByLabel("Confirm password", { exact: true }).fill("TestPassword123!");
+      await page.getByRole("button", { name: "Set password and continue" }).click();
+      await expect(page).toHaveURL(new RegExp(`/accept-invitation/${invitationId}$`));
+      await page.getByRole("button", { name: "Accept invitation", exact: true }).click();
       await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);
       if (role === "admin") {
         const guide = page.getByRole("region", { name: "Getting started" });
@@ -87,6 +104,8 @@ for (const role of ["admin", "member"] as const) {
       await db.delete(invitations).where(eq(invitations.organizationId, organizationId));
       await db.delete(organizations).where(eq(organizations.id, organizationId));
       if (invitee) {
+        await db.delete(apiRateLimitBuckets).where(eq(apiRateLimitBuckets.bucketKey, `invitation-set-password:${invitee.id}`));
+        await db.delete(verifications).where(eq(verifications.value, invitee.id));
         await db.delete(sessions).where(eq(sessions.userId, invitee.id));
         await db.delete(accounts).where(eq(accounts.userId, invitee.id));
         await db.delete(users).where(eq(users.id, invitee.id));

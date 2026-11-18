@@ -1,6 +1,6 @@
 import { decideSubmissionClaim } from "@/lib/isometric/utils/submission-claim";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
-import { isSubmittedAttempt, isRemovalCorrectionWindowOpen, isReturnedStatement } from "@/lib/record-lock";
+import { isSubmittedAttempt, isRemovalCorrectionWindowOpen, readsAsCorrectionWindowOpenFromPersisted, isReturnedStatement } from "@/lib/record-lock";
 import { getCertifiedLineageForBatches } from "./certification-lineage-guards";
 import { readPerCorrectionUnion } from "./emission-entry-corrections";
 import type { StatementReads } from "./record-lock-lineage";
@@ -15,7 +15,7 @@ import { deriveRemovalEntryWindow, type EntryContender } from "@/lib/certificati
 import { requireOrgScope, type Executor } from "./utils";
 
 /** Every unsubmitted Removal is a contender, even before it acquires a ledger row. */
-export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBatchIds: string[], executor: Executor & Pick<typeof db, "selectDistinct"> = db, claimedAttempt?: { removalId: string; submissionId?: string }): Promise<EntryContender[]> {
+export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBatchIds: string[], executor: Executor & Pick<typeof db, "selectDistinct"> = db, claimedAttempt?: { removalId: string; submissionId?: string }, { savedOnly = false }: { savedOnly?: boolean } = {}): Promise<EntryContender[]> {
   requireOrgScope(ctx);
   if (!creditBatchIds.length) return [];
   const members = await executor.select({ removalId: creditBatchApplications.removalId }).from(creditBatchApplications)
@@ -47,7 +47,7 @@ export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBa
   }
   const statementReads: StatementReads = new Map();
   const lineageByBatch = await readPerCorrectionUnion(ctx, executor, rows.map((row) => row.creditBatchId), async union =>
-    (await getCertifiedLineageForBatches(ctx, executor, union, statementReads, excludeSubmissionId)).map(row => row.recordLockRemoval));
+    (await getCertifiedLineageForBatches(ctx, executor, union, statementReads, excludeSubmissionId, savedOnly)).map(row => row.recordLockRemoval));
   const facts = [...lineageByBatch.values()].flat();
   return ids.flatMap((removalId) => {
     const group = rows.filter((row) => row.removalId === removalId && !hasFreshRemovalDeletionLease(row.metadata));
@@ -55,11 +55,11 @@ export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBa
     if (!fact) return [];
     const eligibleBatchIds = group.map((row) => row.creditBatchId).filter((id) => {
       const shared = lineageByBatch.get(id);
-      return !!shared && isRemovalCorrectionWindowOpen(fact, shared);
+      return !!shared && (savedOnly ? readsAsCorrectionWindowOpenFromPersisted(fact.id, shared) : isRemovalCorrectionWindowOpen(fact, shared));
     });
     const correction = eligibleBatchIds.length > 0;
     // The correction window's own rule; inside an open window every statement passes it.
-    const returnedStatements = correction ? fact.statements.filter(isReturnedStatement) : [];
+    const returnedStatements = correction ? fact.statements.filter(statement => isReturnedStatement(savedOnly ? { ...statement, fresh: true } : statement)) : [];
     const statement = returnedStatements.find((item) => item.id === group[0]?.ghgStatementId) ?? returnedStatements[0];
     const returnedStatement: EntryContender["returnedStatement"] = statement
       ? { id: statement.id, status: statement.status === "DRAFT" ? "DRAFT" : "FAILED_VERIFICATION" } : undefined;

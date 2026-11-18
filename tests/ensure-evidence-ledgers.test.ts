@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "./helpers/test-org";
-import type { RemovalSubmissionContext } from "@/fn/certification/certify-context-core";
+import type { RemovalSubmissionContext } from "@/lib/certification/certify-context-core";
 
 vi.mock("@/fn/certification/evidence-ledger", () => ({
   ensureTransportEvidenceLedgerSourceFromContext: vi.fn(),

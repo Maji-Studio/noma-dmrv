@@ -200,15 +200,16 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 10. Create production run (links reactor, facility)
     const today = new Date().toISOString().split("T")[0];
+    const outputPostedAt = new Date(Date.now() - 2 * 60 * 60 * 1000);
     await tx.insert(schema.productionRuns).values({
         organizationId: DEC_ORG_ID,
       id: ids.productionRun,
       code: codes.productionRun,
       facilityId: ids.facility,
       reactorId: ids.reactor,
-      status: "complete",
+      status: "complete", outputPostedAt,
       startTime: new Date(Date.now() - 6 * 60 * 60 * 1000),
-      endTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      endTime: outputPostedAt,
       biocharOutputKg: 150,
       biocharDryMassKg: 150,
       biocharMoisturePercent: 0,
@@ -325,7 +326,6 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
     });
 
     // 20. Create credit batch (links facility, single feedstock per ADR 0016).
-    // Credit batches retain Draft independently of production run status.
     await tx.insert(schema.creditBatches).values({
         organizationId: DEC_ORG_ID,
       id: ids.creditBatch,
@@ -335,7 +335,6 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       productionProcessId: ids.productionProcess,
       startDate: today,
       endDate: today,
-      status: "draft",
     });
 
     // Create a Sample on the credit batch.

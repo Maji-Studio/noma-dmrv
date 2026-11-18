@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { CarriedEntriesPanel, CarriedEntriesSection, RevisionLateEntriesSection, type CarriedEntry } from "./carried-entries";
 
@@ -31,6 +31,14 @@ describe("CarriedEntriesPanel", () => {
     expect(panel.getAllByRole("link", { name: "CB-26-009" })[0].getAttribute("href")).toBe("/credit-batches/cb-9?facility=f1");
     expect(container.textContent).toContain("Recorded after RM-26-009 was sent.");
     expect(panel.getByRole("link", { name: "RM-26-009" }).getAttribute("href")).toBe("/removals?facility=f1&removal=rm-9");
+  });
+
+  it("marks the return for the re-check when a new-tab link is used", () => {
+    const onFix = vi.fn();
+    const { container } = render(<CarriedEntriesPanel entries={[ENTRY]} facilityId="f1" onFix={onFix} />);
+    fireEvent.click(within(container).getAllByRole("link", { name: "CB-26-009" })[0]);
+    fireEvent.click(within(container).getByRole("link", { name: "RM-26-009" }));
+    expect(onFix).toHaveBeenCalledTimes(2);
   });
 
   it("omits the earlier Removal line when the entry was not recorded after one", () => {

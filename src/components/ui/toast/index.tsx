@@ -6,6 +6,7 @@
  */
 "use client";
 
+import { ICON_BUTTON_TOUCH_PROPS } from "@/components/ui/touch-target";
 import {
   createContext,
   useContext,
@@ -246,9 +247,9 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
         </p>
         <Button
           variant="noOutline"
-          size="icon"
           onClick={() => onDismiss(toast.id)}
-          className="h-28 w-28 shrink-0 text-[var(--color-text-tertiary)] hover:bg-[var(--color-surface-light)] hover:text-[var(--color-text-primary)]"
+          {...ICON_BUTTON_TOUCH_PROPS}
+          className={cn(ICON_BUTTON_TOUCH_PROPS.className, "h-28 w-28 text-[var(--color-text-tertiary)] hover:bg-[var(--color-surface-light)] hover:text-[var(--color-text-primary)]")}
           aria-label="Dismiss notification"
         >
           <XIcon size={14} weight="bold" />

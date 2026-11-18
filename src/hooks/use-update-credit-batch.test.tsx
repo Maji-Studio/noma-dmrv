@@ -9,7 +9,7 @@ import { useUpdateCreditBatch } from "./use-credit-batches";
 const mocks = vi.hoisted(() => ({ update: vi.fn() }));
 vi.mock("@/fn/credit-batches", () => ({ updateCreditBatchFn: mocks.update }));
 vi.mock("@/lib/read-api/client", () => ({ getOnboardingStatusRead: vi.fn() }));
-vi.mock("./use-certification", () => ({ invalidateCertificationReadiness: vi.fn() }));
+vi.mock("./stale-reads", () => ({ invalidateCertificationReadiness: vi.fn() }));
 
 const row = { id: "batch-1", facilityId: "facility-1", code: "CB-001", name: "September maize" };
 let client: QueryClient;

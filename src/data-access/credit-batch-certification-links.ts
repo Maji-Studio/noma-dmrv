@@ -12,9 +12,11 @@ export interface CreditBatchCertificationLink {
   removalId: string | null;
   removalCode: string | null;
   productionEmissionsClaimedByRemovalId: string | null;
+  productionEmissionsClaimReservedBySubmissionId: string | null;
   ghgStatementId: string | null;
   removalStartedOn: string | null;
   removalCompletedOn: string | null;
+  removalCreatedAt: Date | null;
 }
 
 export async function listCreditBatchCertificationLinks(
@@ -33,6 +35,7 @@ export async function listCreditBatchCertificationLinks(
       removalId: creditBatchApplications.removalId,
       removalCode: certifierRemovals.code,
       productionEmissionsClaimedByRemovalId: creditBatches.productionEmissionsClaimedByRemovalId,
+      productionEmissionsClaimReservedBySubmissionId: creditBatches.productionEmissionsClaimReservedBySubmissionId,
       ghgStatementId: certifierRemovals.ghgStatementId,
       removalStartedOn: certifierRemovals.startedOn,
       removalCompletedOn: certifierRemovals.completedOn,
@@ -71,8 +74,10 @@ export async function listCreditBatchCertificationLinks(
     removalId: row.removalId,
     removalCode: row.removalCode,
     productionEmissionsClaimedByRemovalId: row.productionEmissionsClaimedByRemovalId,
+    productionEmissionsClaimReservedBySubmissionId: row.productionEmissionsClaimReservedBySubmissionId,
     ghgStatementId: row.ghgStatementId,
     removalStartedOn: row.removalStartedOn,
     removalCompletedOn: row.removalCompletedOn,
+    removalCreatedAt: row.removalCreatedAt,
   }));
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
-import { buildDurabilityBatchGates } from "@/fn/certification/durability-readiness";
-import { buildSubmissionLineageBlockers } from "@/fn/certification/certify-lineage-blockers";
+import type { RemovalCertifyContext } from "@/lib/certification/certify-context-types";
+import { buildDurabilityBatchGates } from "@/lib/certification/durability-readiness";
+import { buildSubmissionLineageBlockers } from "@/lib/certification/certify-lineage-blockers";
 import { buildCreditBatchOpenItems, openItemText } from "@/lib/credit-batches/open-items";
 import { readOnlyOpenItems } from "@/lib/credit-batches/batch-page";
 import { buildSoilTemperatureGate } from "@/lib/isometric/utils/durability-aggregation";

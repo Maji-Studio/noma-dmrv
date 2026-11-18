@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@/lib/auth/client";
 import Link from "next/link";
 import { Button } from "@/components/ui";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import {
   forgotPasswordSchema,
   type ForgotPasswordFormData,
@@ -71,7 +72,7 @@ export function ForgotPasswordForm() {
             <FormInput
               id="email"
               type="email"
-              placeholder="name@darkearthcarbon.com"
+              placeholder="name@company.com"
               disabled={isSubmitting}
               error={!!errors.email}
               aria-label="Email address"
@@ -85,6 +86,7 @@ export function ForgotPasswordForm() {
             type="submit"
             variant="primary"
             width="full"
+            className={PHONE_TOUCH_TARGET}
             busy={isSubmitting}
           >
             Send reset link

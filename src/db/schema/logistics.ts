@@ -1,3 +1,4 @@
+import { realColumn } from './real-column';
 import { relations, sql } from 'drizzle-orm';
 import {
   boolean,
@@ -7,7 +8,6 @@ import {
   index,
   integer,
   pgTable,
-  real,
   text,
   timestamp,
   unique,
@@ -49,7 +49,7 @@ export const vehicles = pgTable('vehicles', {
   // The emission factor is a fixed template input, not selected by this type.
   vehicleType: text('vehicle_type').notNull(), // e.g., "truck", "tractor"
   fuelType: text('fuel_type'), // e.g., "Diesel" — metadata only
-  fuelConsumptionLPerKm: real('fuel_consumption_l_per_km'), // e.g., 0.3 L/km — metadata only, never submitted
+  fuelConsumptionLPerKm: realColumn('fuel_consumption_l_per_km'), // e.g., 0.3 L/km — metadata only, never submitted
   modelYear: integer('model_year'), // Transportation module record copied onto feedstock legs
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -82,7 +82,7 @@ export const orders = pgTable('orders', {
     .references(() => customerLocations.id),
   // --- Order Details ---
   formulationId: uuid('formulation_id').notNull().references(() => formulations.id),
-  quantityKg: real('quantity_kg').notNull(),
+  quantityKg: realColumn('quantity_kg').notNull(),
   packaging: packagingType('packaging').notNull(),
 
   // Stamped by the facility archive cascade; NULL = active
@@ -126,9 +126,9 @@ export const deliveries = pgTable(
     // leg. Falls back to the frozen recorded distance; set here
     // only when this trip's routing differs. Mirrors the feedstock-side
     // transportDistanceKm override.
-    distanceKmOverride: real('distance_km_override'),
+    distanceKmOverride: realColumn('distance_km_override'),
     // Facility-pair snapshot captured on save, or filled later only while missing.
-    recordedDistanceKm: real('recorded_distance_km'),
+    recordedDistanceKm: realColumn('recorded_distance_km'),
     // Provenance captured with the recorded distance.
     recordedDistanceSource: distanceSource('recorded_distance_source'),
     // Provenance of the effective trip distance. Usually null when no distance
@@ -223,7 +223,7 @@ export const transportLegs = pgTable(
     destinationName: text('destination_name'),
     // One-way road distance. Every leg counts its round trip (×2) at the
     // mass-distance aggregation seam (`@/lib/calculations/round-trip`).
-    distanceKm: real('distance_km').notNull(),
+    distanceKm: realColumn('distance_km').notNull(),
     // Provenance of distanceKm. On a derived leg this is inherited from the
     // level that won the distance-priority resolution (NOT a blanket
     // supplier/customer default); on an aggregated distribution leg it is the

@@ -1,5 +1,7 @@
 # noma-dmrv
 
+Use Isometric's term for a concept before inventing one; add our own word only where the registry has none.
+
 A biochar carbon-credit MRV (Monitoring, Reporting, Verification) system.
 It traces biomass through pyrolysis to biochar application, aggregates the
 result, and submits it to the Isometric carbon registry for verification.
@@ -64,6 +66,22 @@ A confirmation that one component had no emissions for a specific Removal.
 It is an emissions entry owned by that Removal, contributes 0, and needs no file.
 It is never pooled into another Removal. On screen it is a component recorded as zero.
 _Avoid_: zero stub.
+
+**Proof setting**:
+What a Removal-template **component** needs as files before a Removal can go out
+(`filePolicy` in code): one set of files per credit batch and component for the From records amount
+(production-run diesel and electricity only), a file on each manual entry, evidence
+noma generates, or no file. Manual entries keep their own files under every setting
+but "no file", and an entry whose amount is 0 needs no file. For paired inputs,
+the amount is the readout difference or the product of the factors. The credit
+batch file covers only the From records amount. An exact From records total of 0
+needs no file. Only the Removal claiming the batch's production emissions sends
+these files. While that Removal is returned, replace the files by starting a new set.
+Replaced files stay in history and are no longer sent. The set belongs to the credit batch and component, not each run.
+It is separate from **Proof of delivery** and from a component's **Evidence method**.
+_Avoid_: proof type, file policy (in prose).
+
+**Component file**: A file on the credit batch for a component's From records amount.
 
 **Component comment**:
 One editable comment on a credit batch's Removal-template component, identified by

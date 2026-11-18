@@ -5,14 +5,19 @@ import type { OrgContext } from "@/lib/auth/server";
 import { getDashboardAttentionItems, getDashboardOverview, KPI_HINTS } from "./dashboard-overview";
 import { ATTENTION_PER_CHECK } from "./dashboard-attention";
 import { EXACT_ID_FILTER_MAX } from "@/lib/exact-id-filter";
+import { attentionRow } from "../../tests/helpers/dashboard-attention";
 import type { RemovalAttentionRows } from "@/lib/certification/removal-attention";
+import { REMOVAL_INTERRUPTED_ATTENTION_TITLE } from "@/lib/certification/removal-attention";
+import { CHANGED_SINCE_REVIEW_LABEL } from "@/lib/certification/interrupted-removal-copy";
 
 const mocks = vi.hoisted(() => ({
   select: vi.fn(),
   previews: vi.fn(),
   union: vi.fn(async (): Promise<unknown[]> => []),
   returned: vi.fn(async (): Promise<Set<string>> => new Set()),
+  changedAttempts: vi.fn(async (): Promise<Set<string>> => new Set()),
 }));
+vi.mock("./removal-latest-attempt", () => ({ getRemovalIdsWithChangedLatestAttempt: mocks.changedAttempts }));
 vi.mock("./dashboard-returned-removals", () => ({ loadReturnedRemovalIds: mocks.returned }));
 // Batch rows carry already-derived Removal displays in these tests.
 vi.mock("./credit-batch-removal-display", () => ({
@@ -77,6 +82,8 @@ type Row = Record<string, unknown>;
 let rowsByTable: Record<string, Row[]>;
 
 beforeEach(() => {
+  mocks.changedAttempts.mockClear();
+  mocks.changedAttempts.mockResolvedValue(new Set());
   mocks.union.mockResolvedValue([]);
   mocks.returned.mockResolvedValue(new Set());
   rowsByTable = { facilities: [{ timezone: "UTC" }] };
@@ -198,6 +205,25 @@ describe("needs attention rows", () => {
     total: n, allIds: [], removals: [],
   }));
 
+  it.each([
+    { kind: "run-mass", stage: "production", recordKind: "productionRun" },
+    { kind: "feedstock-missing", stage: "feedstock", recordKind: "feedstock" },
+    { kind: "application-evidence", stage: "applications", recordKind: "application" },
+    { kind: "batch-pending", stage: "production", recordKind: "creditBatch" },
+  ])("types single and grouped $kind records", async ({ kind, stage, recordKind }) => {
+    const singleIds = ["record-1"];
+    mocks.union.mockResolvedValue(runRows(singleIds).map((row) => ({ ...row, kind })));
+    const single = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
+    expect(single.items[0]).toMatchObject({ stage, recordKind, recordIds: singleIds });
+
+    const ids = idsOf(ATTENTION_PER_CHECK + 1);
+    const source = kind === "batch-pending" ? batchRows(ids.length) : runRows(ids);
+    mocks.union.mockResolvedValue(source.map((row) => ({ ...row, kind })));
+    const grouped = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
+    expect(grouped.items[0]).toMatchObject({ stage, recordKind, count: ids.length });
+    expect(grouped.items[0].recordItems?.every((item) => item.stage === stage && item.recordKind === recordKind && item.recordIds?.length === 1)).toBe(true);
+  });
+
   it("groups an over-cap check into one row linking to its filtered list", async () => {
     const runIds = idsOf(ATTENTION_PER_CHECK + 1);
     mocks.union.mockResolvedValue([...runRows(runIds), ...feedstockRows, ...batchRows(ATTENTION_PER_CHECK + 1)]);
@@ -213,11 +239,42 @@ describe("needs attention rows", () => {
       {
         entityCode: "Credit batches",
         count: ATTENTION_PER_CHECK + 1,
-        title: "Period ended · not submitted yet",
+        title: "Period ended, not submitted yet",
         href: `/credit-batches?facility=${FACILITY_ID}`,
       },
     ]);
+    expect(items.find((item) => item.id === "run-mass-group")?.recordIds).toEqual(runIds);
+    expect(items.find((item) => item.id === "run-mass-group")?.recordItems?.map((item) => item.recordIds?.[0])).toEqual(runIds.slice(0, ATTENTION_PER_CHECK));
+    expect(items.find((item) => item.id === "batch-not-submitted-group")?.recordIds).toEqual(batchRows(ATTENTION_PER_CHECK + 1).map((row) => row.id));
     expect(batches).toEqual({ interrupted: 0, notSubmitted: ATTENTION_PER_CHECK + 1, returned: 0 });
+  });
+
+  it.each(["run-mass", "feedstock-missing", "application-evidence"])("carries every %s id even beyond the SQL row cap", async (kind) => {
+    const ids = idsOf(ATTENTION_PER_CHECK + 2);
+    mocks.union.mockResolvedValue(runRows(ids).map((row) => ({ ...row, kind })));
+    const { items } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
+    expect(items).toHaveLength(1);
+    expect(items[0].recordIds).toEqual(ids);
+    expect(items[0].count).toBe(ids.length);
+  });
+
+  it("carries ids for grouped interrupted Removals and returned credit batches", async () => {
+    const records = batchRows(ATTENTION_PER_CHECK + 1);
+    const interrupted = records.map((row, index) => ({
+      ...row, id: `interrupted-${index}`,
+      removals: [{ id: `rm-${index}`, code: `RM-${index}`, ghgStatementId: null, status: { kind: "interrupted" }, phase: "draft" }],
+    }));
+    const returned = records.map((row, index) => ({
+      ...row, removals: [{ id: `back-${index}`, code: `RM-BACK-${index}`, ghgStatementId: "gs", status: { kind: "submitted" }, phase: "submitted" }],
+    }));
+    mocks.union.mockResolvedValue([...interrupted, ...returned]);
+    mocks.returned.mockResolvedValue(new Set(returned.map((row) => row.removals[0].id)));
+    const { items } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
+    expect(mocks.changedAttempts).toHaveBeenCalledExactlyOnceWith(CTX, interrupted.map((row) => row.removals[0].id));
+    expect(items.find((item) => item.id === "removal-interrupted-group")).toMatchObject({ stage: "production", recordKind: "removal" });
+    expect(items.find((item) => item.id === "batch-returned-group")).toMatchObject({ stage: "production", recordKind: "creditBatch" });
+    expect(items.find((item) => item.id === "removal-interrupted-group")?.recordIds).toEqual(interrupted.map((row) => row.removals[0].id));
+    expect(items.find((item) => item.id === "batch-returned-group")?.recordIds).toEqual(returned.map((row) => row.id));
   });
 
   it("keeps a batch whose submitted Removal came back, and leaves out one awaiting verification", async () => {
@@ -244,7 +301,7 @@ describe("needs attention rows", () => {
   it("opens the plain list when the group has more records than the id filter takes", async () => {
     mocks.union.mockResolvedValue(runRows(idsOf(EXACT_ID_FILTER_MAX + 1)));
     const { items } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
-    expect(items).toEqual([expect.objectContaining({ count: EXACT_ID_FILTER_MAX + 1, href: `/production-runs?facility=${FACILITY_ID}` })]);
+    expect(items).toEqual([expect.objectContaining({ recordIds: idsOf(EXACT_ID_FILTER_MAX + 1), count: EXACT_ID_FILTER_MAX + 1, href: `/production-runs?facility=${FACILITY_ID}` })]);
   });
 
   it("counts records as N open: single rows, grouped counts and GPS gaps", async () => {
@@ -256,7 +313,7 @@ describe("needs attention rows", () => {
   });
 
   describe("Removal rows from the read model", () => {
-    const row = (removalId: string, title: string) => ({ id: `removal-draft-${removalId}`, entityCode: `RM-${removalId}`, date: null, title, href: `/removals?removal=${removalId}` });
+    const row = (removalId: string, title: string) => attentionRow("removal", removalId, { id: `removal-draft-${removalId}`, entityCode: `RM-${removalId}`, title });
     const rows = (over: Partial<RemovalAttentionRows>): Promise<RemovalAttentionRows> =>
       Promise.resolve({ drafts: [], rejected: [], returned: [], covered: new Set<string>(), ...over });
     const interruptedBatch = {
@@ -264,13 +321,48 @@ describe("needs attention rows", () => {
       removals: [{ id: "rm-i", code: "RM-I", ghgStatementId: null, status: { kind: "interrupted" }, phase: "draft" }],
     };
 
+    it.each([
+      { outcome: "latest changed summary", changed: true },
+      { outcome: "later failure superseding changed", changed: false },
+      { outcome: "no attempt summary", changed: false },
+    ])("routes the interrupted outcome: $outcome", async ({ changed }) => {
+      mocks.changedAttempts.mockResolvedValue(new Set(changed ? ["rm-i"] : []));
+      mocks.union.mockResolvedValue([interruptedBatch, { ...interruptedBatch, id: "cb-2", code: "CB-2" }]);
+      const { items } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
+      expect(mocks.changedAttempts).toHaveBeenCalledExactlyOnceWith(CTX, ["rm-i"]);
+      expect(items).toContainEqual(expect.objectContaining({
+        stage: "production", recordKind: "removal", recordIds: ["rm-i"],
+        id: "removal-interrupted-rm-i", entityCode: "RM-I · CB-I · CB-2",
+        title: changed ? CHANGED_SINCE_REVIEW_LABEL : REMOVAL_INTERRUPTED_ATTENTION_TITLE,
+        href: `/removals?facility=${FACILITY_ID}&${changed ? "removal" : "resume"}=rm-i`,
+      }));
+    });
+
+    it("passes no ids to the attempt lookup when no Removal is interrupted", async () => {
+      mocks.union.mockResolvedValue([{
+        ...interruptedBatch,
+        removals: [{ ...interruptedBatch.removals[0], status: { kind: "submitted" }, phase: "submitted" }],
+      }]);
+      await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
+      expect(mocks.changedAttempts).toHaveBeenCalledExactlyOnceWith(CTX, []);
+    });
+
     it("puts draft rows after the interrupted rows, groups them past the cap, and counts every Removal", async () => {
       mocks.union.mockResolvedValue([interruptedBatch, ...runRows(["run-0"])]);
       const drafts = Array.from({ length: ATTENTION_PER_CHECK + 1 }, (_, index) => row(`d${index}`, "Ready to submit"));
       const overview = await getDashboardOverview(CTX, FACILITY_ID, "month", rows({ drafts }));
       expect(overview.attention.map((item) => item.id)).toEqual(["removal-interrupted-rm-i", "removal-draft-group", "run-mass-run-0"]);
-      expect(overview.attention[1]).toMatchObject({ count: ATTENTION_PER_CHECK + 1, title: "Draft Removals" });
+      expect(overview.attention[1]).toMatchObject({ stage: "production", recordKind: "removal", count: ATTENTION_PER_CHECK + 1, title: "Draft Removals", recordIds: drafts.flatMap((row) => row.recordIds) });
       expect(overview.attentionTotal).toBe(1 + ATTENTION_PER_CHECK + 1 + 1);
+    });
+
+    it("carries every id for grouped rejected and returned Removal rows", async () => {
+      const rejected = Array.from({ length: ATTENTION_PER_CHECK + 1 }, (_, index) => row(`x${index}`, "Submission failed"));
+      const returned = rejected.map((item, index) => ({ removalId: `back${index}`, item: { ...item, recordIds: [`back${index}`] } }));
+      const { items } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY, rows({ rejected, returned }));
+      expect(items.every((item) => item.stage === "production" && item.recordKind === "removal")).toBe(true);
+      expect(items.find((item) => item.id === "removal-rejected-group")?.recordIds).toEqual(rejected.flatMap((item) => item.recordIds));
+      expect(items.find((item) => item.id === "removal-returned-group")?.recordIds).toEqual(returned.map((item) => item.removalId));
     });
 
     it("lists a few draft and rejected Removals one row each", async () => {

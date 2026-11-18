@@ -27,13 +27,8 @@ import {
 import { useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
-import {
-  useCreateEmissionEntry,
-  useReplaceEmissionEntry,
-  useUpdateEmissionEntry,
-  type EmissionBatchScope,
-  invalidateEmissionEntryReads,
-} from "@/hooks/use-emission-entries";
+import { useCreateEmissionEntry, useReplaceEmissionEntry, useUpdateEmissionEntry, type EmissionBatchScope } from "@/hooks/use-emission-entries";
+import { invalidateEmissionEntryReads } from "@/hooks/stale-reads";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { CreditBatchLine } from "@/components/credit-batches/credit-batch-line";
 import { describeEmissionEntryCreditBatchLine } from "./emission-entry-credit-batch-line-copy";
@@ -63,6 +58,7 @@ import {
 import { TOP_REFUSAL_TITLE, TopRefusalBox } from "@/components/forms/form-actions";
 import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
 import { isActionError } from "@/lib/action-error";
+import { entriesNeedFiles } from "@/lib/isometric/template-observations/file-policies";
 import { FormErrorSummary } from "@/components/forms/form-error-summary";
 import { readFieldDirectory, type FieldDirectory } from "@/components/forms/form-error-summary-dom";
 
@@ -253,7 +249,7 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
               />
             </FormField>
           )}
-          <FormField id={`${idPrefix}-file`} label="File" certifyRequired>
+          <FormField id={`${idPrefix}-file`} label="File" certifyRequired={entriesNeedFiles(line.filePolicy)}>
             <div className="flex flex-col gap-8">
               {mode.kind !== "add" && mode.entry.documentCount > 0 && <EntryFileNames entry={mode.entry} />}
               <FormFileUpload

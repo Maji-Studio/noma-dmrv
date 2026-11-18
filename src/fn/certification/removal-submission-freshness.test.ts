@@ -2,30 +2,30 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import type { OrgContext } from "@/lib/auth/server";
 
-vi.mock("./certify-context-core", () => ({
+vi.mock("@/lib/certification/certify-context-core", () => ({
   loadRemovalSubmissionContext: vi.fn(),
 }));
 vi.mock("./production-claim-gate", () => ({
   retireClaimedRemovalDraftForDrift: vi.fn(),
 }));
-vi.mock("./removal-submission-build", () => ({
+vi.mock("@/lib/certification/removal-submission-build", () => ({
   buildRemovalSubmissionBuild: vi.fn(),
 }));
-vi.mock("./removal-submission-prepare", () => ({
+vi.mock("@/lib/certification/removal-submission-prepare", () => ({
   prepareRemovalSubmission: vi.fn(),
 }));
 vi.mock("@/lib/isometric", () => ({
   payloadHash: (payload: { hash: string }) => payload.hash,
 }));
 
-import { loadRemovalSubmissionContext } from "./certify-context-core";
+import { loadRemovalSubmissionContext } from "@/lib/certification/certify-context-core";
 import { retireClaimedRemovalDraftForDrift } from "./production-claim-gate";
-import { buildRemovalSubmissionBuild } from "./removal-submission-build";
+import { buildRemovalSubmissionBuild } from "@/lib/certification/removal-submission-build";
 import { assertClaimedRemovalPayloadFresh } from "./removal-submission-freshness";
 import {
   prepareRemovalSubmission,
   type PreparedRemovalSubmission,
-} from "./removal-submission-prepare";
+} from "@/lib/certification/removal-submission-prepare";
 
 const ORG_CTX = {
   userId: "user-1",
@@ -47,6 +47,11 @@ function assertFresh() {
 
 function retiredReason() {
   return vi.mocked(retireClaimedRemovalDraftForDrift).mock.calls[0]?.[0].reason;
+}
+
+/** Whether the retire call claimed a proven change, which a possibly sent draft turns into Delete Removal (#1114). */
+function retiredAsChanged() {
+  return vi.mocked(retireClaimedRemovalDraftForDrift).mock.calls[0]?.[0].changed;
 }
 
 describe("assertClaimedRemovalPayloadFresh", () => {
@@ -84,7 +89,22 @@ describe("assertClaimedRemovalPayloadFresh", () => {
     expect(retiredReason()).toBe(
       "semantic payload rebuild failed after draft claim",
     );
+    expect(retiredAsChanged()).toBe(true);
     expect(buildRemovalSubmissionBuild).not.toHaveBeenCalled();
+  });
+
+  it("does not call a template that could not be read a change (#1114)", async () => {
+    vi.mocked(prepareRemovalSubmission).mockReturnValue({
+      prepared: null,
+      // An unread template also yields derived blockers; together they prove nothing.
+      blockers: [
+        { code: "templateNotFullyRead", message: "not fully read" },
+        { code: "templateLinesNeedReview", message: "lines to decide" },
+      ],
+    });
+
+    await expect(assertFresh()).rejects.toThrow();
+    expect(retiredAsChanged()).toBe(false);
   });
 
   it("names the durability gate when it is the only change", async () => {
@@ -111,6 +131,7 @@ describe("assertClaimedRemovalPayloadFresh", () => {
     );
 
     await expect(assertFresh()).rejects.toThrow("lineage broke");
+    expect(retiredAsChanged()).toBe(false);
     expect(retiredReason()).toBe(
       "semantic payload rebuild failed after draft claim",
     );
@@ -131,5 +152,6 @@ describe("assertClaimedRemovalPayloadFresh", () => {
     expect(retiredReason()).toBe(
       "semantic payload drift: snapshot hash-claimed != current hash-current",
     );
+    expect(retiredAsChanged()).toBe(true);
   });
 });

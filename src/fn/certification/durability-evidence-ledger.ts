@@ -16,7 +16,9 @@
  * Server-internal core (no "use server" — takes an explicit `orgCtx`, called from
  * the submit pipeline which already resolved the caller).
  */
-import { durabilityLedgerModel } from "./evidence-ledger-models";
+import { durabilityLedgerModel, stableLedgerContentHash } from "@/lib/certification/evidence-ledger-models";
+import { getActiveOrganization } from "@/data-access/organizations";
+import { SafeError } from "@/lib/errors";
 import { getFacilityById } from "@/data-access/facilities";
 import type { OrgContext } from "@/lib/auth/server";
 import { CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION } from "@/lib/calculations/biochar-removal";
@@ -30,11 +32,10 @@ import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/stora
 import { logger } from "@/lib/log";
 import {
   type RemovalSubmissionContext,
-} from "./certify-context-core";
+} from "@/lib/certification/certify-context-core";
 import {
   ensureLedgerSource,
   retireLedgerSources,
-  stableLedgerContentHash,
   type EnsureLedgerResult,
 } from "./evidence-ledger-core";
 
@@ -96,8 +97,12 @@ export async function ensureDurabilityEvidenceLedgerSourceFromContext(
     });
   }
 
-  const facility = await getFacilityById(orgCtx, ctx.facilityId);
-  const ledger = durabilityLedgerModel(ctx, facility?.name ?? null, new Date().toISOString());
+  const [facility, organization] = await Promise.all([
+    getFacilityById(orgCtx, ctx.facilityId),
+    getActiveOrganization(orgCtx),
+  ]);
+  if (!organization) throw new SafeError("Organization not found.");
+  const ledger = durabilityLedgerModel(ctx, facility?.name ?? null, new Date().toISOString(), organization.name);
   const { model } = ledger;
   const render = () => ledger.option === "1000_year"
     ? renderThousandYearDurabilityLedgerPdf(ledger.model)

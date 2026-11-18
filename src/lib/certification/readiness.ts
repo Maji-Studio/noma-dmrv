@@ -1,6 +1,12 @@
+import { EMISSION_LINE_STATE_LABELS } from "./emission-lines";
 import { templateLineFixTarget, templateCoverageFixTarget, type TemplateFixTarget } from "./template-fix-targets";
 import type { RemovalBlocker, RemovalBlockerCode } from "./removal-blockers";
-import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
+import { EMPTY_REMOVAL_TEMPLATE_MESSAGE, DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE } from "./removal-submission-conditions";
+import {
+  REMOVAL_TEMPLATE_BLOCKERS,
+  removalTemplateBlockerDestination,
+  type RemovalTemplateBlocker,
+} from "@/lib/certification/removal-template-blockers";
 /**
  * Removal readiness classifier — the single pure decision behind every
  * "can this removal be submitted, and if not why?" surface: the Overview work
@@ -26,7 +32,6 @@ import {
   type ProductionReadinessGap,
 } from "./production-readiness";
 import { CERT_REQUIREMENT_META, EMISSION_ENTRIES_TO_CHECK_LABEL, NO_REMOVAL_TEMPLATE_LABEL, templateLinesUnmetLabel } from "./requirement-labels";
-import { removalTemplateBlockerDestination, type RemovalTemplateBlocker } from "./removal-template-blockers";
 import { pluralize } from "@/lib/copy-utils";
 import {
   describeFeedstockTypeMappingGap,
@@ -70,6 +75,10 @@ export interface RemovalReadinessFacts {
   hasOrgCredentials: boolean;
   /** The member batches' pinned Removal template resolved on Isometric. */
   hasRemovalTemplate: boolean;
+  /** A resolved template with no groups is refused by submission preparation. */
+  emptyRemovalTemplate?: boolean;
+  /** Durability components require the sandbox-only measurement-sample step. */
+  durabilitySubmissionUnavailable?: boolean;
   templateBlockers?: RemovalTemplateBlocker[];
   /** Current template components without a saved, unambiguous decision. */
   undecidedLineIds?: readonly string[];
@@ -208,6 +217,7 @@ function templateBlockerReason(facts: RemovalReadinessFacts): string | null {
   if (facts.unbindableTemplateInputs.length > 0) {
     return formatUnbindableTemplateInputsText(facts.unbindableTemplateInputs);
   }
+  if (facts.emptyRemovalTemplate) return EMPTY_REMOVAL_TEMPLATE_MESSAGE;
   // Coverage derives from the same line decision, so this only catches line
   // blockers coverage has no wording for.
   if (facts.emissionLineBlockers?.length) return [...new Set(facts.emissionLineBlockers.map((blocker) => blocker.message))].join(" ");
@@ -217,6 +227,7 @@ function templateBlockerReason(facts: RemovalReadinessFacts): string | null {
 function templateResolvesCleanly(facts: RemovalReadinessFacts): boolean {
   return (
     facts.hasRemovalTemplate &&
+    !facts.emptyRemovalTemplate &&
     !facts.templateBlockers?.length &&
     !facts.emissionLineBlockers?.length &&
     facts.unresolvedBlueprintKeys.length === 0 &&
@@ -342,6 +353,7 @@ export function deriveRemovalReadiness(
   // Durability sampling/eligibility — the same fail-closed gate the submit
   // pipeline throws on (D3). Surfacing it here means a removal can't read
   // "ready" then bounce at submit on an unsampled run or out-of-spec chemistry.
+  if (facts.durabilitySubmissionUnavailable) reasons.push(DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE);
   reasons.push(...(facts.durabilityConfigurationBlockers ?? []));
   reasons.push(...durabilityBlockerReasons(facts.durabilityGateBlockers ?? []));
 
@@ -607,7 +619,7 @@ function templateRequirementChecks(facts: RemovalReadinessFacts): RemovalRequire
     ...(linesToDecide > 0 ? ["templateLineReview" as const] : []),
   ])];
   const linesUnmet = lineMessages.length > 0 || linesToDecide > 0;
-  const entriesNeedFiles = entryBlockers.every((blocker) => blocker.code === "entryMissingEvidence");
+  const entriesNeedFiles = entryBlockers.every((blocker) => ["entryMissingEvidence", "lineMissingEvidence"].includes(blocker.code));
   return [
     {
       key: "templateSet",
@@ -636,7 +648,9 @@ function templateRequirementChecks(facts: RemovalReadinessFacts): RemovalRequire
       label: CERT_REQUIREMENT_META.emissions.requirementLabel,
       status: "unmet" as const,
       detail: [...new Set(entryBlockers.map((blocker) => blocker.message))].join(" "),
-      ...(entriesNeedFiles ? {} : { unmetLabel: EMISSION_ENTRIES_TO_CHECK_LABEL }),
+      ...(entriesNeedFiles
+        ? entryBlockers.some(blocker => blocker.code === "lineMissingEvidence") ? { unmetLabel: EMISSION_LINE_STATE_LABELS.missingEvidence } : {}
+        : { unmetLabel: EMISSION_ENTRIES_TO_CHECK_LABEL }),
     }] : []),
   ];
 }
@@ -747,7 +761,7 @@ export function buildRemovalRequirementsChecklist(
     if (!facts.hasSubmittableRuns) {
       return { key: "durability", label: DURABILITY_LABEL, status: "skipped" };
     }
-    const blockers = [...(facts.templateTierBlocker ? [facts.templateTierBlocker] : []), ...(facts.durabilityConfigurationBlockers ?? []), ...(facts.durabilityGateBlockers ?? [])];
+    const blockers = [...(facts.durabilitySubmissionUnavailable ? [DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE] : []), ...(facts.templateTierBlocker ? [facts.templateTierBlocker] : []), ...(facts.durabilityConfigurationBlockers ?? []), ...(facts.durabilityGateBlockers ?? [])];
     return blockers.length === 0
       ? { key: "durability", label: DURABILITY_LABEL, status: "met" }
       : {

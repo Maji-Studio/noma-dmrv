@@ -25,6 +25,9 @@ const TIME_FORMAT = "HH:mm";
 const DATE_TIME_FORMAT = `MMM d, yyyy, ${TIME_FORMAT}`;
 const FACILITY_DATE_TIME_WITH_OFFSET_FORMAT = "yyyy-MM-dd HH:mm xxx";
 const SAME_YEAR_RANGE_START_FORMAT = "MMM d";
+const SHORT_DAY_FORMAT = "MMM d";
+const YEAR_FORMAT = "yyyy";
+const UTC_ZONE = "UTC";
 const KG_PER_TONNE = 1000;
 const CO2E_TONNES_MAX_FRACTION_DIGITS = 3;
 /** A CO₂e preview shows kg to one decimal, so a short run does not read as zero. */
@@ -135,6 +138,40 @@ export function formatFacilityDay(value: Date | string | null | undefined, timeZ
   if (!value) return MISSING_VALUE.notRecorded;
   const date = typeof value === "string" ? new Date(value) : value;
   return isValid(date) ? formatFacilityTime(date, timeZone, DATE_FORMAT) : UNREADABLE_DATE;
+}
+
+/**
+ * A compact day for one-line rows ("Nov 9"), with the year only when it is not
+ * the current year ("Nov 9, 2025"), on the facility clock. A bare `YYYY-MM-DD`
+ * or a business date stored as UTC midnight (`calendarDay`) reads in UTC, so
+ * it never drifts a day. Returns "Not recorded" for null and "Unreadable date"
+ * for a value it cannot parse.
+ */
+export function formatFacilityShortDay(
+  value: Date | string | null | undefined,
+  timeZone: string,
+  options: { calendarDay?: boolean; now?: Date } = {},
+): string {
+  if (!value) return MISSING_VALUE.notRecorded;
+  const bareDay = typeof value === "string" && DATE_ONLY_PATTERN.test(value);
+  const date = typeof value === "string" ? new Date(bareDay ? `${value}T00:00:00Z` : value) : value;
+  if (!isValid(date)) return UNREADABLE_DATE;
+  const zone = options.calendarDay || bareDay ? UTC_ZONE : timeZone;
+  const now = options.now ?? new Date();
+  const sameYear = formatFacilityTime(date, zone, YEAR_FORMAT) === formatFacilityTime(now, zone, YEAR_FORMAT);
+  return formatFacilityTime(date, zone, sameYear ? SHORT_DAY_FORMAT : DATE_FORMAT);
+}
+
+/** A compact day and time on the facility clock ("Nov 9, 13:37"), the year as in `formatFacilityShortDay`. */
+export function formatFacilityShortDateTime(
+  value: Date | string | null | undefined,
+  timeZone: string,
+  now?: Date,
+): string {
+  if (!value) return MISSING_VALUE.notRecorded;
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (!isValid(date)) return UNREADABLE_DATE;
+  return `${formatFacilityShortDay(date, timeZone, { now })}, ${formatFacilityClockTime(date, timeZone)}`;
 }
 
 /** Format an instant in a facility's timezone with its numeric UTC offset. */

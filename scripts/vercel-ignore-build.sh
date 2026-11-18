@@ -1,38 +1,22 @@
 #!/bin/sh
-# Vercel Ignored Build Step for both projects that build from this repo (root vercel.json applies to
-# both, overriding any dashboard setting). Exit 0 skips the build, exit 1 builds; when in doubt, build.
-# Redeploys of the same commit build so build-time environment changes take effect.
-#   noma-site: builds when site/, the shared scripts/fetch-fonts.mjs, or this root vercel.json
-#              (which configures both projects) changed.
-#   noma-dmrv: builds when anything outside site/ changed.
-APP_PROJECT_ID="prj_MAe7LnlVetbWRIPtOLm7kAo2XlJM"
-SITE_PROJECT_ID="prj_ClEafU9NNMK2pCUMzQfnrMd5AtYw"
+# Vercel Ignored Build Step (root vercel.json `ignoreCommand`, which overrides any dashboard
+# setting). Exit 0 skips the build, exit 1 builds.
+# Only `staging` and `main` build on push. Feature-branch previews were most of the build bill
+# and nothing consumed them. To get a preview for one branch, push a commit whose message
+# contains [preview]. A deployment with no git branch (a CLI deploy) always builds.
+ref="${VERCEL_GIT_COMMIT_REF:-}"
+echo "ignore-build: branch=${ref:-none}"
 
-prev="${VERCEL_GIT_PREVIOUS_SHA:-}"
-project="${VERCEL_PROJECT_ID:-}"
-echo "ignore-build: project=${project:-unknown} previous=${prev:-none}"
-
-# A branch from before the site existed has nothing for noma-site to build.
-[ "$project" = "$SITE_PROJECT_ID" ] && [ ! -d site ] && { echo "ignore-build: no site/ on this branch, skipping"; exit 0; }
-
-# No previous deployment on this branch, or its commit is outside Vercel's shallow clone.
-[ -n "$prev" ] || exit 1
-if ! git cat-file -e "${prev}^{commit}" 2>/dev/null; then
-  echo "ignore-build: previous commit not in the clone, building"
-  exit 1
-fi
-
-# A deliberate redeploy reuses the previous deployment's commit.
-if [ "$prev" = "$(git rev-parse HEAD)" ]; then
-  echo "ignore-build: redeploy of the same commit, building"
-  exit 1
-fi
-
-case "$project" in
-  "$SITE_PROJECT_ID") git diff --quiet "$prev" HEAD -- site scripts/fetch-fonts.mjs vercel.json ;;
-  "$APP_PROJECT_ID") git diff --quiet "$prev" HEAD -- . ':(exclude)site' ;;
-  *) echo "ignore-build: unknown project, building"; exit 1 ;;
+case "$ref" in
+  staging | main | "") exit 1 ;;
 esac
-# git diff: 0 = unchanged (skip), 1 = changed, >1 = error; build on anything but 0.
-[ $? -eq 0 ] && { echo "ignore-build: no relevant changes, skipping"; exit 0; }
-exit 1
+
+case "${VERCEL_GIT_COMMIT_MESSAGE:-}" in
+  *"[preview]"*)
+    echo "ignore-build: [preview] in the commit message, building"
+    exit 1
+    ;;
+esac
+
+echo "ignore-build: not staging or main, skipping"
+exit 0

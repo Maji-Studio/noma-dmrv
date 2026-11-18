@@ -7,6 +7,26 @@ type Coverage = { status: "direct" } | { status: "runner"; operations: string[] 
 // Explicit inventory includes wrappers, cascades and derived writers. Discovery
 // below scans the whole data-access tree so new modules cannot bypass it.
 const ACTIVITY_COVERAGE = {
+  "emission-line-files.ts": {
+    getOrCreateEmissionLineFile: { status: "exempt", reason: "The anchor is internal ownership bookkeeping; the document writer records file activity." },
+    replaceEmissionLineFiles: { status: "direct" },
+    attachEmissionLineFile: { status: "direct" },
+    removeEmissionLineFile: { status: "direct" },
+  },
+  "emission-line-file-lock.ts": {
+    bumpEmissionLineFileEvidence: { status: "exempt", reason: "The document writer records the activity." },
+  },
+  "component-file-policy.ts": {
+    setComponentFilePolicy: { status: "direct" },
+  },
+  "removal-template-observations.ts": {
+    observeTemplate: { status: "exempt", reason: "Registry observation refresh is internal snapshot bookkeeping, not an operator entity edit." },
+    reviewLineContracts: { status: "exempt", reason: "Delegates to reviewLineContractsInTransaction; initial template decisions have no entity activity event." },
+    reviewLineContractsInTransaction: { status: "exempt", reason: "Initial template contract decisions are setup state; component proof changes record their own activity." },
+  },
+  "removal-template-setup.ts": {
+    applySetupInTransaction: { status: "exempt", reason: "Delegates template decisions to reviewLineContractsInTransaction and batch changes to their activity-recording writer." },
+  },
   "emission-line-comments.ts": {
     setEmissionLineComment: { status: "direct" },
     deleteEmissionLineComment: { status: "direct" },
@@ -99,6 +119,7 @@ const ACTIVITY_COVERAGE = {
     deleteDocumentRow: { status: "direct" },
     retireDocumentsForEntities: { status: "direct" },
     retireTombstonedEmissionEntryDocuments: { status: "direct" },
+    retireCreditBatchEmissionLineFiles: { status: "direct" },
   },
   "document-writes.ts": {
     requestDocumentUploadInTransaction: { status: "runner", operations: ["request_document_upload", "request_document_upload_app"] },
@@ -200,7 +221,7 @@ const ACTIVITY_COVERAGE = {
 const COVERED_TABLES = new Set([
   "creditBatches", "creditBatchProductionRuns", "creditBatchApplications",
   "applications", "documents", "transportLegs", "emissionEntries", "emissionEntryValues", "emissionLineComments",
-  "formulations", "formulationIngredients",
+  "formulations", "formulationIngredients", "emissionLineFiles", "removalTemplateObservations",
 ]);
 const WRITE_PREFIX = /^(create|update|delete|attach|detach|archive|insert|upsert|sync|replace|retire|remove|set|mark)/;
 type Inventory = Record<string, Record<string, Coverage>>;

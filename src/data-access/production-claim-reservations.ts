@@ -1,3 +1,4 @@
+import { assertComponentFileClaimFresh } from "./component-file-claim";
 import { isCarriedToRemoval } from "@/lib/certification/emission-entry-carry";
 import { loadFacilityEmissionEntryCarry } from "./emission-entry-carry";
 import { loadEmissionEntryHolds } from "./emission-entry-holds";
@@ -54,6 +55,7 @@ export async function reserveProductionEmissionsClaims(
     submissionId: string;
     creditBatchIds: string[];
     now?: Date;
+    frozenLineFileSet?: { anchorId: string; version: number }[];
     entryClaim?: { memberBatchIds: string[]; frozenEntrySet: { entryId: string; contentRevision: number }[] };
   },
 ): Promise<void> {
@@ -196,6 +198,8 @@ export async function reserveProductionEmissionsClaims(
       );
     }
 
+    await assertComponentFileClaimFresh(ctx, tx, batches.filter(batch => productionIds.includes(batch.id)), args.frozenLineFileSet ?? []);
+
     const reservedEntries = entryIds.length ? await tx.update(emissionEntries).set({
       sendReservedBySubmissionId: args.submissionId, version: nextVersion(emissionEntries.version), updatedAt: sql`now()`,
     }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), inArray(emissionEntries.id, entryIds))).returning() : [];
@@ -235,6 +239,8 @@ export async function rejectSubmissionAndReleaseProductionClaims(
     submissionId: string;
     expectedLockedAt: Date;
     errorMessage: string;
+    /** Owning attempt observed no writes, including any uncertainty inherited on resume. */
+    mutationFreeAttempt?: true;
   },
 ): Promise<void> {
   requireOrgScope(ctx);
@@ -259,7 +265,17 @@ export async function rejectSubmissionAndReleaseProductionClaims(
         ),
       )
       .for("update");
-    if (!submission || hasPossibleExternalMutation(submission)) return;
+    if (!submission) return;
+
+    // Only the exact live attempt may discharge its pre-write crash marker.
+    // Confirmed identities and uncertainty inherited from prior attempts stay protected.
+    const canClearAttemptMarker = args.mutationFreeAttempt &&
+      submission.status === "draft" &&
+      submission.lockedAt?.getTime() === args.expectedLockedAt.getTime() &&
+      !submission.externalId &&
+      getMetadataValue(submission.metadata, SUBMISSION_METADATA_KEYS.externalMutation) ===
+        SUBMISSION_EXTERNAL_MUTATIONS.possible;
+    if (hasPossibleExternalMutation(submission) && !canClearAttemptMarker) return;
 
     const exactDraftAttempt =
       submission.status === "draft" &&

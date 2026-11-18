@@ -1,0 +1,23 @@
+/*
+ * Stage band hover: a column lights its ground lot (in the scene) and its cell
+ * together, in the same purple. The scene's stations never move and nothing
+ * covers the drawing. Each rule pairs a column's data-stage with the scene's
+ * data-art-lot of the same stage; the scene sits in the same .stage-band.
+ */
+.scene-lot {
+  fill: transparent;
+  transition: fill 0.2s;
+}
+.stage-band:has([data-stage="suppliers"]:is(:hover, :focus-within)) [data-art-lot="suppliers"],
+.stage-band:has([data-stage="feedstock"]:is(:hover, :focus-within)) [data-art-lot="feedstock"],
+.stage-band:has([data-stage="production"]:is(:hover, :focus-within)) [data-art-lot="production"],
+.stage-band:has([data-stage="products"]:is(:hover, :focus-within)) [data-art-lot="products"],
+.stage-band:has([data-stage="deliveries"]:is(:hover, :focus-within)) [data-art-lot="deliveries"],
+.stage-band:has([data-stage="applications"]:is(:hover, :focus-within)) [data-art-lot="applications"] {
+  fill: var(--clr-purple-5);
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene-lot {
+    transition: none;
+  }
+}

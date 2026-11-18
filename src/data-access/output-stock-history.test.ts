@@ -63,9 +63,9 @@ it('uses physical intake dry balances but returns recorded order', async () => {
   const rows = historyRows('fifo', ['2026-09-12', '2026-09-13'], ['1', '2']);
   rows.set(productionRuns, [
     { id: LAYER_A, code: 'A', status: 'complete', biocharStorageLocationId: 'bin',
-      endTime: new Date('2026-09-10'), updatedAt: new Date('2026-09-10'), biocharOutputKg: 200, biocharDryMassKg: 200, biocharMoisturePercent: 0 },
+      endTime: new Date('2026-09-10'), outputPostedAt: new Date('2026-09-10'), biocharOutputKg: 200, biocharDryMassKg: 200, biocharMoisturePercent: 0 },
     { id: LAYER_B, code: 'B', status: 'complete', biocharStorageLocationId: 'bin',
-      endTime: new Date('2026-09-13'), updatedAt: new Date('2026-09-17'), biocharOutputKg: 50, biocharDryMassKg: 50, biocharMoisturePercent: 0 },
+      endTime: new Date('2026-09-13'), outputPostedAt: new Date('2026-09-17'), biocharOutputKg: 50, biocharDryMassKg: 50, biocharMoisturePercent: 0 },
   ]);
   vi.spyOn(stock, 'readOutputBinAllLayers').mockResolvedValue({ layers: [], allLayersDryKg: '0.000', availableDryKg: '0.000', expectedSolidsKg: decimal('0') });
   vi.spyOn(stock, 'getLayerMoistureBases').mockResolvedValue([]);
@@ -83,7 +83,7 @@ it.each([true, false])('recomputes wet changes with a saved wet preview: %s', as
     inputSnapshot: { kind: 'loss', preview: { beforeEstimatedWetKg: hasSavedWet ? 100 : null, afterEstimatedWetKg: hasSavedWet ? 110 : null, beforeSolidsKg: 80, afterSolidsKg: 55 } },
   } }]);
   rows.set(productionRuns, [{ id: LAYER_B, code: 'B', status: 'complete', biocharStorageLocationId: 'bin',
-    endTime: new Date('2026-09-13'), updatedAt: new Date('2026-09-17'), biocharOutputKg: 200, biocharDryMassKg: 80, biocharMoisturePercent: 60 }]);
+    endTime: new Date('2026-09-13'), outputPostedAt: new Date('2026-09-17'), biocharOutputKg: 200, biocharDryMassKg: 80, biocharMoisturePercent: 60 }]);
   vi.spyOn(stock, 'readOutputBinAllLayers').mockResolvedValue({ layers: [], allLayersDryKg: '0.000', availableDryKg: '0.000', expectedSolidsKg: decimal('0') });
   vi.spyOn(stock, 'getLayerMoistureBases').mockResolvedValue([
     { layerId: LAYER_A, placedAt: '2026-09-12', remainingSolidsKg: decimal('55'),

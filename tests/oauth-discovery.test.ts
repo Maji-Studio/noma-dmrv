@@ -67,7 +67,7 @@ it.each(resourceRoutes.slice(1))("serves the exact challenge metadata URL at $pa
   expect(oauthResourceMetadataUrl(resource)).toBe(expected);
   expect(apiDenialResponse("credential_missing", audience, "request-id").headers.get("www-authenticate"))
     .toContain(`resource_metadata="${expected}"`);
-  expect(oauthInsufficientScopeChallenge(resource, ["feedstocks:read"], ["feedstocks:write"]))
+  expect(oauthInsufficientScopeChallenge(resource, ["feedstocks:read"], ["feedstocks:write"], "member"))
     .toContain(`resource_metadata="${expected}"`);
   expect((await (await (await load()).GET()).json()).resource).toBe(resource);
 });

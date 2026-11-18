@@ -12,7 +12,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 
 // Keep the statement guard real. Lock fixtures have no semantic snapshots, so
 // stub only the shared content comparison.
-vi.mock("@/fn/certification/removal-content-comparison-core", () => ({
+vi.mock("@/lib/certification/removal-content-comparison-core", () => ({
   compareRemovalCurrentContent: vi.fn(async () => ({ kind: "unchanged", components: [],
     state: { windowOpen: true, correctionNeeded: false, changedComponentIds: [], message: null },
   })),

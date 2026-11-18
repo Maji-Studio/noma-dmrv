@@ -125,7 +125,6 @@ export function FacilityActivity({ facilityId, caption }: FacilityActivityProps)
           <div className="min-w-0 flex-1">
             <EnergyRecordList
               records={recordsForBatch(data.records, batchId)}
-              creditBatches={data.creditBatches}
               facilityId={facilityId}
               scope={scope}
               onScopeChange={setScope}

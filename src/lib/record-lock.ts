@@ -201,8 +201,15 @@ export function readsAsReturnedFromPersisted(removal: RecordLockRemoval): boolea
 }
 
 /** Entry corrections use the existing returned state and every shared lineage holder. */
-export function isRemovalCorrectionWindowOpen(removal: RecordLockRemoval, lineage: readonly RecordLockRemoval[] = [removal]): boolean {
-  return isReturnedRemoval(removal) && lineage.every((holder) =>
+export function isRemovalCorrectionWindowOpen(
+  removal: RecordLockRemoval,
+  lineage: readonly RecordLockRemoval[] = [removal],
+  /** Send again: the Removal's own version is gone (retired, its statement unlinked), so it need not be returned and its
+   * own retired attempt is not an open one. Every other holder's checks still apply. */
+  options: { ownReturnedNotRequired?: boolean } = {},
+): boolean {
+  return (options.ownReturnedNotRequired || isReturnedRemoval(removal)) && lineage.every((holder) =>
+    (options.ownReturnedNotRequired && holder.id === removal.id) ||
     holder.submissions.every(isIdleAttempt) &&
     // An unsubmitted DRAFT on another holder has never locked its lineage.
     holder.statements.every((statement) => isReturnedStatement(statement) ||

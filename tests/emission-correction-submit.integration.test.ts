@@ -1,7 +1,7 @@
 /** DB-backed claim/freshness/reservation regression. Registry I/O uses the orchestrator harness. */
 import { makeContext, makeTemplate, fakeExternalIds, makeInventorySourceDocument } from "./fixtures/submit-removal-orchestrator";
 import { updateApplicationInTransaction } from "@/data-access/application-writes";
-import { loadRemovalEntryCorrection } from "@/fn/certification/removal-correction-core";
+import { loadRemovalEntryCorrection } from "@/lib/certification/removal-correction-core";
 import { afterEach, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -16,16 +16,16 @@ import { recordEmissionZeros } from "@/data-access/emission-zeros";
 import * as claims from "@/data-access/certification-submissions";
 import * as ledger from "@/data-access/certification";
 import * as reservations from "@/data-access/production-claim-reservations";
-import * as context from "@/fn/certification/certify-context-core";
-import * as sources from "@/fn/certification/source-candidates";
+import * as context from "@/lib/certification/certify-context-core";
+import * as sources from "@/lib/certification/source-candidates";
 import * as isometric from "@/lib/isometric";
-import { loadBatchEmissionContext } from "@/fn/certification/batch-emission-context";
-import { loadRemovalEntryContext } from "@/fn/certification/removal-entry-context";
+import { loadBatchEmissionContext } from "@/lib/certification/batch-emission-context";
+import { loadRemovalEntryContext } from "@/lib/certification/removal-entry-context";
 import { emissionEntrySourceCandidates } from "@/lib/certification/emission-entry-source-bindings";
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations";
 import { reviewedTemplateSources } from "./helpers/template-line-sources";
 import { submitRemoval } from "@/fn/certification/submit-removal";
-import type { RemovalScope } from "@/fn/certification/removal-scope";
+import type { RemovalScope } from "@/lib/certification/removal-scope";
 
 const { ORIGINAL_EXTERNAL_ID, returnedEntryIds } = vi.hoisted(() => {
   const id = `original-${crypto.randomUUID()}`;
@@ -106,6 +106,7 @@ it.each([
   vi.mocked(claims.claimSubmissionDraft).mockImplementation(realClaims.claimSubmissionDraft);
   vi.mocked(claims.getLatestSubmissionWithExecutor).mockImplementation(realClaims.getLatestSubmissionWithExecutor);
   vi.mocked(claims.recordConfirmedSubmissionIdentity).mockImplementation(realClaims.recordConfirmedSubmissionIdentity);
+  vi.mocked(claims.markSubmissionAttemptStarted).mockImplementation(realClaims.markSubmissionAttemptStarted);
   const realReservations = await vi.importActual<typeof reservations>("@/data-access/production-claim-reservations");
   vi.mocked(reservations.reserveProductionEmissionsClaims).mockImplementation(realReservations.reserveProductionEmissionsClaims);
   const transitions = await import("@/data-access/submission-ledger-transitions");

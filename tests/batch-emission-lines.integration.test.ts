@@ -51,7 +51,7 @@ beforeAll(async () => {
     enrichment: await loadTemplateEnrichment(registryClient, template, blueprints) });
   observationId = observation.id;
   await db.update(creditBatches).set({ removalTemplateId: template.id }).where(and(eq(creditBatches.organizationId, TEST_ORG_ID), eq(creditBatches.id, lineage.batchId)));
-  const [run] = await db.update(productionRuns).set({ status: "complete", endTime: new Date("2026-06-13T12:00:00Z"), electricityKwh: 12 })
+  const [run] = await db.update(productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-06-13T12:00:00Z"), endTime: new Date("2026-06-13T12:00:00Z"), electricityKwh: 12 })
     .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, lineage.productionRunId))).returning();
   // A second run on the same reactor needs its own start time and posting sequence.
   const [unapplied] = await db.insert(productionRuns).values({ ...run, stockPostingSequence: undefined, id: crypto.randomUUID(), code: `PR-EL-${crypto.randomUUID()}`, electricityKwh: 8,
@@ -90,7 +90,7 @@ it("loads pinned lines using all and only the batch's runs, including unapplied 
   assert(linesResult.status === "ready");
   const lines = linesResult.lines;
   expect(lines).toHaveLength(1);
-  expect(lines[0]).toMatchObject({ componentId: group.components[0].id, state: "filled", automaticFigure: { magnitude: "20", unit: "kWh" }, total: { magnitude: "20", unit: "kWh" }, entries: [], comment: null });
+  expect(lines[0]).toMatchObject({ componentId: group.components[0].id, state: "missingEvidence", blocker: { code: "lineMissingEvidence", fixTarget: "emissions" }, automaticFigure: { magnitude: "20", unit: "kWh" }, total: { magnitude: "20", unit: "kWh" }, entries: [], comment: null });
 });
 it("rejects a cross-organization batch read", async () => {
   await expect(loadBatchEmissionLines({ ...ctx, organizationId: `other-${crypto.randomUUID()}` }, lineage.facilityId, lineage.batchId)).rejects.toThrow();

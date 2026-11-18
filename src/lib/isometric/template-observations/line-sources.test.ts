@@ -1,3 +1,4 @@
+import { normalizeStoredLineSources } from "./line-sources";
 import { describe, expect, it } from "vitest";
 import sandbox from "../../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import lcaTemplate from "../../../../tests/fixtures/isometric/production-template-2026-10-15.json";
@@ -348,7 +349,6 @@ it("keeps separate mass and distance inputs single and flags stored additive con
   })).toContainEqual({ code: "disallowed-entry-policy", componentId: pair.id });
 });
 
-
 it.each([1, 2])("normalizes stored automatic transport pairs for fixture %s, preserving reviewed decisions", (index) => {
   const definition = definitions[index];
   const id = index === 1 ? "rtc_1M2QJGQS21S0XCMB" : "rtc_1KWKNGJZY1S0D548";
@@ -363,4 +363,21 @@ it.each([1, 2])("normalizes stored automatic transport pairs for fixture %s, pre
     // A second observation must never silently normalize an admin's decision.
     expect(resolveLineSources({ definition, previous: { definition, lineSources: resolved } })[id].entryPolicy).toBe(resolved[id].entryPolicy);
   }
+});
+
+it.each([undefined, "none", "entryFiles", "generated", "lineFile"] as const)("preserves stored proof setting %s across observations", (filePolicy) => {
+  const lineSources = resolveLineSources({ definition });
+  if (filePolicy !== undefined) lineSources[GENSET].filePolicy = filePolicy;
+  const before = structuredClone(lineSources);
+  const next = structuredClone(definition);
+  next.groups[0].displayName += " renamed";
+  const normalized = normalizeStoredLineSources(next, lineSources);
+  const carried = resolveLineSources({ definition: next, previous: { definition, lineSources } });
+  for (const contract of [normalized[GENSET], carried[GENSET], effectiveContract(carried[GENSET])]) {
+    expect(contract.filePolicy).toBe(filePolicy);
+    expect(Object.hasOwn(contract, "filePolicy")).toBe(filePolicy !== undefined);
+  }
+  expect(carried[GENSET].origin).toBe("carried");
+  expect(lineSources).toEqual(before);
+  expect(Object.values(resolveLineSources({ definition })).every((contract) => !Object.hasOwn(contract, "filePolicy"))).toBe(true);
 });

@@ -61,13 +61,13 @@ it.each(["admin", "member"] as const)("lists reads and writes within the %s ceil
   expect(names).not.toContain("delete_customer_location");
 });
 it.each([
-  { name: "log_feedstock_delivery", arguments: {}, scope: "feedstocks:write" },
-  { name: "find_documents", arguments: { ownerType: "delivery" }, scope: "deliveries:read" },
-  { name: "request_document_upload", arguments: { ownerType: "application" }, scope: "applications:write" },
-])("steps up $name before parsing or dispatch", async ({ name, arguments: args, scope }) => {
+  { name: "log_feedstock_delivery", arguments: {}, scope: "feedstocks:write", offered: "feedstocks:read feedstocks:write" },
+  { name: "find_documents", arguments: { ownerType: "delivery" }, scope: "deliveries:read", offered: "feedstocks:read deliveries:read" },
+  { name: "request_document_upload", arguments: { ownerType: "application" }, scope: "applications:write", offered: "feedstocks:read applications:read applications:write" },
+])("steps up $name before parsing or dispatch", async ({ name, arguments: args, scope, offered }) => {
   const response = await POST(rpc("synthetic", "tools/call", { name, arguments: args }));
   expect(response.status).toBe(403);
-  expect(response.headers.get("www-authenticate")).toContain(`error="insufficient_scope", scope="feedstocks:read ${scope}"`);
+  expect(response.headers.get("www-authenticate")).toContain(`error="insufficient_scope", scope="${offered}"`);
   expect(await response.json()).toMatchObject({ code: "missing_scope" });
   expect(serveMcp).not.toHaveBeenCalled();
   expect(mocks.record).toHaveBeenCalledWith({ userId: oauth().userId, clientId: "client", organizationId: oauth().organizationId }, [scope]);

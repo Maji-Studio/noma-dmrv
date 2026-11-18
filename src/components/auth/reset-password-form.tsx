@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@/lib/auth/client";
 import Link from "next/link";
 import { Button } from "@/components/ui";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import {
   resetPasswordSchema,
   type ResetPasswordFormData,
@@ -130,6 +131,7 @@ function ResetPasswordFormContent() {
             type="submit"
             variant="primary"
             width="full"
+            className={PHONE_TOUCH_TARGET}
             busy={isSubmitting}
           >
             Reset password

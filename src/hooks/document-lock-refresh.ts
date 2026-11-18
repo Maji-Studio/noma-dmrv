@@ -3,7 +3,7 @@ import { isActionError } from "@/lib/action-error";
 import { RECORD_LOCK_VIEW_KINDS, type RecordLockViewKind } from "@/lib/record-lock-view";
 import { recordLockMeta, RECORD_LOCK_TOUCHES } from "./record-lock-query-keys";
 import { documentKeys } from "./document-query-keys";
-import { certificationKeys } from "./use-certification";
+import { certificationKeys } from "./certification-query-keys";
 
 type Owner = { entityType: string; entityId?: string };
 const OWNER_KINDS: Record<string, RecordLockViewKind> = {

@@ -13,7 +13,8 @@
  * trips are budgeted by `tests/dashboard-query-budget.test.ts`.
  */
 import { removalResubmitHref } from "@/lib/removal-correction-copy";
-import { RECORD_LINKS, recordHref } from "@/lib/record-links";
+import { CHANGED_SINCE_REVIEW_LABEL } from "@/lib/certification/interrupted-removal-copy";
+import { RECORD_LINKS, recordHref, type RecordKind } from "@/lib/record-links";
 import { db } from "@/db";
 import {
   applications,
@@ -57,7 +58,7 @@ import {
   creditBatchAttention,
   feedstocksMissingDataWhere,
   PERIOD_ENDED_NOT_SUBMITTED_TITLE,
-  pendingBatchesWhere,
+  activeBatchesWhere,
   runsMissingMassWhere,
 } from "./dashboard-attention";
 import { facilityListHref } from "@/lib/dashboard-links";
@@ -77,6 +78,7 @@ import {
   epochMs,
   getDashboardStations,
   type DashboardStationsData,
+  type DashboardStationKey,
 } from "./dashboard-stations";
 import {
   buildDashboardStructuralGaps,
@@ -85,13 +87,13 @@ import {
 } from "./dashboard-structural-gaps";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { requireOrgScope } from "./utils";
+import { getRemovalIdsWithChangedLatestAttempt } from "./removal-latest-attempt";
 
 // Re-exported so components import every dashboard type from one module.
 export type {
   DashboardActivityItem,
   DashboardCertification,
   DashboardCertificationBatch,
-  DashboardCreditBatchStatus,
   DashboardStation,
   DashboardStationKey,
   DashboardStationReason,
@@ -158,6 +160,9 @@ export interface DashboardMassFlowSegment {
 
 export interface DashboardAttentionItem {
   id: string;
+  /** The traceability stage whose attention bubble includes this row. */
+  stage: DashboardStationKey;
+  recordKind: RecordKind;
   /**
    * Entity code shown in the mono column, e.g. "PR-26-0042"; on a grouped row
    * the list it links to, e.g. "Production runs".
@@ -165,6 +170,10 @@ export interface DashboardAttentionItem {
   entityCode: string;
   /** Records a grouped row stands for; absent on a single record's row. */
   count?: number;
+  /** Every record represented, including records beyond a grouped check's SQL cap. */
+  recordIds: string[];
+  /** Available single rows, so a one-record scope can name that record without another read. */
+  recordItems?: DashboardAttentionItem[];
   /** Canonical record date shown beside the entity code. */
   date: string | Date | null;
   title: string;
@@ -243,7 +252,6 @@ export async function getDashboardOverview(
         eq(creditBatches.organizationId, ctx.organizationId),
         eq(creditBatches.facilityId, facilityId),
         isNull(creditBatches.archivedAt),
-        ne(creditBatches.status, "rejected"),
         ...(fetchStartDay
           ? [gte(creditBatches.endDate, fetchStartDay)]
           : []),
@@ -596,36 +604,53 @@ function branchIds(id: SQLWrapper): SQL<string[]> {
  * filter to exact ids (within the filter's limit); the feedstock list has no
  * such filter, so its row opens the plain list.
  */
-const FLAG_GROUPS: Record<FlagKind, { title: string; list: string; href: (facilityId: string, ids: string[]) => string }> = {
+const FLAG_GROUPS: Record<FlagKind, {
+  stage: DashboardStationKey;
+  recordKind: RecordKind;
+  title: string;
+  list: string;
+  href: (facilityId: string, ids: string[]) => string;
+}> = {
   "run-mass": {
+    stage: "production",
+    recordKind: "productionRun",
     title: "Complete runs missing mass data",
     list: "Production runs",
     href: (facilityId, ids) => facilityListHref(RECORD_LINKS.productionRun.path, facilityId, ids),
   },
   "feedstock-missing": {
+    stage: "feedstock",
+    recordKind: "feedstock",
     title: "Feedstock records missing data",
     list: "Feedstock intake",
     href: (facilityId) => facilityListHref(RECORD_LINKS.feedstock.path, facilityId),
   },
   "application-evidence": {
+    stage: "applications",
+    recordKind: "application",
     title: "Applications missing evidence",
     list: "Applications",
     href: (facilityId, ids) => facilityListHref(RECORD_LINKS.application.path, facilityId, ids),
   },
 };
 
-function groupedRow(kind: string, list: string, title: string, count: number, href: string): DashboardAttentionItem {
-  return { id: `${kind}-group`, entityCode: list, count, date: null, title, href };
+function groupedRow(
+  kind: string, list: string, title: string, count: number, href: string,
+  recordItems: DashboardAttentionItem[],
+  recordIds = recordItems.flatMap((item) => item.recordIds),
+): DashboardAttentionItem {
+  const { stage, recordKind } = recordItems[0];
+  return { stage, recordKind, id: `${kind}-group`, entityCode: list, count, recordIds, recordItems, date: null, title, href };
 }
 
-/** Pending batches take their title from `creditBatchAttention`. */
+/** Active batches take their title from `creditBatchAttention`. */
 const ATTENTION_TITLES: Record<Exclude<AttentionKind, "batch-pending">, string> = {
   "run-mass": "Complete run missing mass data",
   "feedstock-missing": "Feedstock record missing data",
   "application-evidence": "Application missing evidence",
 };
 
-/** Flags sort before pending batches; within a kind the branch ordinal holds. */
+/** Flags sort before active batches; within a kind the branch ordinal holds. */
 const FLAG_ORDER: FlagKind[] = [
   "run-mass",
   "feedstock-missing",
@@ -654,7 +679,7 @@ function attentionHref(
  * `union all` of capped, narrow, indexed selects; a window count and id list
  * carry each check's uncapped size, so an over-cap check folds into one
  * grouped row (`capOrGroup`). An item disappears the moment the underlying
- * record is fixed (no independent lifecycle). Pending batches are read
+ * record is fixed (no independent lifecycle). Active batches are read
  * uncapped with their Removals' display facts (correlated subqueries, no
  * extra round trip): an interrupted Removal is one row per Removal, a period
  * closed without a submission one row per batch (`creditBatchAttention`),
@@ -745,7 +770,7 @@ export async function getDashboardAttentionItems(
       // Redundant org predicate for the lexical guard (see note above).
       .where(
         and(
-          pendingBatchesWhere(orgId, facilityId),
+          activeBatchesWhere(orgId, facilityId),
           eq(creditBatches.organizationId, orgId),
         ),
       )
@@ -767,6 +792,9 @@ export async function getDashboardAttentionItems(
   let returnedBatchCount = 0;
   let notSubmittedBatchCount = 0;
   const interrupted = new Map<string, DashboardAttentionItem>();
+  const interruptedIds = new Set(batchRows.flatMap(({ removals }) =>
+    removals.filter((removal) => removal.status.kind === "interrupted").map((removal) => removal.id)));
+  const changedRemovalIds = await getRemovalIdsWithChangedLatestAttempt(ctx, [...interruptedIds]);
   // Only periods waiting on the operator; one awaiting verification waits on the verifier.
   const notSubmitted: DashboardAttentionItem[] = [];
   const returned: DashboardAttentionItem[] = [];
@@ -778,10 +806,13 @@ export async function getDashboardAttentionItems(
       const existing = interrupted.get(removal.id);
       interrupted.set(removal.id, {
         id: `removal-interrupted-${removal.id}`,
+        stage: "production",
+        recordKind: "removal",
+        recordIds: [removal.id],
         entityCode: `${existing?.entityCode ?? removal.code} · ${row.code}`,
         date: null,
-        title: REMOVAL_INTERRUPTED_ATTENTION_TITLE,
-        href: removalResubmitHref(removal.id, facilityId),
+        title: changedRemovalIds.has(removal.id) ? CHANGED_SINCE_REVIEW_LABEL : REMOVAL_INTERRUPTED_ATTENTION_TITLE,
+        href: changedRemovalIds.has(removal.id) ? recordHref("removal", removal.id, { facilityId }) : removalResubmitHref(removal.id, facilityId),
       });
     }
     const returnedHere = removals.filter((removal) => returnedRemovalIds.has(removal.id));
@@ -793,6 +824,9 @@ export async function getDashboardAttentionItems(
     if (attention.period === "notSubmitted" || attention.period === "returned") {
       (attention.period === "returned" ? returned : notSubmitted).push({
         id: `batch-pending-${row.id}`,
+        stage: "production",
+        recordKind: "creditBatch",
+        recordIds: [row.id],
         entityCode: row.code,
         date: row.dateDay,
         title: attention.period === "returned" ? RETURNED_BY_ISOMETRIC_LABEL : PERIOD_ENDED_NOT_SUBMITTED_TITLE,
@@ -808,34 +842,38 @@ export async function getDashboardAttentionItems(
     const first = kindRows[0];
     if (!first) return [];
     const group = FLAG_GROUPS[kind];
+    const recordItems = kindRows.map((row): DashboardAttentionItem => ({
+      id: `${kind}-${row.id}`,
+      stage: group.stage,
+      recordKind: group.recordKind,
+      recordIds: [row.id],
+      entityCode: row.code,
+      date: row.dateDay ?? (row.dateMs == null ? null : new Date(row.dateMs)),
+      title: ATTENTION_TITLES[kind],
+      href: attentionHref(kind, row.id, facilityId),
+    }));
     return capOrGroup(
-      kindRows.map((row): DashboardAttentionItem => ({
-        id: `${kind}-${row.id}`,
-        entityCode: row.code,
-        date: row.dateDay ?? (row.dateMs == null ? null : new Date(row.dateMs)),
-        title: ATTENTION_TITLES[kind],
-        href: attentionHref(kind, row.id, facilityId),
-      })),
+      recordItems,
       first.total,
-      () => groupedRow(kind, group.list, group.title, first.total, group.href(facilityId, first.allIds)),
+      () => groupedRow(kind, group.list, group.title, first.total, group.href(facilityId, first.allIds), recordItems, first.allIds),
     );
   });
   return {
     // An interrupted submission leads: it blocks the Removal until resumed.
     items: [
       ...capOrGroup(interruptedRows, interruptedRows.length, () =>
-        groupedRow("removal-interrupted", "Removals", "Submissions interrupted", interruptedRows.length, removalsList)),
+        groupedRow("removal-interrupted", "Removals", "Submissions interrupted", interruptedRows.length, removalsList, interruptedRows)),
       ...capOrGroup(removalRows.drafts, removalRows.drafts.length, () =>
-        groupedRow("removal-draft", "Removals", "Draft Removals", removalRows.drafts.length, removalsList)),
+        groupedRow("removal-draft", "Removals", "Draft Removals", removalRows.drafts.length, removalsList, removalRows.drafts)),
       ...capOrGroup(removalRows.rejected, removalRows.rejected.length, () =>
-        groupedRow("removal-rejected", "Removals", REMOVAL_REJECTED_ATTENTION_TITLE, removalRows.rejected.length, removalsList)),
+        groupedRow("removal-rejected", "Removals", REMOVAL_REJECTED_ATTENTION_TITLE, removalRows.rejected.length, removalsList, removalRows.rejected)),
       ...flags,
       ...capOrGroup(removalRows.returned.map((row) => row.item), removalRows.returned.length, () =>
-        groupedRow("removal-returned", "Removals", RETURNED_BY_ISOMETRIC_LABEL, removalRows.returned.length, removalsList)),
+        groupedRow("removal-returned", "Removals", RETURNED_BY_ISOMETRIC_LABEL, removalRows.returned.length, removalsList, removalRows.returned.map((row) => row.item))),
       ...capOrGroup(returned, returned.length, () =>
-        groupedRow("batch-returned", "Credit batches", RETURNED_BY_ISOMETRIC_LABEL, returned.length, batchList)),
+        groupedRow("batch-returned", "Credit batches", RETURNED_BY_ISOMETRIC_LABEL, returned.length, batchList, returned)),
       ...capOrGroup(notSubmitted, notSubmitted.length, () =>
-        groupedRow("batch-not-submitted", "Credit batches", PERIOD_ENDED_NOT_SUBMITTED_TITLE, notSubmitted.length, batchList)),
+        groupedRow("batch-not-submitted", "Credit batches", PERIOD_ENDED_NOT_SUBMITTED_TITLE, notSubmitted.length, batchList, notSubmitted)),
     ],
     batches: { interrupted: interrupted.size, notSubmitted: notSubmittedBatchCount, returned: returnedBatchCount },
   };

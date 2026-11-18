@@ -116,7 +116,7 @@ function holdAfterWrite<I extends z.ZodType, O>(operation: Operation<I, O>, paus
 }
 async function fixture(emptyMembership = false) {
   const f = await createLineageFixture("none");
-  await db.update(schema.productionRuns).set({ status: "complete", endTime: new Date("2026-06-13T12:00:00Z") }).where(eq(schema.productionRuns.id, f.productionRunId));
+  await db.update(schema.productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-06-13T12:00:00Z"), endTime: new Date("2026-06-13T12:00:00Z") }).where(eq(schema.productionRuns.id, f.productionRunId));
   await db.delete(schema.samples).where(eq(schema.samples.id, f.sampleId));
   await db.update(schema.creditBatchApplications).set({ removalId: null }).where(eq(schema.creditBatchApplications.applicationId, f.applicationId));
   if (emptyMembership) {
@@ -298,7 +298,7 @@ it.each(["membership", "completion"] as const)("notes edit retries a scope/artif
   // The existing run's output already has a delivery allocation, so its
   // output-basis guard refuses completion before attachment can take scope.
   // Keep that completed member's Removal artifact and complete an unused run.
-  await db.update(schema.productionRuns).set({ status: "complete", endTime: new Date("2026-06-13T12:00:00Z") })
+  await db.update(schema.productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-06-13T12:00:00Z"), endTime: new Date("2026-06-13T12:00:00Z") })
     .where(eq(schema.productionRuns.id, f.productionRunId));
   await db.update(schema.feedstocks).set({ massWetKg: 2_000, massDryKg: 1_800 }).where(eq(schema.feedstocks.id, f.feedstockId));
   const [completingRun] = await db.insert(schema.productionRuns).values({

@@ -7,7 +7,7 @@ import {
 } from "@/lib/isometric";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
-import { safeListIfConfigured } from "./shared";
+import { safeListIfConfigured } from "@/lib/certification/shared";
 
 // Read-only browse of the registry's feedstock-type catalogue for the
 // feedstock-type form's Isometric tab. Browse-only by design: no local

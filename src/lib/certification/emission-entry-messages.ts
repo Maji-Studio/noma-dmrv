@@ -1,3 +1,8 @@
+export const REENTER_EMISSION_ENTRY = "Enter the values again for the current component.";
+export const ENTRY_FILE_MISSING_INSTRUCTION = "Add a file for each emissions entry with a value.";
+export const COMPONENT_FILE_LABEL = "Component file";
+export const EMISSION_LINE_FILE_CHANGED = "The component file changed. Reload and review this Removal again.";
+export const LINE_FILE_MISSING_INSTRUCTION = "Add a file for the From records amount on this credit batch.";
 export const RETURNED_BY_ISOMETRIC_LABEL = "Returned by Isometric";
 export const EMISSION_ENTRY_OUTSIDE_CORRECTION_WINDOW = "Keep the entry date within this Removal's period.";
 export const ENTRY_HAS_NO_REMOVAL = "No Removal can carry this entry yet. Change its date to fit the Removal period, or wait for a later Removal.";

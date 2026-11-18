@@ -20,7 +20,7 @@
 
 import { readStockBalances, type SnapshotStock } from "@/data-access/stock-effects";
 import { diffStockBalances, type StockBalance, type StockEffects } from "@/lib/representations/stock-effects";
-import { createHash } from "node:crypto";
+import { fingerprint } from "@/lib/crypto/fingerprint";
 import { z } from "zod";
 import type { Pool } from "pg";
 import type { DbTransaction } from "@/db";
@@ -135,17 +135,15 @@ export function requestFingerprint(
   decodedInput: unknown,
   idempotency: Pick<IdempotencyOptions, "target" | "precondition">,
 ): string {
-  return createHash("sha256")
-    .update(
-      stableJson({
-        apiVersion: API_CONTRACT_VERSION,
-        operationId,
-        input: decodedInput,
-        target: idempotency.target ?? null,
-        precondition: idempotency.precondition ?? null,
-      }),
-    )
-    .digest("hex");
+  return fingerprint(
+    stableJson({
+      apiVersion: API_CONTRACT_VERSION,
+      operationId,
+      input: decodedInput,
+      target: idempotency.target ?? null,
+      precondition: idempotency.precondition ?? null,
+    }),
+  );
 }
 
 /** The JSON representation a first response and its replay share. */

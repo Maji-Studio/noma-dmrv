@@ -20,7 +20,7 @@ const OAUTH_RESTART_ERRORS = new Set(["invalid_signature", "access_denied"]);
  *
  * In the browser we always use the current origin so requests stay
  * same-origin no matter which domain served the page (e.g.
- * staging.noma.maji.studio vs the noma-dmrv-git-*.vercel.app branch URL).
+ * staging.app.noma.maji.studio vs the noma-dmrv-git-*.vercel.app branch URL).
  * Targeting NEXT_PUBLIC_APP_URL directly caused cross-origin requests and
  * CORS preflight failures when the served domain differed from that value.
  * On the server (SSR) we fall back to the configured app URL.
@@ -375,10 +375,16 @@ export async function resetPassword(
   newPassword: string
 ): Promise<AuthResult> {
   try {
-    await authClient.resetPassword({
+    const result = await authClient.resetPassword({
       newPassword,
       token,
     });
+    if (result.error) {
+      return {
+        success: false,
+        error: mapBetterAuthError(result.error),
+      };
+    }
     return { success: true };
   } catch (error) {
     return {

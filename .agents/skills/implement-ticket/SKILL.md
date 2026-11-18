@@ -63,6 +63,8 @@ Last reviewed head: `def5678…` (full SHA). Models: <the last round's `Models:`
 Declined: <one line per declined P0-P2: id, title, reason>.
 ```
 
+Archive the last round's report once its dispositions are set, so retros can count them: `node .agents/skills/pr-review-suite/scripts/run-pr-review-suite.mjs --archive <scratch>/round-<k>/report.json` (earlier rounds are archived again when passed as `--prior`).
+
 Commits after the last reviewed head, if any, are named below the table with why they skipped a round. Move the board item to **In review (Maji)**.
 
 Done when: the PR is open and ready (not draft), the section's last reviewed head is an ancestor of the PR head, and the board moved.
@@ -86,6 +88,14 @@ Done when: the light-pass comment is on the PR, every P0/P1 is fixed or declined
 Publish the merge card per the **pr** skill's Done state. Once Kenji's saved doc says `choice: merge` and its `sha` equals the PR head, land with `scripts/pr-land.sh <pr> --teardown <worktree-name>`.
 
 Done when: the PR state is MERGED, the worktree is torn down, and the issue is closed.
+
+## Waiting
+
+The suite, `scripts/pr-land.sh` and Codex runs are **background** work: start each with `run_in_background` and act on its exit notification. Until it arrives, work on another step or end the turn; the run needs no checking. When a look is needed (Kenji asks, a peer reports a change), `scripts/pr-status.sh <pr>...` prints one line per PR. `pr-land.sh --help` lists its exit codes; 5 means merged with requested teardown still owed, for any cause.
+
+## Status
+
+When the ticket's state changes (PR opened, a review round ended, waiting on Kenji, merged) and at handoff, state four lines: **owns** (worktree, branch, PR), **waiting on**, **next step**, **handoff due** (yes once a batch has ended and no subagent is running). Write the same four lines to `~/.claude/projects/<project>/state/<worktree-name>.md`, replacing the file, so a crashed session is resumed from that file instead of its log. Delete the file after teardown.
 
 ## Report
 

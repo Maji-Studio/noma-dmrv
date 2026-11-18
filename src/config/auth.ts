@@ -1,3 +1,5 @@
+import { RATE_LIMIT_SECONDS_PER_MINUTE } from "./api-rate-limits";
+
 /** Shared password bounds for Better Auth, form schemas, and CLI bootstrap. */
 export const AUTH_PASSWORD_MIN_LENGTH = 8;
 export const AUTH_PASSWORD_MAX_LENGTH = 72;
@@ -28,3 +30,10 @@ export const EMAIL_VERIFICATION_EXPIRES_IN_SECONDS = SECONDS_PER_HOUR * 24;
 
 /** Password reset links expire after 1 hour (Better Auth's default, now explicit). */
 export const PASSWORD_RESET_EXPIRES_IN_SECONDS = SECONDS_PER_HOUR;
+
+/** Minimum interval between invitation password setup emails. */
+export const INVITATION_SET_PASSWORD_RESEND_COOLDOWN_SECONDS = 60;
+export const INVITATION_SET_PASSWORD_RATE_LIMIT = {
+  capacity: 1,
+  refillPerMinute: RATE_LIMIT_SECONDS_PER_MINUTE / INVITATION_SET_PASSWORD_RESEND_COOLDOWN_SECONDS,
+} as const;

@@ -65,7 +65,8 @@ With `OAUTH_PROVIDER_ENABLED=true`, 401 challenges include the audience's
 `resource_metadata` and every grantable read and write scope plus `offline_access` (no delete scopes).
 OAuth bearer denials add `error="invalid_token"`. Missing grantable scopes return 403 `missing_scope`
 with `error="insufficient_scope"` and the union of current and required scopes
-in `WWW-Authenticate`. Re-authorize with that union for step-up consent; only
+plus the matching read for each write in `WWW-Authenticate`, limited to grantable
+scopes within the live role ceiling. Re-authorize with that union for step-up consent; only
 the last refused operation is preselected, using a user/client/organization hint
 that expires after 15 minutes.
 Consent offers only scopes within the live organization role ceiling. MCP lists
@@ -138,6 +139,10 @@ Ratios and warnings come from the merged locked row
 `src/lib/certification/sample-entry-warnings.ts`).
 Reads (`src/data-access/api-lab-samples.ts`, `api-credit-batches.ts`) hide
 samples on archived batches from lists and still serve them by id.
+
+Credit batch representation revision 2 has no `status` field and the list has no
+`status` filter (#1046): the stored status never left `pending`. Where a batch
+stands with Isometric lives on its Removal and GHG Statement.
 
 ### Documents
 
@@ -807,8 +812,10 @@ API keys discover tools allowed by their scopes. OAuth discovery uses the live
 role ceiling, allowing clients to discover grantable writes; deletes remain
 hidden and return "Unknown tool." OAuth calls missing a grantable scope return
 HTTP 403 with an `insufficient_scope` challenge before dispatch and operation
-rate limiting. The dispatcher also checks every required scope before execution
-and returns an `isError` `missing_scope` problem as a backstop. Document tools
+rate limiting. The challenge carries current and required scopes plus the matching read
+for each write, limited to grantable scopes within the live role ceiling. The
+dispatcher also checks every required scope before execution and returns an
+`isError` `missing_scope` problem as a backstop. Document tools
 use `visible(ctx)` for owner-sensitive discovery, then `authorize(ctx, args)`
 checks the selected owner. Missing or unknown document owner types stay inside
 MCP argument validation; document reads return `invalid_query`.

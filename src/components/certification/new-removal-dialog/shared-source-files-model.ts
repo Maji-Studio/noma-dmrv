@@ -3,7 +3,7 @@
  * sheet) into file uses for the shared-file note on Review & submit (#1531).
  * The grouping itself lives in `@/lib/certification/shared-source-files`.
  */
-import type { CandidateDocument, CandidateLineageEntityType } from "@/fn/certification/source-candidates";
+import type { CandidateDocument, CandidateLineageEntityType } from "@/lib/certification/source-candidates";
 import type { MemberCreditBatch } from "@/fn/certification/certify-context";
 import type { BatchEmissionLine } from "@/lib/certification/emission-lines";
 import {
@@ -44,7 +44,7 @@ function codeOf(entityType: string, label: string): string {
   return noun && label.startsWith(noun) && label.length > noun.length ? label.slice(noun.length) : label;
 }
 
-const RECORD_KIND_BY_ENTITY: Record<Exclude<CandidateLineageEntityType, "emission_entry">, RecordKind> = {
+const RECORD_KIND_BY_ENTITY: Record<Exclude<CandidateLineageEntityType, "emission_entry" | "emission_line">, RecordKind> = {
   application: "application",
   delivery: "delivery",
   feedstock: "feedstock",
@@ -106,6 +106,15 @@ export function sharedSourceFiles(input: SharedSourceFilesInput): SharedSourceFi
     const { document, lineageEntity } = candidate;
     const base = { fileKey: fileKeyOf(document), fileName: document.fileName, role };
 
+    if (role === "emission_line_file") {
+      const target = candidate.binding?.intendedTarget;
+      const batchId = candidate.binding?.lineFile?.creditBatchId;
+      return [{ ...base,
+        component: target?.kind === "explicit" ? { id: target.componentId, name: names.get(target.componentId) ?? null } : null,
+        record: { label: input.batches.find(batch => batch.id === batchId)?.code ?? lineageEntity.entityLabel,
+          href: batchId ? recordHref("creditBatch", batchId, { facilityId: input.facilityId, tab: "emissions" }) : null },
+      }];
+    }
     if (role === "emission_entry") {
       const place = places.get(lineageEntity.entityId);
       if (place) {

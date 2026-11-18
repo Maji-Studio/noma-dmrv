@@ -2,6 +2,7 @@ import type {
   SubmitGhgStatementDialogInput,
   SubmitRemovalInput,
 } from "@/schemas/certification";
+import type { SubmissionFailureDetails } from "./submission-error";
 
 export const SUBMISSION_STREAM_PING_INTERVAL_MS = 15_000;
 export const SUBMISSION_STREAM_READ_TIMEOUT_MS = 60_000;
@@ -60,4 +61,4 @@ export type SubmissionProgressStreamEvent<T> =
   | { type: "ping" }
   | { type: "progress"; update: SubmissionProgressUpdate }
   | { type: "result"; result: T }
-  | { type: "error"; error: string };
+  | ({ type: "error"; error: string } & SubmissionFailureDetails);

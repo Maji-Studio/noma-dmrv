@@ -1,4 +1,12 @@
+import { setComponentFilePolicy } from "@/data-access/component-file-policy";
+import { and } from "drizzle-orm";
+import { productionRuns } from "@/db/schema";
+import { attachEmissionLineFile, listEmissionLineFilesForBatches } from "@/data-access/emission-line-files";
+import { confirmDocumentUploadInTransaction, uploadFactsFor } from "@/data-access/document-writes";
+import { EMISSION_ENTRIES_CHANGED } from "@/lib/certification/emission-entry-messages";
+import { createEmissionLineFileFixture, cleanupEmissionLineFileFixture, COMPONENT_ID, FILE_UPLOAD, FILE_STORAGE } from "./helpers/emission-line-file-fixture";
 import { insertRemovalFixture } from "./helpers/removal-fixture";
+import { getMetadataValue } from "@/lib/certification/submission-metadata";
 /**
  * DB-backed coverage for the pre-POST whole-batch production claim reservation.
  * Competing Removal submissions must serialize on the credit-batch row, while
@@ -7,7 +15,7 @@ import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { markSubmissionSubmitted } from "@/data-access/certification";
-import { markSubmissionInterrupted } from "@/data-access/certification-submissions";
+import { markSubmissionAttemptStarted, markSubmissionInterrupted } from "@/data-access/certification-submissions";
 import { deleteDocumentApp } from "@/lib/operations/documents";
 import { runOperationInProcess } from "@/lib/operations/runner";
 const deleteViaApp = (ctx: Parameters<typeof runOperationInProcess>[1], documentId: string) => runOperationInProcess(deleteDocumentApp, ctx, { documentId, expectedVersion: 1 });
@@ -137,7 +145,6 @@ async function createFixture(): Promise<Fixture> {
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
         productionProcessId: productionProcess.id,
-        status: "pending",
         startDate: "2026-06-01",
         endDate: "2026-06-30",
         certifier: "isometric",
@@ -443,4 +450,126 @@ it("transfers only a mutation-free reviewed predecessor to its linked version of
   expect(prior.status).toBe("draft");
 });
 
+});
+
+
+describe("attempt-started marker guards and terminal cleanup", () => {
+  it("guards org, draft status and exact lock, preserves confirmed, and leaves the TTL bypass closed", async () => {
+    const fixture = await createFixture();
+    const row = await insertDraft(fixture.removalAId, 1);
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const read = async () => (await db.select().from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, row.id)))[0];
+    expect(await markSubmissionAttemptStarted({ ...ctx, organizationId: "another-org" }, row.id, row.lockedAt)).toBe(false);
+    expect(await markSubmissionAttemptStarted(ctx, row.id, new Date(0))).toBe(false);
+    expect(getMetadataValue((await read()).metadata, "externalMutation")).toBeNull();
+    expect(await markSubmissionAttemptStarted(ctx, row.id, row.lockedAt)).toBe(true);
+    expect(await read()).toMatchObject({ lockedAt: row.lockedAt, metadata: { externalMutation: "possible" } });
+    expect(getMetadataValue((await read()).metadata, "lastAttemptOutcome")).toBeNull();
+    await db.update(certificationSubmissions).set({ metadata: { externalMutation: "confirmed" } })
+      .where(eq(certificationSubmissions.id, row.id));
+    expect(await markSubmissionAttemptStarted(ctx, row.id, row.lockedAt)).toBe(true);
+    expect(getMetadataValue((await read()).metadata, "externalMutation")).toBe("confirmed");
+    await db.update(certificationSubmissions).set({ status: "submitted" })
+      .where(eq(certificationSubmissions.id, row.id));
+    expect(await markSubmissionAttemptStarted(ctx, row.id, row.lockedAt)).toBe(false);
+  });
+
+  it.each(["possible", "confirmed"] as const)("only releases a proven mutation-free attempt's possible marker (%s)", async (mutation) => {
+    const fixture = await createFixture();
+    const row = await insertDraft(fixture.removalAId, 1);
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    await reserveProductionEmissionsClaims(ctx, {
+      removalId: fixture.removalAId, submissionId: row.id, creditBatchIds: [fixture.batchId], now: row.lockedAt,
+    });
+    await markSubmissionAttemptStarted(ctx, row.id, row.lockedAt);
+    if (mutation === "confirmed") {
+      await db.update(certificationSubmissions).set({ metadata: { externalMutation: mutation } })
+        .where(eq(certificationSubmissions.id, row.id));
+    }
+    const reject = (expectedLockedAt: Date, mutationFreeAttempt?: true) => rejectSubmissionAndReleaseProductionClaims(ctx, {
+      submissionId: row.id, expectedLockedAt, mutationFreeAttempt, errorMessage: "Definitive refusal",
+    });
+    await reject(row.lockedAt);
+    await reject(new Date(0), true);
+    expect(await readReservation(fixture.batchId)).toBe(row.id);
+    await reject(row.lockedAt, true);
+    const [saved] = await db.select().from(certificationSubmissions).where(eq(certificationSubmissions.id, row.id));
+    expect(saved.status).toBe(mutation === "possible" ? "rejected" : "draft");
+    expect(getMetadataValue(saved.metadata, "externalMutation")).toBe(mutation === "possible" ? null : "confirmed");
+    expect(await readReservation(fixture.batchId)).toBe(mutation === "possible" ? null : row.id);
+  });
+});
+
+describe("component-file revision fence", () => {
+  it.each(["existing-anchor", "new-anchor", "pending-only", "unchanged"])("compares the reviewed set under the batch lock (%s)", async kind => {
+    const fixture = await createEmissionLineFileFixture();
+    const { ctx, batch, removal, run } = fixture;
+    const electricityKwh = 1;
+    const sha256Length = 64;
+    try {
+      await db.update(productionRuns).set({ electricityKwh }).where(and(
+        eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, run.id),
+      ));
+      const attach = () => attachEmissionLineFile(ctx, { creditBatchId: batch.id, componentId: COMPONENT_ID, upload: FILE_UPLOAD }, FILE_STORAGE);
+      const confirm = (document: Awaited<ReturnType<typeof attach>>) => db.transaction(tx => confirmDocumentUploadInTransaction(ctx, tx, {
+        ...uploadFactsFor(document), finalKey: `confirmed/${document.id}`, inspectedSizeBytes: FILE_UPLOAD.sizeBytes,
+        inspectedContentType: FILE_UPLOAD.contentType, inspectedSha256: "a".repeat(sha256Length),
+      }));
+      if (kind !== "new-anchor") {
+        expect(await confirm(await attach())).toMatchObject({ kind: "uploaded" });
+      }
+      const reviewed = [...new Map((await listEmissionLineFilesForBatches(ctx, [batch.id]))
+        .filter(row => row.document).map(row => [row.anchor.id, { anchorId: row.anchor.id, version: row.anchor.version }])).values()];
+      if (kind !== "unchanged") {
+        const pending = await attach();
+        if (kind !== "pending-only") expect(await confirm(pending)).toMatchObject({ kind: "uploaded" });
+      }
+      const [submission] = await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId,
+        provider: "isometric", submissionType: "removal", localEntityType: "removal", localEntityId: removal.id,
+        version: 1, status: "draft", lockedAt: new Date(), payloadHash: crypto.randomUUID(), payloadSnapshot: {},
+      }).returning();
+      const reserve = (frozenLineFileSet: typeof reviewed) => reserveProductionEmissionsClaims(ctx, {
+        removalId: removal.id, submissionId: submission.id, creditBatchIds: [batch.id], frozenLineFileSet,
+      });
+      if (kind === "unchanged" || kind === "pending-only") {
+        await expect(reserve(reviewed)).resolves.toBeUndefined();
+      } else {
+        await expect(reserve(reviewed)).rejects.toMatchObject({ code: "conflict", message: EMISSION_ENTRIES_CHANGED, retryable: true });
+        const [saved] = await db.select().from(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, batch.id)));
+        expect(saved.productionEmissionsClaimReservedBySubmissionId).toBeNull();
+        const refreshed = [...new Map((await listEmissionLineFilesForBatches(ctx, [batch.id]))
+          .filter(row => row.document).map(row => [row.anchor.id, { anchorId: row.anchor.id, version: row.anchor.version }])).values()];
+        await expect(reserve(refreshed)).resolves.toBeUndefined();
+      }
+    } finally {
+      await cleanupEmissionLineFileFixture(fixture);
+    }
+  });
+});
+
+it("refuses required proof introduced after review even with no uploaded files", async () => {
+  const fixture = await createEmissionLineFileFixture();
+  const { ctx, batch, removal, run, observation } = fixture;
+  const electricityKwh = 1;
+  try {
+    await db.update(productionRuns).set({ electricityKwh }).where(and(
+      eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, run.id),
+    ));
+    const none = await setComponentFilePolicy(ctx, { observationId: observation.id, componentId: COMPONENT_ID,
+      filePolicy: "none", expectedVersion: observation.version });
+    const reviewed = await listEmissionLineFilesForBatches(ctx, [batch.id]);
+    expect(reviewed).toEqual([]);
+    await setComponentFilePolicy(ctx, { observationId: observation.id, componentId: COMPONENT_ID,
+      filePolicy: "lineFile", expectedVersion: none.version });
+    const [submission] = await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId,
+      provider: "isometric", submissionType: "removal", localEntityType: "removal", localEntityId: removal.id,
+      version: 1, status: "draft", lockedAt: new Date(), payloadHash: crypto.randomUUID(), payloadSnapshot: {},
+    }).returning();
+    await expect(reserveProductionEmissionsClaims(ctx, { removalId: removal.id, submissionId: submission.id,
+      creditBatchIds: [batch.id], frozenLineFileSet: [],
+    })).rejects.toMatchObject({ code: "conflict", message: EMISSION_ENTRIES_CHANGED, retryable: true });
+  } finally {
+    await cleanupEmissionLineFileFixture(fixture);
+  }
 });

@@ -66,11 +66,10 @@ and need no follow-up.
 
 ### maplibre-gl v6 upgrade (`maps/maplibre-v6`, opened 2026-10-02)
 
-- Still open: `package.json` and `site/package.json` pin `maplibre-gl` ^5.24.0
+- Still open: `package.json` pins `maplibre-gl` ^5.24.0
   (PR #870) because v6 derives its web-worker URL from `import.meta.url`, which
   Turbopack rewrites to a `file://` URL, so the worker never starts and every
-  basemap renders blank (PR #752). The site build additionally breaks on v6's
-  missing default export (PR #897). `.github/dependabot.yml` ignores
+  basemap renders blank (PR #752). `.github/dependabot.yml` ignores
   `maplibre-gl` semver-major updates for this reason.
 - Accepted risk: GHSA-jrc7-96c5-q579 (attribution sanitizer XSS) is fixed only
   in 6.4.1+. It needs untrusted attribution strings; ours are
@@ -83,15 +82,6 @@ and need no follow-up.
   fails on the broken worker.
   Then drop the Dependabot ignore (S).
 
-### Keyboard and accessibility checks for the site (`site/a11y-ci`, opened 2026-10-05)
-
-- `.github/workflows/site.yml:jobs.site` type-checks, builds and checks asset
-  references (`site/scripts/check-public-assets.mjs`), but nothing drives the
-  built pages. Keyboard paths through the walkthroughs, the section index and
-  the hero map, plus an axe pass per page, are unchecked.
-- **Resolve via:** a Playwright run against `astro preview` in that workflow,
-  using `@playwright/test` and `@axe-core/playwright` in `site/` (M).
-
 ### Form-audit capture generator lost (`tooling/form-audit`, opened 2026-10-05)
 
 - The form-cleanup audit pages were built by scripts in `/tmp/form-cleanup-audits/`.
@@ -100,6 +90,18 @@ and need no follow-up.
 - **Resolve via:** if another audit is needed, rebuild the generator in the repo
   (a `form-audit` folder under `scripts/`) with a README and a `meta.json` that
   records the rebuild date (M).
+
+### minimatch override (`tooling/minimatch-override`, opened 2026-11-11)
+
+- `pnpm-workspace.yaml` overrides every minimatch from 7.0.0 up to 11.0.0 to
+  `^11.0.1`, because all of them carry the denial-of-service advisory
+  [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249) and
+  `@typescript-eslint/typescript-estree` still asks for 9.x or 10.x. This puts
+  typescript-eslint on a minimatch major outside its declared range. It is a
+  lint-time dependency only.
+- **Resolve via:** remove the override once the installed typescript-eslint
+  accepts minimatch `^11`, then confirm `pnpm why minimatch` lists no version
+  from 7.0.0 up to 11.0.0 (S).
 
 ### Toolchain decisions requiring source review
 

@@ -166,7 +166,7 @@ export async function seedGroupedRemovalWithChain(
         code: `E2E-PRD-${testRunId}`,
         facilityId: refs.facilityId,
         reactorId: refs.reactorId,
-        status: "complete",
+        status: "complete", outputPostedAt: productionEndTime,
         // A closed run must lie in the PAST: the submit pipeline stamps the
         // run window's latest end as the durability datapoints' measured_at,
         // and the registry rejects a measured_at in the future (live 400,
@@ -292,7 +292,6 @@ export async function seedGroupedRemovalWithChain(
         productionProcessId: id.productionProcess,
         startDate: today,
         endDate: today,
-        status: "draft",
         removalTemplateId: await facilityDefaultRemovalTemplateId(tx, refs.facilityId),
         // Tier is inherited from the facility (ADR 0021), not a batch column.
       });
@@ -418,6 +417,8 @@ export interface SeededReadyBatch {
   code: string;
   applicationId: string;
   applicationCode: string;
+  /** Exact documents owned by this seed, including the unchanged readings CSV. */
+  documentIds: string[];
   cleanup: () => Promise<void>;
 }
 
@@ -576,7 +577,7 @@ export async function seedUngroupedReadyBatchWithChain(
         code: `E2E-PRD-RDY-${testRunId}`,
         facilityId: refs.facilityId,
         reactorId: refs.reactorId,
-        status: "complete",
+        status: "complete", outputPostedAt: productionEndTime,
         // A closed run must lie in the PAST: the submit pipeline stamps the
         // run window's latest end as the durability datapoints' measured_at,
         // and the registry rejects a measured_at in the future (live 400,
@@ -725,8 +726,8 @@ export async function seedUngroupedReadyBatchWithChain(
       // Since PR #700 readiness requires the batch's feedstock type to be
       // linked to an Isometric feedstock type. The column is unique per org and
       // every E2E worker shares fixtureOrgId(), so use a per-run placeholder. It is
-      // never sent anywhere on the committed (no-submit) path; a real
-      // E2E_LIVE_SUBMIT=1 run would need a sandbox catalogue id here instead.
+      // never sent anywhere on the committed (no-submit) path.
+      // The live branch swaps in the sandbox ID in live-submit-evidence.ts.
       const [priorType] = await tx
         .select({ isometricFeedstockTypeId: schema.feedstockTypes.isometricFeedstockTypeId })
         .from(schema.feedstockTypes)
@@ -755,7 +756,6 @@ export async function seedUngroupedReadyBatchWithChain(
         productionProcessId: id.productionProcess,
         startDate: today,
         endDate: today,
-        status: "draft",
         removalTemplateId: await facilityDefaultRemovalTemplateId(tx, refs.facilityId),
         // Tier is inherited from the facility (ADR 0021), not a batch column.
       });
@@ -838,6 +838,9 @@ export async function seedUngroupedReadyBatchWithChain(
     code: creditBatchCode,
     applicationId: id.application,
     applicationCode,
+    documentIds: [id.productionReadingsDocument, id.deliveryReceiptDocument,
+      ...id.applicationDocuments, ...(options.transportEvidence !== false
+        ? [id.feedstockTransportDocument, id.biocharTransportDocument] : [])],
     cleanup: async () => {
       const conn = createDbConnection();
       try {

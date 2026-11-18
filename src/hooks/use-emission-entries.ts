@@ -8,7 +8,7 @@
 
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { useIntentMutation } from "./use-create-intent-key";
-import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   confirmEmissionEntryFn,
   createEmissionEntryFn,
@@ -24,8 +24,7 @@ import { EmissionLinesBlockedError } from "@/lib/certification/emission-lines-bl
 import type { ActionResult } from "@/types/actions";
 import { withoutRegistryCalculatedLines, type EmissionLineRecords, type EmissionRecordSource } from "@/lib/certification/emission-lines";
 import { creditBatchKeys } from "./credit-batch-query-keys";
-import { invalidateCertificationReadiness } from "./use-certification";
-import { energyKeys } from "./use-energy";
+import { invalidateEmissionEntryReads } from "./stale-reads";
 
 type LinesResult = Awaited<ReturnType<typeof getBatchEmissionLinesFn>>;
 type LinesData = Extract<LinesResult, { success: true }>["data"];
@@ -71,18 +70,6 @@ export function useBatchEmissionLines(scope: EmissionBatchScope | null) {
     // other pages; refetch on every visit rather than wiring all of them here.
     staleTime: 0,
   });
-}
-
-/** Everything that reads emissions entries. Also used after a file upload. */
-export function invalidateEmissionEntryReads(queryClient: QueryClient, scope: EmissionBatchScope) {
-  return Promise.all([
-    queryClient.invalidateQueries({ queryKey: creditBatchKeys.emissionLines(scope.facilityId, scope.creditBatchId) }),
-    queryClient.invalidateQueries({ queryKey: creditBatchKeys.emissionsOverview(scope.facilityId) }),
-    queryClient.invalidateQueries({ queryKey: creditBatchKeys.emissionAllocationPrefix() }),
-    queryClient.invalidateQueries({ queryKey: energyKeys.all }),
-    // Batch health, batch-health summaries, the certification overview, removal preflight and activity.
-    invalidateCertificationReadiness(queryClient),
-  ]);
 }
 
 function useEntryMutation<TInput, TData>(scope: EmissionBatchScope, run: (input: TInput) => Promise<ActionResult<TData>>) {

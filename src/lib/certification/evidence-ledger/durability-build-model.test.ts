@@ -52,6 +52,7 @@ const COMMON = {
   attributionByRunId: new Map<string, number>(),
   facilityReferenceSoilTemperature: SOIL,
   memberBatchCodes: "CB-A",
+  organizationName: "Example Carbon",
   facilityName: "DEC Pyrolysis",
   externalProjectId: "prj_X",
   generatedAtIso: "2026-01-31T00:00:00.000Z",

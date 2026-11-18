@@ -10,7 +10,8 @@ import type {
   ApplicationBoundaryLogbookEvidenceType,
   ApplicationVisualEvidenceRole,
 } from "@/lib/certification/application-evidence";
-import type { DocumentType } from "@/schemas/documents";
+import type { DocumentType, RequestUploadInput } from "@/schemas/documents";
+import type { RequestUploadResult } from "@/fn/documents";
 
 interface EvidenceExif {
   capturedAt?: string;
@@ -161,7 +162,10 @@ async function extractEvidenceExif(
   }
 }
 
-export function useFileUpload(): UseFileUploadResult {
+/** Replaces the generic upload request for an owner that creates its own upload (a component file's anchor is made with its first file). */
+export type RequestUploadOverride = (input: Omit<RequestUploadInput, "entityType" | "entityId">) => Promise<RequestUploadResult>;
+
+export function useFileUpload(requestOverride?: RequestUploadOverride): UseFileUploadResult {
   const [state, setState] = useState<UploadState>({ status: "idle" });
   const requestMutation = useRequestUpload();
   const confirmMutation = useConfirmUpload();
@@ -206,7 +210,7 @@ export function useFileUpload(): UseFileUploadResult {
       safeSetState({ status: "uploading", progress: 0 });
       try {
         const parsedExif = await extractEvidenceExif(file, documentType);
-        const presign = await requestMutation.mutateAsync({
+        const request = {
           entityType,
           entityId,
           documentType,
@@ -222,7 +226,8 @@ export function useFileUpload(): UseFileUploadResult {
           description,
           applicationEvidenceRole,
           applicationLogbookEvidenceType,
-        });
+        };
+        const presign = await (requestOverride ?? requestMutation.mutateAsync)(request);
         if (controller.signal.aborted) throw new Error("Upload aborted");
 
         await putWithProgress(
@@ -253,7 +258,7 @@ export function useFileUpload(): UseFileUploadResult {
         throw err;
       }
     },
-    [requestMutation, confirmMutation, safeSetState]
+    [requestMutation, requestOverride, confirmMutation, safeSetState]
   );
 
   const reset = useCallback(() => safeSetState({ status: "idle" }), [safeSetState]);

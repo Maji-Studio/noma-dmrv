@@ -8,16 +8,16 @@ vi.mock("./emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: mocks.fa
 vi.mock("./emission-entry-contenders", () => ({ listEmissionEntryAvailableApplications: mocks.available, listEmissionEntryDraftContenders: mocks.contenders, loadEmissionEntryReservations: mocks.reservations }));
 vi.mock("./emission-entry-activity", () => ({ recordEmissionEntryActivity: mocks.activity }));
 vi.mock("./batch-emission-automatic-figures", () => ({ loadBatchesEmissionAutomaticFacts: mocks.automatic }));
-vi.mock("@/fn/certification/certify-context-core", () => ({ loadRemovalSubmissionContext: mocks.context }));
+vi.mock("@/lib/certification/certify-context-core", () => ({ loadRemovalSubmissionContext: mocks.context }));
 vi.mock("./certifier-removals", () => ({ getCertifierRemovalById: vi.fn(async () => ({ updatedAt: new Date("2026-01-01") })) }));
 // These drafts have no returned lineage; keep correction locking at its own tested boundary.
 vi.mock("./emission-entry-corrections", () => ({ lockEmissionCorrectionScope: mocks.correctionScope, emissionCorrectionWindow: () => undefined }));
-import { loadRemovalEmptyLines } from "@/fn/certification/removal-empty-lines-core";
-import { loadRemovalEntryContext } from "@/fn/certification/removal-entry-context";
-import { resolveRemovalTemplate } from "@/fn/certification/resolve-removal-template";
-import type { BatchEmissionContext } from "@/fn/certification/batch-emission-context";
-import type { FacilityCertifierFacts } from "@/fn/certification/facility-certifier-facts";
-import type { RemovalScope } from "@/fn/certification/removal-scope";
+import { loadRemovalEmptyLines } from "@/lib/certification/removal-empty-lines-core";
+import { loadRemovalEntryContext } from "@/lib/certification/removal-entry-context";
+import { resolveRemovalTemplate } from "@/lib/certification/resolve-removal-template";
+import type { BatchEmissionContext } from "@/lib/certification/batch-emission-context";
+import type { FacilityCertifierFacts } from "@/lib/certification/facility-certifier-facts";
+import type { RemovalScope } from "@/lib/certification/removal-scope";
 import { entriesWithoutRemoval } from "@/lib/certification/removal-emission-contributions";
 import { isRemovalZeroEditable, recordEmissionZeros, undoEmissionZeros } from "./emission-zeros";
 const ctx = makeTestOrgContext();

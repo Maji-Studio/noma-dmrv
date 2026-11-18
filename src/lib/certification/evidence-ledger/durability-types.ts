@@ -111,6 +111,7 @@ export interface LedgerSoilReference {
 }
 
 export interface DurabilityLedgerModel {
+  organizationName: string;
   memberBatchCodes: string | null;
   facilityName: string | null;
   externalProjectId: string | null;
@@ -169,6 +170,7 @@ export interface ThousandYearLedgerBatch {
 }
 
 export interface ThousandYearDurabilityLedgerModel {
+  organizationName: string;
   memberBatchCodes: string | null;
   facilityName: string | null;
   externalProjectId: string | null;

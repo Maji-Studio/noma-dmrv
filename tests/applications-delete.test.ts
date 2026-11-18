@@ -245,17 +245,15 @@ async function createMeasurementRecord(
 async function createCreditBatchRecord(
   fixture: DeleteFixture,
   runId: string,
-  status: "draft" | "pending" | "verified" | "issued" | "rejected",
 ): Promise<string> {
   const [creditBatch] = await db
     .insert(creditBatches)
     .values({
       organizationId: TEST_ORG_ID,
-      code: `CB-DEL-${runId}-${status.toUpperCase()}`,
+      code: `CB-DEL-${runId}`,
       facilityId: fixture.facilityId,
       feedstockTypeId: fixture.feedstockTypeId,
       productionProcessId: fixture.productionProcessId,
-      status,
       startDate: "2025-06-01",
       endDate: "2025-06-30",
       certifier: "isometric",
@@ -316,7 +314,6 @@ describe("deleteApplication", () => {
       const creditBatchId = await createCreditBatchRecord(
         fixture,
         runId,
-        "pending",
       );
 
       // Derived on read (issue #285): Σ member applications' applied tons —
@@ -360,8 +357,8 @@ describe("deleteApplication", () => {
     }
   });
 
-  it("ignores the retired issued batch status when no Removal holds the application", async () => {
-    const runId = `${crypto.randomUUID()}-issued`;
+  it("allows deletion when no Removal holds the application", async () => {
+    const runId = `${crypto.randomUUID()}-unheld`;
     const fixture = await createDeleteFixture(runId);
 
     try {
@@ -370,7 +367,7 @@ describe("deleteApplication", () => {
         biocharAppliedDryTons: 4.5,
         co2eStoredTonnes: 3.6,
       });
-      await createCreditBatchRecord(fixture, runId, "issued");
+      await createCreditBatchRecord(fixture, runId);
 
       await deleteTestApplication(makeTestOrgContext(TEST_USER_ID), applicationId,
         await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", applicationId));

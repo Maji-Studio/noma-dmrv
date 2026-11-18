@@ -1,18 +1,20 @@
+import { deriveRemovalEntryInputs } from "@/lib/certification/removal-entry-inputs";
+import { lineFileEvidenceFacts } from "../../../tests/helpers/line-file-evidence-facts";
 import { describe, expect, it, vi } from "vitest";
 import { makeContext, REMOVAL_ID, setDurabilityMeasurementSamplesEnabled } from "../../../tests/fixtures/submit-removal-orchestrator";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import { make1000YearSequestrationTemplate } from "../../../tests/fixtures/submit-removal-templates";
 import { reviewedTemplateSources } from "../../../tests/helpers/template-line-sources";
-import * as build from "./removal-submission-build";
+import * as build from "@/lib/certification/removal-submission-build";
 import { env } from "@/config/env";
-import { loadRemovalSubmissionContext } from "./certify-context-core";
+import { loadRemovalSubmissionContext } from "@/lib/certification/certify-context-core";
 import { submitRemoval } from "./submit-removal";
 import { SafeError } from "@/lib/errors";
 import { describeFeedstockTypeMappingGap } from "@/lib/certification/feedstock-type-mapping";
 import { collectContextRemovalBlockers, evaluateRemovalBlockers } from "./removal-blockers-gate";
-import { prepareRemovalSubmission, REMOVAL_PREPARATION_BLOCKERS } from "./removal-submission-prepare";
-import { assertEntityReadinessGapsResolved, buildRemovalSubmissionBuild, removalTemplateTierCompatibilityBlocker } from "./removal-submission-build";
-import { assertSupportedDurabilityConfiguration } from "./durability-measurement-samples";
+import { prepareRemovalSubmission, REMOVAL_PREPARATION_BLOCKERS } from "@/lib/certification/removal-submission-prepare";
+import { assertEntityReadinessGapsResolved, buildRemovalSubmissionBuild, removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-submission-build";
+import { assertSupportedDurabilityConfiguration } from "@/lib/certification/durability-measurement-samples";
 import * as ledger from "@/data-access/certification";
 import * as claims from "@/data-access/certification-submissions";
 import * as evidence from "./ensure-evidence-ledgers";
@@ -121,7 +123,7 @@ describe("Removal preflight", () => {
       entityReadinessIssues: [{ key: "sampleMoisture", label: "Sample moisture", fixTarget: "labSamples", affectedRecords: [] }],
       batchesWithSamples: [],
     }));
-    expect(blockers.map(({ code }) => code)).toEqual(["feedstockTypeMapping", "entityReadiness", "durabilityTier"]);
+    expect(blockers.map(({ code }) => code)).toEqual(["feedstockTypeMapping", "entityReadiness", "durabilityUnresolved"]);
     expect(blockers[1].fixTarget).toBe("labSamples");
   });
 
@@ -153,18 +155,37 @@ describe("Removal preflight", () => {
     const detail = "Delivery DL-1 has no proof of delivery.";
     const ctx = makeContext(undefined, { submissionLineageBlockers: [{ kind: "deliveryProof", instruction: "", fact: detail, detail, fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } }] });
     expect(await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx })).toEqual([
-      { code: "legacy", message: `Removal submission blocked:\n${detail}`, fixTarget: "deliveryEvidence" },
+      { code: "buildRefused", message: `Removal submission blocked:\n${detail}`, fixTarget: "deliveryEvidence" },
     ]);
+  });
+
+  it.each([
+    ["shared targets", ["deliveryEvidence", "deliveryEvidence"], "deliveryEvidence"],
+    ["mixed targets", ["deliveryEvidence", "deliveryDistances"], null],
+  ] as const)("uses only the refused lineage blockers for %s", async (_label, targets, fixTarget) => {
+    const ctx = makeContext(undefined, { submissionLineageBlockers: targets.map((target, index) => ({
+      kind: "deliveryProof", instruction: "Attach evidence.", fact: "Missing evidence.",
+      detail: `Delivery DL-${index} needs attention.`, fixTarget: target,
+      record: { id: `delivery-${index}`, code: `DL-${index}` },
+    })) });
+    expect(() => build.assertSubmissionLineageResolved(ctx.submissionLineageBlockers)).toThrow(SafeError);
+    expect(() => build.assertSubmissionLineageResolved(ctx.submissionLineageBlockers)).toThrow(build.SubmissionLineageError);
+    expect(await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx })).toEqual([{
+      code: "buildRefused", fixTarget,
+      message: `Removal submission blocked:\n${ctx.submissionLineageBlockers.map(blocker => blocker.detail).join("\n")}`,
+    }]);
   });
 
   it.each([
     ["mass", "Removal submission blocked:\nProduction run PR-1 has no dry mass."],
     ["window", "The Removal reporting window is inverted."],
+    ["coincidentally equal lineage detail", "Delivery DL-1 has no proof of delivery."],
+    ["coincidentally equal aggregate", "Removal submission blocked:\nDelivery DL-1 has no proof of delivery."],
   ])("does not attribute a %s build error to an unrelated lineage blocker", async (_label, message) => {
     const spy = vi.spyOn(build, "buildRemovalSubmissionBuild").mockRejectedValue(new SafeError(message));
     try {
       const ctx = makeContext(undefined, { submissionLineageBlockers: [{ kind: "deliveryProof", instruction: "Attach a delivery receipt, bill of lading or delivery photo before submitting.", fact: "Delivery DL-1 has no proof of delivery.", detail: "Delivery DL-1 has no proof of delivery.", fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } }] });
-      expect(await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx })).toEqual([{ code: "legacy", message, fixTarget: null }]);
+      expect(await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx })).toEqual([{ code: "buildRefused", message, fixTarget: null }]);
     } finally { spy.mockRestore(); }
   });
 
@@ -226,7 +247,7 @@ describe("Removal preflight", () => {
 
 it("retains typed empty-line and contribution blockers with entry compilation enabled", () => {
   const ctx = makeContext();
-  ctx.removalEntryContext = { observationId: "observation", semanticFingerprint: "fingerprint", contributions: {
+  ctx.removalEntryContext = { lineFileEvidence: [], observationId: "observation", semanticFingerprint: "fingerprint", contributions: {
     manifest: [], inputs: [], entrySet: [], selectedEntryIds: [], sentSingleComponentIds: [],
     blockers: [{ code: "singleLineMultipleEntries", message: "Create separate Removals for these batches.", creditBatchId: "batch", fixTarget: "emissions" }],
   } };
@@ -237,10 +258,34 @@ it("deduplicates the same contribution and line blocker but keeps distinct batch
   const ctx = makeContext();
   const blocker = { code: "entryMissingEvidence" as const, message: "Add a file.", fixTarget: "emissions" as const,
     lineRef: { componentId: "line", displayName: "Electricity" } };
-  ctx.removalEntryContext = { observationId: "observation", semanticFingerprint: "fingerprint", contributions: {
+  ctx.removalEntryContext = { lineFileEvidence: [], observationId: "observation", semanticFingerprint: "fingerprint", contributions: {
     manifest: [], inputs: [], entrySet: [], selectedEntryIds: [], sentSingleComponentIds: [], blockers: [{ ...blocker, creditBatchId: "batch" }],
   } };
   ctx.emissionLinesByBatchId = { batch: [{ componentId: "line", blocker }, { componentId: "other", blocker: { ...blocker, lineRef: { componentId: "other", displayName: "Other" } } }],
     second: [{ componentId: "line", blocker }] } as unknown as NonNullable<typeof ctx.emissionLinesByBatchId>;
   expect(collectContextRemovalBlockers(ctx)).toHaveLength(3);
+});
+
+it("keeps the contribution's component display name in the gate without a line projection", () => {
+  const ctx = makeContext();
+  const { observation } = lineFileEvidenceFacts();
+  const window = { start: "2026-01-01", end: "2026-02-01" };
+  const batchId = ctx.memberBatches[0].id;
+  const contributions = deriveRemovalEntryInputs({
+    removalId: REMOVAL_ID, memberBatchIds: [batchId], observation, window,
+    contenders: [{ contenderKind: "draft", removalId: REMOVAL_ID, creditBatchIds: [batchId], createdAt: window.start, window }],
+    entries: [{ id: "entry", creditBatchId: batchId, componentId: "component", contentRevision: 1,
+      kind: "value", lineRule: "additive", occurredOn: "2026-01-10", deletedAt: null,
+      sentByRemovalId: null, confirmedForRemovalId: null, sendReservedBySubmissionId: null,
+      counts: false, values: [], evidenceDocumentIds: [] }],
+    reservations: [], nowMs: 0,
+  });
+  ctx.removalEntryContext = { lineFileEvidence: [], observationId: "observation", semanticFingerprint: "fingerprint", contributions };
+  ctx.emissionLines = [];
+  ctx.emissionLinesByBatchId = {};
+  const blockers = collectContextRemovalBlockers(ctx);
+  expect(blockers).toEqual([expect.objectContaining({
+    code: "lineNeedsReview", fixTarget: "emissions", creditBatchId: batchId,
+    lineRef: { componentId: "component", displayName: "Energy" },
+  })]);
 });

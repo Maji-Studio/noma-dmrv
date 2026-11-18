@@ -22,10 +22,10 @@ const originalMode = env.NODE_ENV;
 beforeEach(() => { vi.clearAllMocks(); });
 afterEach(() => { env.NODE_ENV = originalMode; });
 
-it("keeps a reset provider failure indistinguishable from an unknown account", async () => {
+it.each(["reset-password", "set-password"] as const)("keeps a %s provider failure indistinguishable from an unknown account", async type => {
   vi.mocked(sendEmail).mockResolvedValue({ sent: false, reason: "provider-error" });
-  await expect(sendAuthEmail(INPUT)).resolves.toBeUndefined();
-  expect(sendEmail).toHaveBeenCalledExactlyOnceWith(INPUT);
+  await expect(sendAuthEmail({ ...INPUT, type })).resolves.toBeUndefined();
+  expect(sendEmail).toHaveBeenCalledExactlyOnceWith({ ...INPUT, type });
 });
 
 it.each(["verify-email", "email-change-confirm"] as const)("propagates a generic %s failure", async type => {
@@ -38,11 +38,13 @@ it.each(["development", "test", "production"] as const)("only logs fallback link
   const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
   vi.mocked(sendEmail).mockResolvedValue({ sent: false, reason: "not-configured" });
   await expect(sendAuthEmail(INPUT)).resolves.toBeUndefined();
+  await sendAuthEmail({ ...INPUT, type: "set-password" });
   const result = await sendOrganizationInvitation(INVITATION);
   expect(result).toEqual({ acceptUrl: "http://localhost:3100/accept-invitation/invite-123", emailSent: false });
   if (mode === "production") expect(consoleLog).not.toHaveBeenCalled();
   else {
     expect(consoleLog).toHaveBeenCalledWith(expect.stringContaining(INPUT.url));
+    expect(consoleLog).toHaveBeenCalledWith(expect.stringContaining("[auth:set-password]"));
     expect(consoleLog).toHaveBeenCalledWith(expect.stringContaining(result.acceptUrl));
   }
 });

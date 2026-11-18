@@ -1,5 +1,7 @@
 "use server";
 
+import { isRegistryMissingSubmission } from "@/lib/certification/registry-missing-submission";
+
 import type { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 
 
@@ -10,6 +12,7 @@ import { getRecordLocksForTargets } from "@/data-access/record-certification-loc
 import type { RecordLock } from "@/lib/record-lock";
 import { env } from "@/config/env";
 import { listCreditBatchCertificationLinks } from "@/data-access/credit-batch-certification-links";
+import { batchStatementStatus } from "@/lib/certification/credit-batch-statements";
 import { requireOrgFacility } from "@/data-access/utils";
 import {
   listRecentSyncEvents,
@@ -60,7 +63,7 @@ import {
   buildRemovalContext,
   loadFacilityCertifierFacts,
   resolveScopeForRemoval,
-} from "./certify-context-core";
+} from "@/lib/certification/certify-context-core";
 
 import { heldMissingRuns } from "@/lib/credit-batches/open-items";
 import { loadCreditBatchTodos } from "./credit-batch-todos-core";
@@ -103,10 +106,12 @@ export interface CreditBatchHealthSummary {
   removalStatus: DerivedStatus | null;
   /** Any Removal holding this batch is interrupted, not only the newest (`findInterruptedRemoval`). */
   removalInterrupted: boolean;
+  /** Any holder has a submitted version, even when its newest attempt is a draft. */
+  hasSubmittedRemoval: boolean;
   recordLock?: RecordLock;
-  /** The downstream GHG Statement, once the submitted Removal is rolled up. */
+  /** The statement deciding the batch's aggregate verifier status. */
   ghgStatementId: string | null;
-  /** The GHG Statement's verifier lifecycle, kept distinct from the Removal. */
+  /** Aggregate across all holders: failed, issued, verified, else newest linked holder. */
   ghgStatementStatus: DerivedStatus | null;
 }
 
@@ -120,6 +125,7 @@ export interface RemovalMissingProductionRuns {
 // submission identity, and the readiness verdict (the same one the table hint
 // and wizard submit step render).
 export interface RemovalPreflightSummary {
+  registryMissing?: boolean;
   correction?: RemovalCorrection;
   removalId: string;
   code: string;
@@ -227,6 +233,7 @@ async function buildRemovalPreflightSummary(
     externalId: ctx.latestSubmission?.externalId ?? null,
     version: ctx.latestSubmission?.version ?? null,
     local: facts.local,
+    registryMissing: isRegistryMissingSubmission(ctx.latestSubmission),
     lockInFlight: facts.lockInFlight,
     submissionInterrupted,
     hasFinalizedSubmission: ctx.hasFinalizedSubmission,
@@ -437,13 +444,22 @@ export async function loadCreditBatchHealthSummaries(
       const todos = todosByBatch.get(batchId)!;
       const batchRow = batchRowById.get(batchId);
       const removalId = batchRow?.removalId ?? null;
-      const ghgStatementId = batchRow?.ghgStatementId ?? null;
       const removalSubmission = removalId
         ? (removalSubmissions.get(removalId) ?? null)
         : null;
-      const ghgStatementSubmission = ghgStatementId
-        ? (ghgStatementSubmissions.get(ghgStatementId) ?? null)
-        : null;
+      const statement = batchStatementStatus(batchFacilityRows
+        .filter(row => row.id === batchId && row.removalId !== null)
+        .map(row => {
+          const latest = row.ghgStatementId ? ghgStatementSubmissions.get(row.ghgStatementId) ?? null : null;
+          return {
+            id: row.removalId!,
+            createdAt: row.removalCreatedAt,
+            ghgStatementId: row.ghgStatementId,
+            ghgStatementStatus: row.ghgStatementId
+              ? deriveSubmissionStatus(latest, latest ? isLockedInFlight(latest) : false, "ghgStatement", "unknown")
+              : null,
+          };
+        }));
       summaries[batchId] = {
         recordLock: locksById.get(batchId)!,
         state: todos.state,
@@ -451,6 +467,7 @@ export async function loadCreditBatchHealthSummaries(
         linesToDecide: todos.linesToDecide,
         checkCount: todos.check.length,
         removalInterrupted: todos.removalInterrupted,
+        hasSubmittedRemoval: todos.hasSubmittedRemoval,
         removalId,
         removalCode: batchRow?.removalCode ?? null,
         productionEmissionsClaimedByRemovalCode: claimCodes.get(batchRow?.productionEmissionsClaimedByRemovalId ?? "") ?? null,
@@ -467,17 +484,8 @@ export async function loadCreditBatchHealthSummaries(
               },
             )
           : null,
-        ghgStatementId,
-        ghgStatementStatus: ghgStatementId
-          ? deriveSubmissionStatus(
-              ghgStatementSubmission,
-              ghgStatementSubmission
-                ? isLockedInFlight(ghgStatementSubmission)
-                : false,
-              "ghgStatement",
-              "unknown",
-            )
-          : null,
+        ghgStatementId: statement?.id ?? null,
+        ghgStatementStatus: statement?.status ?? null,
       };
     }
     return summaries;

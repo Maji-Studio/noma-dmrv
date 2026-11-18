@@ -6,7 +6,7 @@ const id = "df2795a4-886b-4a89-bbdd-532c6b1b8e45";
 const other = "ea31ace1-5b30-4443-adb4-26b43bfa5599";
 const now = new Date("2026-10-06T12:00:00Z");
 const row: CreditBatchRepresentationInput = {
-  id, code: "CB-26-0001", version: 2, facilityId: id, feedstockTypeId: other, status: "pending", sampling: "sampled",
+  id, code: "CB-26-0001", version: 2, facilityId: id, feedstockTypeId: other, sampling: "sampled",
   startDate: "2026-09-01", endDate: "2026-09-30", archivedAt: null, createdAt: now, updatedAt: now,
 };
 
@@ -32,4 +32,9 @@ it("serializes the archive instant and keeps business dates as plain dates", () 
 it("describes every published field", () => {
   const published = z.toJSONSchema(creditBatchRepresentationSchema);
   for (const field of Object.values(published.properties ?? {})) expect(typeof field === "object" && field.description).toBeTruthy();
+});
+
+it("omits the retired status from credit batch representation output", () => {
+  const legacyRow = { ...row, status: "pending" as const };
+  expect(representCreditBatch(legacyRow)).not.toHaveProperty("status");
 });

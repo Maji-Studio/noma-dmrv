@@ -11,7 +11,7 @@ vi.mock("@/lib/auth/server", () => ({
 
 import { requirePlatformAdmin } from "@/lib/auth/server";
 import { organizationSlugBase } from "@/lib/organizations/organization-slug";
-import { createOrganizationWithAdmin } from "@/data-access/organizations";
+import { createOrganizationWithAdmin, findUserIdByEmail } from "@/data-access/organizations";
 
 const INVITATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 const createdIds: string[] = [];
@@ -19,6 +19,7 @@ const createdIds: string[] = [];
 let triggerName: string | null = null;
 let functionName: string | null = null;
 let adminUserId: string | null = null;
+let pendingUserId: string | null = null;
 let organizationSlug: string | null = null;
 
 afterEach(async () => {
@@ -38,10 +39,14 @@ afterEach(async () => {
   if (adminUserId) {
     await db.delete(users).where(eq(users.id, adminUserId));
   }
+  if (pendingUserId) {
+    await db.delete(users).where(eq(users.id, pendingUserId));
+  }
   createdIds.length = 0;
   triggerName = null;
   functionName = null;
   adminUserId = null;
+  pendingUserId = null;
   organizationSlug = null;
 });
 
@@ -49,7 +54,7 @@ describe("organization creation transaction", () => {
   it.each(["member", "invited"] as const)("replays a creation intent with one catalog and one %s", async (kind) => {
     adminUserId = randomUUID();
     await db.insert(users).values({
-      id: adminUserId, email: `${adminUserId}@example.test`, name: "Platform Admin", role: "admin",
+      id: adminUserId, email: `${adminUserId}@example.test`, name: "Platform Admin", role: "admin", emailVerified: true,
     });
     vi.mocked(requirePlatformAdmin).mockResolvedValue({ id: adminUserId } as never);
     const organizationId = randomUUID();
@@ -103,6 +108,7 @@ describe("organization creation transaction", () => {
       name: "Test",
       emailVerified: true,
     });
+    expect(await findUserIdByEmail(`  ${adminUserId.toUpperCase()}@EXAMPLE.TEST  `)).toBe(adminUserId);
     const org = await createOrganizationWithAdmin({
       name: organizationSlug,
       adminEmail: `  ${adminUserId.toUpperCase()}@EXAMPLE.TEST  `,
@@ -111,10 +117,31 @@ describe("organization creation transaction", () => {
       .toMatchObject([{ userId: adminUserId, role: "admin" }]);
   });
 
+  it("invites an unverified account instead of creating an Admin membership", async () => {
+    adminUserId = randomUUID();
+    pendingUserId = randomUUID();
+    organizationSlug = `pending-admin-${randomUUID()}`;
+    const email = `${pendingUserId}@example.test`;
+    await db.insert(users).values([
+      { id: adminUserId, email: `${adminUserId}@example.test`, name: "Platform Admin", role: "admin", emailVerified: true },
+      { id: pendingUserId, email, name: "Pending invitee", emailVerified: false },
+    ]);
+    vi.mocked(requirePlatformAdmin).mockResolvedValue({ id: adminUserId } as never);
+
+    expect(await findUserIdByEmail(`  ${email.toUpperCase()}  `)).toBeNull();
+    const org = await createOrganizationWithAdmin({ name: organizationSlug, adminEmail: `  ${email.toUpperCase()}  ` });
+    createdIds.push(org.id);
+    expect(org.firstAdmin.kind).toBe("invited");
+    expect(await db.select().from(members).where(eq(members.organizationId, org.id))).toEqual([]);
+    const [invitation] = await db.select().from(invitations).where(eq(invitations.organizationId, org.id));
+    expect(invitation).toMatchObject({ email, role: "admin", status: "pending", inviterId: adminUserId });
+    expect(org.firstAdmin).toEqual({ kind: "invited", invitationId: invitation.id });
+  });
+
   it("derives slugs, suffixes collisions and creates pending invitations for an unknown account", async () => {
     adminUserId = randomUUID();
     await db.insert(users).values({
-      id: adminUserId, email: `${adminUserId}@example.test`, name: "Platform Admin", role: "admin",
+      id: adminUserId, email: `${adminUserId}@example.test`, name: "Platform Admin", role: "admin", emailVerified: true,
     });
     vi.mocked(requirePlatformAdmin).mockResolvedValue({ id: adminUserId } as never);
     const name = `New company ${randomUUID()}`;

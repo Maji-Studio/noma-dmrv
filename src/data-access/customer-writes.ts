@@ -16,7 +16,7 @@
  * delete each order through its writer; locations, then customer; Activity and
  * after-commit document storage drain are owned by the operation.
  */
-import { createHash } from "node:crypto";
+import { fingerprint } from "@/lib/crypto/fingerprint";
 import type { ActivityEventInput } from "./activity-events";
 import { lockBiocharTransportRouteTopology } from "./transport-legs";
 import { tryLockStorageSiteRegistration } from "./customer-location-registration-guards";
@@ -148,7 +148,7 @@ export async function deleteCustomerInTransaction(ctx: OrgContext, tx: DbTransac
   }
   const cascade = {
     orders: lockedOrders.map(({ id, code, facilityId }) => ({ id, code, facilityId })),
-    cascadeFingerprint: `${CASCADE_FINGERPRINT_VERSION}:` + createHash("sha256").update(lockedOrders.map(row => row.id).sort().join(",")).digest("hex"),
+    cascadeFingerprint: `${CASCADE_FINGERPRINT_VERSION}:` + fingerprint(lockedOrders.map(row => row.id).sort().join(",")),
   };
   if (input.cascadeFingerprint !== undefined && input.cascadeFingerprint !== cascade.cascadeFingerprint) throw cascadeChanged();
   for (const order of lockedOrders) {

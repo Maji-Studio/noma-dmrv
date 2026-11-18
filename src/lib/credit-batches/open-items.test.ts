@@ -1,3 +1,4 @@
+import { ENTRY_FILE_MISSING_INSTRUCTION } from "@/lib/certification/emission-entry-messages";
 import { describe, expect, it } from "vitest";
 import type { Sample } from "@/db/schema";
 import {
@@ -230,7 +231,7 @@ describe("buildCreditBatchOpenItems", () => {
   ])("routes emission review to %s", fixTarget => {
     const result = buildCreditBatchOpenItems({ ...batchContext, emissionLines: [{
       componentId: "diesel", displayName: "Diesel", state: "needsReview", groupKey: "production", groupName: "Production", groupPosition: 0, position: 0,
-      description: null, entryPolicy: "additive", records: null,
+      description: null, entryPolicy: "additive", filePolicy: "entryFiles" as const, records: null,
       blueprintKey: "production", contract: undefined, automaticFigure: null, entries: [], total: null,
       blocker: { code: "lineNeedsReview", message: "Review this line", fixTarget },
     }] });
@@ -244,7 +245,7 @@ describe("buildCreditBatchOpenItems", () => {
       status: "unmet" as const, fixTarget: "templateLineReview" as const, linesToDecide: 5, detail: "Answer them in Settings, Removal templates." };
     const line = {
       componentId: "diesel", displayName: "Diesel", state: "needsReview" as const, groupKey: "production", groupName: "Production", groupPosition: 0, position: 0,
-      description: null, entryPolicy: "additive" as const, records: null,
+      description: null, entryPolicy: "additive" as const, filePolicy: "entryFiles" as const, records: null,
       blueprintKey: "production", contract: undefined, automaticFigure: null, entries: [], total: null,
       blocker: { code: "lineNeedsReview" as const, message: "Decide it in Removal templates.", fixTarget: "templateLineReview" as const },
     };
@@ -267,7 +268,7 @@ describe("buildCreditBatchOpenItems", () => {
       status: "unmet" as const, fixTarget: "templateLines" as const, detail: "Some inputs could not be read from Isometric." };
     const line = {
       componentId: "diesel", displayName: "Diesel", state: "needsReview" as const, groupKey: "production", groupName: "Production", groupPosition: 0, position: 0,
-      description: null, entryPolicy: "additive" as const, records: null,
+      description: null, entryPolicy: "additive" as const, filePolicy: "entryFiles" as const, records: null,
       blueprintKey: "production", contract: undefined, automaticFigure: null, entries: [], total: null,
       blocker: { code: "lineNeedsReview" as const, message: "Some inputs could not be read from Isometric.", fixTarget: "templateLines" as const },
     };
@@ -296,7 +297,7 @@ describe("buildCreditBatchOpenItems", () => {
         groupPosition: 0,
         position: 0,
         description: null,
-        entryPolicy: "additive" as const,
+        entryPolicy: "additive" as const, filePolicy: "entryFiles" as const,
         records: null,
         blueprintKey: "production",
         contract: undefined,
@@ -608,7 +609,7 @@ describe("entries recorded after the Removal was sent", () => {
 it("points an unavailable returned-Removal comparison to the Removal without claiming changed records", () => {
   const { check } = buildCreditBatchOpenItems({ ...batchContext, health: returnedHealth({
     removalId: "removal-1", removalCode: "RM-26-003", windowOpen: true, resubmitNeeded: true,
-    comparison: "unavailable", unavailableMessages: ["Add a file for each emissions entry with a value."],
+    comparison: "unavailable", unavailableMessages: [ENTRY_FILE_MISSING_INSTRUCTION],
     statement: STATEMENT, batches: [{ id: "batch", code: "CB-1" }], changed: [],
   }) });
   expect(check[0].detail).toBe("noma could not compare RM-26-003 with what it sent. Open the Removal to see why.");

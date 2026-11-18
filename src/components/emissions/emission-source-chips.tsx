@@ -22,6 +22,7 @@ import {
   TruckIcon,
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
+import { entryFileMissing } from "@/lib/certification/emission-entry-evidence";
 import { EMISSION_LINE_STATE_LABELS } from "@/lib/certification/emission-lines";
 import { cn } from "@/lib/utils";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
@@ -141,7 +142,7 @@ export function SourceChips({ line, ids, onEntries, interactive = true, quietTex
   const entryChips: ReactNode[] = [];
   const values = valueEntries(line);
   if (values.length) {
-    const missing = values.some((entry) => !entry.hasEvidence);
+    const missing = values.some((entry) => entryFileMissing(line.filePolicy, entry));
     const text = manualEntriesText(values.length);
     entryChips.push(
       <EntryChip key="entries" label={missing ? `${text}, file missing` : text} interactive={interactive} onClick={onEntries}>

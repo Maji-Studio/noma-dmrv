@@ -1,12 +1,12 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { useRemovalCarriedEntries } from "./use-removal-carried-entries";
 import { getRemovalCarriedEntriesFn } from "@/fn/certification/removal-carried-entries";
-import type { RemovalCarriedEntries } from "@/data-access/removal-carried-entries";
+import type { RemovalCarriedEntries } from "@/lib/certification/removal-carried-entries";
 
 const mocks = vi.hoisted(() => ({ query: vi.fn() }));
 vi.mock("@tanstack/react-query", () => ({ useQuery: mocks.query }));
 vi.mock("@/fn/certification/removal-carried-entries", () => ({ getRemovalCarriedEntriesFn: vi.fn() }));
-vi.mock("./use-certification", () => ({ certificationKeys: { removalCarriedEntries: (id: string) => ["carried", id] } }));
+vi.mock("./certification-query-keys", () => ({ certificationKeys: { removalCarriedEntries: (id: string) => ["carried", id] } }));
 beforeEach(() => vi.resetAllMocks());
 const options = () => mocks.query.mock.calls[0][0] as { queryFn: () => Promise<RemovalCarriedEntries>; enabled: boolean };
 

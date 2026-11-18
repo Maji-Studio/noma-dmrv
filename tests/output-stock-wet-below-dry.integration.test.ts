@@ -128,7 +128,7 @@ it.each(['before', 'after'] as const)('uses physical placement when a run create
   const posted = await postMeasurement(f, loss);
   await db.update(binMovements).set({ createdAt: new Date(drawTime) }).where(and(
     eq(binMovements.organizationId, f.ctx.organizationId), eq(binMovements.id, posted.movementId)));
-  await db.update(productionRuns).set({ status: 'complete', endTime: placedAt,
+  await db.update(productionRuns).set({ status: 'complete', outputPostedAt: new Date('2026-09-17T12:00:00.000Z'), endTime: placedAt,
     updatedAt: new Date('2026-09-17T12:00:00.000Z'), biocharOutputKg: 200, biocharDryMassKg: 80, biocharMoisturePercent: 60 })
     .where(and(eq(productionRuns.organizationId, f.ctx.organizationId), eq(productionRuns.id, f.runs[1].id)));
   // Once completed, the older physical intake participates in replay of the saved draw.

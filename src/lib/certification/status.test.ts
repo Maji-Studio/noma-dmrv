@@ -3,9 +3,22 @@ import {
   deriveRemovalStatus,
   deriveRemovalWorkflowStatus,
   deriveStatementStatus,
+  hasSubmittedRemoval,
   type LocalSubmissionStatus,
   type RemoteGhgStatus,
 } from "./status";
+
+describe("hasSubmittedRemoval", () => {
+  it("returns false for undefined, empty or draft-only holders", () => {
+    expect(hasSubmittedRemoval(undefined)).toBe(false);
+    expect(hasSubmittedRemoval([])).toBe(false);
+    expect(hasSubmittedRemoval([{ phase: "draft" }])).toBe(false);
+  });
+
+  it("returns true when any holder is submitted", () => {
+    expect(hasSubmittedRemoval([{ phase: "draft" }, { phase: "submitted" }])).toBe(true);
+  });
+});
 
 describe("deriveRemovalStatus", () => {
   it("reports an in-flight lock above any local status", () => {
@@ -383,4 +396,15 @@ describe("deriveStatementStatus", () => {
       ).not.toThrow();
     }
   });
+});
+
+
+it("keeps a confirmed registry-missing retirement Submitted", () => {
+  const retired = {
+    local: "superseded" as const, lockInFlight: false, externalId: "rmv_old",
+    metadata: { registryMissingExternalId: "rmv_old", registryMissingConfirmedAt: "2026-11-13T00:00:00Z" },
+  };
+  expect(deriveRemovalStatus(retired)).toEqual(deriveRemovalStatus({ local: "submitted", lockInFlight: false }));
+  expect(deriveRemovalWorkflowStatus({ ...retired, enrichmentStatus: "unavailable", readiness: null })).toMatchObject({ kind: "submitted", label: "Submitted" });
+  expect(deriveRemovalStatus({ ...retired, externalId: "different" }).kind).toBe("not-submitted");
 });

@@ -14,6 +14,8 @@
  */
 "use client";
 
+import { cn } from "@/lib/utils";
+import { ICON_BUTTON_TOUCH_PROPS } from "@/components/ui/touch-target";
 import { useRef, useState } from "react";
 import { UploadSimpleIcon, FileIcon, XIcon, CheckCircleIcon, WarningCircleIcon, SpinnerIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
@@ -22,7 +24,7 @@ import {
   clampDocumentUploadMaxMb,
   DOCUMENT_UPLOAD_MAX_MB,
 } from "@/lib/documents/upload-policy";
-import { useFileUpload } from "@/hooks/use-file-upload";
+import { useFileUpload, type RequestUploadOverride } from "@/hooks/use-file-upload";
 import type { DeferredFileEntry } from "@/hooks/use-deferred-attachments";
 import type {
   ApplicationBoundaryLogbookEvidenceType,
@@ -62,6 +64,8 @@ interface FormFileUploadProps {
   resolveDocumentType?: (file: File) => DocumentType;
   applicationEvidenceRole?: ApplicationVisualEvidenceRole;
   applicationLogbookEvidenceType?: ApplicationBoundaryLogbookEvidenceType;
+  /** Makes the upload request itself, for an owner with no row to name yet; entityType and entityId are then optional. */
+  requestUpload?: RequestUploadOverride;
   onUploaded?: (documentId: string) => void;
   onUploadError?: (error: string) => void;
   deferred?: boolean;
@@ -118,6 +122,7 @@ export function FormFileUpload({
   resolveDocumentType,
   applicationEvidenceRole,
   applicationLogbookEvidenceType,
+  requestUpload,
   onUploaded,
   onUploadError,
   deferred = false,
@@ -130,13 +135,13 @@ export function FormFileUpload({
   const [uploads, setUploads] = useState<UploadedEntry[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [deferredError, setDeferredError] = useState<string | null>(null);
-  const { upload } = useFileUpload();
+  const { upload } = useFileUpload(requestUpload);
   const uploadChainRef = useRef<Promise<void>>(Promise.resolve());
   const effectiveMaxSizeMb = clampDocumentUploadMaxMb(maxSizeMb);
 
   const isRealMode =
     !deferred &&
-    !!(entityType && entityId && (documentType || resolveDocumentType));
+    !!((requestUpload || (entityType && entityId)) && (documentType || resolveDocumentType));
 
   function getMissingExif(metadata: Record<string, unknown>): string[] {
     const missingExif = metadata.missingExif;
@@ -162,8 +167,8 @@ export function FormFileUpload({
     ]);
     try {
       const { documentId, metadata } = await upload({
-        entityType: entityType!,
-        entityId: entityId!,
+        entityType: entityType ?? "",
+        entityId: entityId ?? "",
         documentType: resolvedDocumentType,
         file,
         applicationEvidenceRole,
@@ -388,10 +393,10 @@ export function FormFileUpload({
               <Button
                 type="button"
                 variant="noOutline"
-                size="icon"
                 disabled={disabled}
                 onClick={() => onDeferredRemove?.(key)}
-                className="h-24 w-24 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]"
+                {...ICON_BUTTON_TOUCH_PROPS}
+                className={cn(ICON_BUTTON_TOUCH_PROPS.className, "h-24 w-24 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]")}
                 aria-label={`Remove ${file.name}`}
               >
                 <XIcon size={14} weight="bold" />
@@ -452,9 +457,9 @@ export function FormFileUpload({
               <Button
                 type="button"
                 variant="noOutline"
-                size="icon"
                 onClick={() => removeUpload(u.tempKey)}
-                className="ml-auto h-24 w-24 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]"
+                {...ICON_BUTTON_TOUCH_PROPS}
+                className={cn(ICON_BUTTON_TOUCH_PROPS.className, "ml-auto h-24 w-24 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]")}
                 aria-label={`Remove ${u.name}`}
               >
                 <XIcon size={14} weight="bold" />
@@ -485,10 +490,10 @@ export function FormFileUpload({
               <Button
                 type="button"
                 variant="noOutline"
-                size="icon"
                 disabled={disabled}
                 onClick={() => removeMockup(i)}
-                className="ml-auto h-24 w-24 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]"
+                {...ICON_BUTTON_TOUCH_PROPS}
+                className={cn(ICON_BUTTON_TOUCH_PROPS.className, "ml-auto h-24 w-24 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]")}
                 aria-label={`Remove ${file.name}`}
               >
                 <XIcon size={14} weight="bold" />

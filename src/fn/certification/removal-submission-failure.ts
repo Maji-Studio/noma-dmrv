@@ -8,7 +8,7 @@ import {
   SUBMISSION_EXTERNAL_MUTATIONS,
   SUBMISSION_METADATA_KEYS,
 } from "@/lib/certification/submission-metadata";
-import type { RegistryExternalMutation } from "./registry-create";
+import type { RegistryExternalMutation } from "@/lib/certification/registry-create";
 
 export type RemovalExternalMutation =
   | typeof SUBMISSION_EXTERNAL_MUTATIONS.none
@@ -79,6 +79,7 @@ export async function recordClaimedRemovalSubmissionFailureBestEffort(args: {
     if (args.externalMutation === SUBMISSION_EXTERNAL_MUTATIONS.none) {
       await rejectSubmissionAndReleaseProductionClaims(args.orgCtx, {
         submissionId: args.submissionId,
+        mutationFreeAttempt: true,
         errorMessage,
         expectedLockedAt: args.expectedLockedAt,
       });

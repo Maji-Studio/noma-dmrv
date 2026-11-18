@@ -1,7 +1,7 @@
 import { biocharProductKeys } from "./use-biochar-products";
 import { outputStockKeys } from "./use-output-stock";
 import { storageLocationKeys } from "./use-storage-locations";
-import { certificationKeys } from "./use-certification";
+import { certificationKeys } from "./certification-query-keys";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";

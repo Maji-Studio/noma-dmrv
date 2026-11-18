@@ -27,4 +27,5 @@ export * from "./stat-card";
 export * from "./status-badge";
 export * from "./entity-side-sheet";
 export * from "./step-flow";
+export * from "./text-action";
 export * from "./tooltip";

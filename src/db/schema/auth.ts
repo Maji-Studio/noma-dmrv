@@ -99,7 +99,12 @@ export const accounts = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  (table) => [index("account_user_id_idx").on(table.userId)],
+  (table) => [
+    index("account_user_id_idx").on(table.userId),
+    uniqueIndex("account_user_credential_unique")
+      .on(table.userId)
+      .where(sql`${table.providerId} = 'credential'`),
+  ],
 );
 
 export type Account = typeof accounts.$inferSelect;

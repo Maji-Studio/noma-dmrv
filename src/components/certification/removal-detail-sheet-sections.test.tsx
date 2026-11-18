@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RemovalWorkflowStatus } from "@/lib/certification/status";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import type { RemovalListRow } from "./removal-list-state";
-import { RemovalDetailSheet, sheetStatusFor, thingsToFixLine } from "./removal-detail-sheet";
+import { RemovalDetailSheet, thingsToFixLine } from "./removal-detail-sheet";
 
 const BASE_FACTS = vi.hoisted(() => ({
   batches: [{ id: "cb-1", code: "CB-26-001" }, { id: "cb-2", code: "CB-26-002" }],
@@ -194,11 +194,6 @@ describe("RemovalDetailSheet returned by lock", () => {
 });
 
 describe("sheet status helpers", () => {
-  it("maps a draft to Not submitted and keeps other states", () => {
-    expect(sheetStatusFor(BLOCKED)).toEqual({ value: "draft", label: "Not submitted" });
-    expect(sheetStatusFor({ ...BLOCKED, kind: "submitted", value: "issued", label: "Submitted" })).toEqual({ value: "issued", label: "Submitted" });
-  });
-
   it("counts and pluralizes things to fix", () => {
     expect(thingsToFixLine(BLOCKED)).toBe("3 things to fix before submitting");
     expect(thingsToFixLine({ ...BLOCKED, reasons: ["a"] })).toBe("1 thing to fix before submitting");

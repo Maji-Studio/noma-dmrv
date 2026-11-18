@@ -23,7 +23,7 @@ import type { updateApplicationEvidenceMetadataSchema } from "@/schemas/document
 import { feedstockKeys } from "./use-feedstocks";
 import { deliveryKeys } from "./use-deliveries";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
-import { invalidateCertificationReadiness } from "./use-certification";
+import { invalidateCertificationReadiness } from "./stale-reads";
 import { transportLegKeys } from "./use-transport-legs";
 import { productionRunKeys } from "./use-production-runs";
 import { sampleKeys } from "./use-samples";

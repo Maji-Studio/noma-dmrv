@@ -23,7 +23,7 @@ Repository (read code/docs only — do not edit):
 /Users/kenji/Dropbox/Maji/18 Dark Earth Carbon/noma-dmrv
 
 Application under test (REMOTE STAGING — not localhost):
-https://staging.noma.maji.studio
+https://staging.app.noma.maji.studio
 
 Isometric sandbox registry project to cross-check every submission against:
 https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/overview
@@ -72,7 +72,7 @@ SAFETY
 
 STEP 0 — LOG IN EVERYWHERE FIRST (halt if any login fails)
 Before doing anything else, establish and confirm an authenticated session in ALL areas:
-1. The staging noma app at https://staging.noma.maji.studio (supplied app creds).
+1. The staging noma app at https://staging.app.noma.maji.studio (supplied app creds).
 2. The sandbox registry at registry.sandbox.isometric.com (supplied registry creds),
    open on the prj_1K9YJ33RKSBX9FFF overview.
 If either login cannot be established, STOP and report an environment blocker. Do not

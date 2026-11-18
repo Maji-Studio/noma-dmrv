@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { findDashViolations } from "../scripts/check-ux-copy";
+import { findDashViolations, findTermViolations } from "../scripts/check-ux-copy";
 
 const require = createRequire(import.meta.url);
 const TSX_CLI = require.resolve("tsx/cli");
@@ -174,5 +174,43 @@ describe("check-ux-copy dash scanner", () => {
     } finally {
       rmSync(projectRoot, { recursive: true, force: true });
     }
+  });
+});
+
+
+describe("check-ux-copy retired terms", () => {
+  it("flags bounded phrases case-insensitively in literals, templates and JSX", () => {
+    const source = ['const label = "TEMPLATE LINE";', 'const tip = `Emission lines: ${count}`;',
+      '<p title="Template pin">Automatic figures</p>'].join("\n");
+    expect(findTermViolations(source, "sample.tsx")).toMatchObject([
+      { line: 1, character: "retired term: TEMPLATE LINE" },
+      { line: 2, character: "retired term: Emission lines" },
+      { line: 3, character: "retired term: Template pin" },
+      { line: 3, character: "retired term: Automatic figures" },
+    ]);
+  });
+
+  it("normalizes phrase whitespace in JSX and template content", () => {
+    expect(findTermViolations('<p>Template\n  lines</p>', "sample.tsx")).toHaveLength(1);
+  });
+
+  it("fails the CLI when the only violation is a retired term", () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "check-ux-copy-"));
+    try {
+      mkdirSync(join(projectRoot, "src"));
+      writeFileSync(join(projectRoot, "src/retired.ts"), 'const label = "Template line";');
+      const result = spawnSync(process.execPath, [TSX_CLI, CHECK_UX_COPY_SCRIPT], { cwd: projectRoot, encoding: "utf8" });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("retired term: Template line");
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("ignores comments, identifiers, common words and substrings", () => {
+    expect(findTermViolations([
+      '// template line', 'const templateLine = "line, pipeline, needs review";',
+      'const more = "template lineage and emission linebacker";',
+    ].join("\n"), "sample.ts")).toEqual([]);
   });
 });

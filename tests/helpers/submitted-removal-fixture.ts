@@ -6,7 +6,7 @@ import { TEST_ORG_ID } from "./test-org";
 
 /**
  * A lineage fixture whose Removal reads as submitted (not interrupted): an
- * ended pending batch waiting on the verifier.
+ * ended active batch waiting on the verifier.
  */
 export async function createSubmittedRemovalFixture(): Promise<LineageFixture> {
   const fixture = await createLineageFixture("none");

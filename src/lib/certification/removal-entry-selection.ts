@@ -38,8 +38,8 @@ export function selectRemovalEntries(args: {
   return {
     frozen, belongsToFrozenView,
     reservationIds: [...new Set(entries.flatMap(entry => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []))],
-    derive(reservations: Input["reservations"], nowMs: number) {
-      const contributions = deriveRemovalEntryInputs({ removalId, memberBatchIds: memberIds, observation,
+    derive(reservations: Input["reservations"], nowMs: number, componentDisplayName?: Input["componentDisplayName"]) {
+      const contributions = deriveRemovalEntryInputs({ removalId, memberBatchIds: memberIds, observation, componentDisplayName,
         window: deriveRemovalEntryWindow(args.memberBatches, args.applicationDates),
         creditBatchCodes: Object.fromEntries([...args.memberBatches.map(batch => [batch.id, batch.code]),
           ...carriedEntries.map(entry => [entry.creditBatchId, entry.creditBatchCode])]),

@@ -17,21 +17,8 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
   return { ...actual, ...reactQueryMocks };
 });
 
-import {
-  certificationKeys,
-  getRemovalCertifyRefetchInterval,
-  getRemovalPreflightRefetchInterval,
-  getRemovalsHubRefetchInterval,
-  invalidateCertificationReadiness,
-  useFacilityCertifierSummary,
-  useRemovalPreflightSummaries,
-  useRemovalsForFacility,
-  useSaveFacilityCertifierMapping,
-  useSubmitGhgStatementToVerifier,
-  useCreateRemovalWithBatches,
-  useDeleteRemoval,
-  useSubmitRemoval,
-} from "./use-certification";
+import { getRemovalCertifyRefetchInterval, getRemovalPreflightRefetchInterval, getRemovalsHubRefetchInterval, useFacilityCertifierSummary, useRemovalPreflightSummaries, useRemovalsForFacility, useSaveFacilityCertifierMapping, useSubmitGhgStatementToVerifier, useCreateRemovalWithBatches, useDeleteRemoval, useSubmitRemoval } from "./use-certification";
+import { certificationKeys } from "./certification-query-keys";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
 
 describe("certificationKeys", () => {
@@ -85,6 +72,28 @@ describe("useSaveFacilityCertifierMapping", () => {
 });
 
 describe("useSubmitRemoval", () => {
+  it("preserves streamed failure details in the mutation rejection", async () => {
+    reactQueryMocks.useQueryClient.mockReturnValue({ invalidateQueries: vi.fn() });
+    reactQueryMocks.useMutation.mockClear();
+    useSubmitRemoval();
+    const [{ mutationFn }] = reactQueryMocks.useMutation.mock.calls[0] as [{
+      mutationFn: (vars: { input: { removalId: string; compilationHash: string }; onProgress: () => void }) => Promise<unknown>;
+    }];
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      type: "error", error: "The reviewed data changed.",
+      failureKind: "changed_since_review", attemptId: "attempt-2",
+    }) + "\n")));
+    try {
+      await expect(mutationFn({
+        input: { removalId: "removal-1", compilationHash: "review-hash" }, onProgress: () => undefined,
+      })).rejects.toMatchObject({
+        message: "The reviewed data changed.", failureKind: "changed_since_review", attemptId: "attempt-2",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("refreshes the dashboard, batch to-dos and list states once an attempt settles", async () => {
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
     reactQueryMocks.useQueryClient.mockReturnValue({ invalidateQueries });
@@ -282,48 +291,6 @@ describe("getRemovalsHubRefetchInterval", () => {
       }),
     ).toBe(60_000);
     expect(options.refetchInterval({ state: { data: undefined } })).toBe(false);
-  });
-});
-
-describe("invalidateCertificationReadiness", () => {
-  it("invalidates certification and activity projections by default", async () => {
-    const invalidateQueries = vi.fn().mockResolvedValue(undefined);
-    const queryClient = { invalidateQueries } as unknown as QueryClient;
-
-    await invalidateCertificationReadiness(queryClient);
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.details() });
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: activityKeys.all });
-
-    expect(invalidateQueries).toHaveBeenCalledTimes(6);
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: dashboardOverviewKeys.all });
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.emissionAllocationPrefix() });
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: certificationKeys.all,
-    });
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: creditBatchKeys.timelineFactsPrefix(),
-    });
-  });
-
-  it("also invalidates CO₂e previews for chemistry and mass inputs", async () => {
-    const invalidateQueries = vi.fn().mockResolvedValue(undefined);
-    const queryClient = { invalidateQueries } as unknown as QueryClient;
-
-    await invalidateCertificationReadiness(queryClient, {
-      creditBatchPreviews: true,
-    });
-
-    expect(invalidateQueries).toHaveBeenCalledTimes(7);
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.emissionAllocationPrefix() });
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: certificationKeys.all,
-    });
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: creditBatchKeys.previewsPrefix(),
-    });
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: creditBatchKeys.details(),
-    });
   });
 });
 

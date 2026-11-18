@@ -4,10 +4,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError } from "@/lib/stale-version";
 // Keep certification invalidation and unrelated server actions out of these cache tests.
-vi.mock("./use-certification", () => ({
-  certificationKeys: { all: ["certification"] },
-  invalidateCertificationReadiness: vi.fn(),
-}));
+vi.mock("./stale-reads", () => ({ invalidateCertificationReadiness: vi.fn() }));
 
 vi.mock("./use-output-stock", () => ({ outputStockKeys: { all: ["outputStock"] } }));
 

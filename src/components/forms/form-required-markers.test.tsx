@@ -116,6 +116,7 @@ const NOT_SHEET_FORMS: Record<string, string> = {
   "components/auth/login-form.tsx": "auth page",
   "components/auth/reset-password-form.tsx": "auth page",
   "components/auth/set-password-form.tsx": "auth page",
+  "components/auth/setup-form.tsx": "auth page",
   "components/organizations/invitation-bootstrap-form.tsx": "onboarding page",
   "components/settings/organization-defaults-form.tsx": "settings page",
   "components/settings/organization-name-form.tsx": "settings page",

@@ -4,7 +4,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { setEmissionLineCommentFn, deleteEmissionLineCommentFn } from "@/fn/emission-line-comments";
 import { throwActionError } from "@/lib/stale-version";
 import type { ActionResult } from "@/types/actions";
-import { invalidateEmissionEntryReads, type EmissionBatchScope } from "./use-emission-entries";
+import { type EmissionBatchScope } from "./use-emission-entries";
+import { invalidateEmissionEntryReads } from "./stale-reads";
 
 function useLineCommentMutation<TInput, TData>(scope: EmissionBatchScope, run: (input: TInput) => Promise<ActionResult<TData>>) {
   const queryClient = useQueryClient();

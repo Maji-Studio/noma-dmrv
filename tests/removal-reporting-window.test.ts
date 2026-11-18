@@ -12,7 +12,7 @@ import {
   assertReportingWindowNotInverted,
   resolveRemovalReportingWindow,
   resolveLatestApplicationTime,
-} from "@/fn/certification/removal-reporting-window";
+} from "@/lib/certification/removal-reporting-window";
 
 const RUN_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const RUN_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";

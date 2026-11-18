@@ -8,14 +8,12 @@
  * fits. Dates are `YYYY-MM-DD` strings, inclusive on both ends.
  */
 
+import type { CreditBatchLifecycleStep } from "@/lib/certification/credit-batch-lifecycle";
+
 const MS_PER_DAY = 86_400_000;
 /** Months a search for a free calendar month may look ahead. */
 const MAX_MONTH_SEARCH = 120;
 const PERCENT = 100;
-/** Lifecycle step index (credit-batch-lifecycle.ts) from which a Removal is submitted. */
-const SUBMITTED_STEP_INDEX = 1;
-/** Lifecycle step index at which credits are issued. */
-const ISSUED_STEP_INDEX = 3;
 
 export interface DateWindow {
   /** YYYY-MM-DD, inclusive. */
@@ -172,11 +170,11 @@ export type TimelineState = "blocking" | "ready" | "interrupted" | "submitted" |
  * Otherwise a submitted Removal or an issued batch wins over data readiness,
  * and any blocking item means "blocking". Null while the readiness of the
  * batch has not loaded. A failed verification is "blocking" even when no data
- * is missing; a rejected Removal (step 0) keeps showing the data readiness.
+ * is missing; a rejected Removal (open step) keeps showing the data readiness.
  */
 export function deriveTimelineState(input: {
   removalInterrupted: boolean;
-  lifecycleStepIndex: number;
+  currentStep: CreditBatchLifecycleStep;
   lifecycleFailed: boolean;
   healthState: "ready" | "incomplete";
   blockingCount: number;
@@ -184,9 +182,9 @@ export function deriveTimelineState(input: {
   if (!input) return null;
   if (input.removalInterrupted) return "interrupted";
   // A failed verification (a failed step after the Removal was submitted) is Open.
-  if (input.lifecycleFailed && input.lifecycleStepIndex >= SUBMITTED_STEP_INDEX) return "blocking";
-  if (!input.lifecycleFailed && input.lifecycleStepIndex >= ISSUED_STEP_INDEX) return "issued";
-  if (!input.lifecycleFailed && input.lifecycleStepIndex >= SUBMITTED_STEP_INDEX) return "submitted";
+  if (input.lifecycleFailed && input.currentStep !== "open") return "blocking";
+  if (!input.lifecycleFailed && input.currentStep === "credits-issued") return "issued";
+  if (!input.lifecycleFailed && input.currentStep !== "open") return "submitted";
   return input.healthState === "ready" && input.blockingCount === 0 ? "ready" : "blocking";
 }
 

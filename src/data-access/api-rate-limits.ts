@@ -1,7 +1,10 @@
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { API_RECORD_PURGE_BATCH_SIZE } from "@/config/operations";
 import { RATE_LIMIT_IDLE_RETENTION_MS, RATE_LIMIT_SECONDS_PER_MINUTE } from "@/config/api-rate-limits";
+
+// Allow floating-point rounding across refused-consume accrual snapshots.
+const REFUND_TOKEN_TOLERANCE = 1e-9;
 
 export interface RateLimitBucket {
   key: string;
@@ -10,6 +13,10 @@ export interface RateLimitBucket {
 }
 export interface RateLimitResult {
   allowed: boolean;
+  /** Exact database timestamp text preserves sub-millisecond precision for refunds. */
+  debitRefilledAt: string;
+  /** Exact post-consume balance, before rounding, for refund projections. */
+  debitTokens: number;
   limit: number;
   remaining: number;
   /** Seconds until the bucket is full again. */
@@ -18,25 +25,41 @@ export interface RateLimitResult {
   retryAfterSeconds: number;
 }
 
+function assertValidBucket(bucket: RateLimitBucket, cost: number): void {
+  const { capacity, refillPerMinute } = bucket;
+  if (![capacity, refillPerMinute, cost].every((value) => Number.isFinite(value) && value > 0) || cost > capacity) {
+    throw new Error("Invalid rate-limit bucket or cost.");
+  }
+}
+
+function availableTokens(bucket: RateLimitBucket, tokens: SQL, refilledAt: SQL, instant: SQL): SQL {
+  return sql`
+    least(${bucket.capacity}::double precision, ${tokens} +
+      greatest(0, extract(epoch from (${instant} - ${refilledAt}))) *
+      ${bucket.refillPerMinute}::double precision / ${RATE_LIMIT_SECONDS_PER_MINUTE})`;
+}
+
 // org-scope-ok: system abuse protection spans unauthenticated IPs, credentials and organizations.
 export async function consumeRateLimit(
   bucket: RateLimitBucket,
   cost = 1,
   now?: Date,
 ): Promise<RateLimitResult> {
+  assertValidBucket(bucket, cost);
   const { key, capacity, refillPerMinute } = bucket;
-  if (![capacity, refillPerMinute, cost].every((value) => Number.isFinite(value) && value > 0) || cost > capacity) {
-    throw new Error("Invalid rate-limit bucket or cost.");
-  }
   // Production uses the database clock; tests inject a clock without sleeping.
   const instant = now ? sql`${now.toISOString()}::timestamptz` : sql`statement_timestamp()`;
-  const available = (row: "api_rate_limit_buckets" | "previous") => sql`
-    least(${capacity}::double precision, ${sql.raw(`${row}.tokens`)} +
-      greatest(0, extract(epoch from (${instant} - ${sql.raw(`${row}.refilled_at`)}))) *
-      ${refillPerMinute}::double precision / ${RATE_LIMIT_SECONDS_PER_MINUTE})`;
+  const available = (row: "api_rate_limit_buckets" | "previous") => availableTokens(
+    bucket, sql.raw(`${row}.tokens`), sql.raw(`${row}.refilled_at`), instant,
+  );
   // PostgreSQL 18's OLD/NEW RETURNING aliases expose the row locked by the
   // upsert, including after a concurrent debit. No snapshot pre-read can race.
-  const result = await db.execute<{ allowed: boolean; tokens: number; refill_delay_seconds: number }>(sql`
+  const result = await db.execute<{
+    allowed: boolean;
+    tokens: number;
+    debit_refilled_at: string;
+    refill_delay_seconds: number;
+  }>(sql`
     insert into api_rate_limit_buckets (bucket_key, tokens, refilled_at)
     values (${key}, ${capacity - cost}, ${instant})
     on conflict (bucket_key) do update set
@@ -46,12 +69,15 @@ export async function consumeRateLimit(
     returning with (old as previous, new as current)
       (previous.bucket_key is null or ${available("previous")} >= ${cost}) as allowed,
       current.tokens,
+      current.refilled_at::text as debit_refilled_at,
       -- After a backward clock step refill resumes only at the retained timestamp.
       greatest(0, extract(epoch from (current.refilled_at - ${instant})))::double precision as refill_delay_seconds
   `);
   const row = result.rows[0];
   return {
     allowed: row.allowed,
+    debitRefilledAt: row.debit_refilled_at,
+    debitTokens: row.tokens,
     limit: capacity,
     remaining: Math.floor(row.tokens),
     resetSeconds: Math.ceil(
@@ -61,6 +87,31 @@ export async function consumeRateLimit(
       Number(row.refill_delay_seconds) + (cost - row.tokens) * RATE_LIMIT_SECONDS_PER_MINUTE / refillPerMinute,
     ),
   };
+}
+
+/**
+ * Refund a debit across refused consumes without resetting refill time or creating a bucket.
+ * A newer admitted debit blocks the refund while the balance is below the original projection.
+ */
+// org-scope-ok: system abuse protection spans unauthenticated IPs, credentials and organizations.
+export async function refundRateLimit(
+  bucket: RateLimitBucket,
+  debit: { refilledAt: string; tokens: number },
+  cost = 1,
+  now?: Date,
+): Promise<void> {
+  assertValidBucket(bucket, cost);
+  const { key, capacity } = bucket;
+  const instant = now ? sql`${now.toISOString()}::timestamptz` : sql`statement_timestamp()`;
+  const available = availableTokens(bucket, sql`tokens`, sql`refilled_at`, instant);
+  const projected = availableTokens(
+    bucket, sql`${debit.tokens}::double precision`, sql`${debit.refilledAt}::timestamptz`, instant,
+  );
+  await db.execute(sql`
+    update api_rate_limit_buckets
+    set tokens = least(${capacity}::double precision, tokens + ${cost}::double precision)
+    where bucket_key = ${key} and ${available} >= ${projected} - ${REFUND_TOKEN_TOLERANCE}::double precision
+  `);
 }
 
 // org-scope-ok: authenticated cron removes idle system buckets across all principals.

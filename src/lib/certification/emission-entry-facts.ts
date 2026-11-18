@@ -1,3 +1,5 @@
+import { REENTER_EMISSION_ENTRY } from "./emission-entry-messages";
+import { entryAmountIsZero } from "./emission-entry-evidence";
 import type { EntryCarryDisposition, EntryCarryDestination } from "./emission-entry-carry";
 import type { listEmissionEntries } from "@/data-access/emission-entries";
 import { emissionEntryCounts, type EntryObservation } from "./emission-entry-rules";
@@ -11,12 +13,12 @@ export function deriveEmissionEntryFacts(
 ) {
   return storedEntries.map((entry): typeof entry & ReturnType<typeof emissionEntryCounts> & {
     carry?: EntryCarryDisposition; reportedIn?: EntryCarryDestination | null; unitMismatch: boolean;
-    hasEvidence: boolean; total: { magnitude: string; unit: string } | null;
+    hasEvidence: boolean; isZero: boolean; total: { magnitude: string; unit: string } | null;
   } => {
     const previous = previousObservations.get(entry.observationId);
     const status = previous
       ? emissionEntryCounts(previous, observation, entry.componentId)
-      : { counts: false, reason: "Enter the values again for the current template component.", canConfirm: false };
+      : { counts: false, reason: REENTER_EMISSION_ENTRY, canConfirm: false };
     const component = observation.definition.groups
       .flatMap((group) => group.components)
       .find((component) => component.id === entry.componentId);
@@ -36,6 +38,7 @@ export function deriveEmissionEntryFacts(
       ...status,
       unitMismatch,
       hasEvidence: entry.documentCount > 0,
+      isZero: entryAmountIsZero(entry.values),
       total: value ? { magnitude: value.magnitude, unit: value.unit } : null,
     };
   });

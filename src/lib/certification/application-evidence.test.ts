@@ -4,7 +4,7 @@ import {
   listDocumentsForEntityIds,
   type DocumentRow,
 } from "@/data-access/documents";
-import { buildApplicationEvidenceGaps } from "@/fn/certification/application-evidence-readiness";
+import { buildApplicationEvidenceGaps } from "@/lib/certification/application-evidence-readiness";
 import {
   APPLICATION_EVIDENCE_FIXTURES,
   NULLISH_EVIDENCE_METHOD_FIXTURES,

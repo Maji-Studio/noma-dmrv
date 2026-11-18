@@ -40,6 +40,13 @@ describe("deriveSubmissionAttempts", () => {
     expect(attempts[1].outcome).toEqual({ kind: "no-answer" });
   });
 
+  it("maps a changed-since-review refusal (#1114)", () => {
+    const [attempt] = deriveSubmissionAttempts([
+      summary("2026-11-09T16:00:00Z", "2026-11-09T16:00:04Z", "failed", "a1", "refusal", "changed_since_review"),
+    ]);
+    expect(attempt).toMatchObject({ errorMessage: "refusal", outcome: { kind: "changed" } });
+  });
+
   it("keeps a drift event with the attempt that wrote it, not a neighbour", () => {
     const attempts = deriveSubmissionAttempts([
       summary("2026-10-20T06:12:00Z", "2026-10-20T06:12:30Z", "failed", "a1", "other"),

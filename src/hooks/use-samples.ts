@@ -27,7 +27,7 @@ import {
   updateSampleFn,
   deleteSampleFn,
 } from "@/fn/samples";
-import { invalidateCertificationReadiness } from "@/hooks/use-certification";
+import { invalidateCertificationReadiness } from "@/hooks/stale-reads";
 
 import { unwrap, type MutationCallbacks, type OptimisticUpdateOptions } from "./types";
 

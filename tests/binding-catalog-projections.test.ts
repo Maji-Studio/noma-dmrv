@@ -14,7 +14,7 @@ import {
   CERTIFY_FIELD_REGISTRY,
   resolveCertifyFieldInputTuples,
 } from "@/lib/certification/certify-field-registry";
-import { deriveRequiredTransportCategories } from "@/fn/certification/certify-transport-coverage";
+import { deriveRequiredTransportCategories } from "@/lib/certification/certify-transport-coverage";
 import {
   SEMANTIC_BINDING_CATALOG,
   TRANSPORT_CATEGORIES,

@@ -179,7 +179,7 @@ describe("entries after template changes", () => {
     const before = observation();
     const after = structuredClone(before);
     after.enrichment.line.electricity_use = { unit: "Wh" };
-    expect(emissionEntryCounts(before, after, "line")).toMatchObject({ counts: false, canConfirm: false, reason: "Enter the values again for the current template component." });
+    expect(emissionEntryCounts(before, after, "line")).toMatchObject({ counts: false, canConfirm: false, reason: "Enter the values again for the current component." });
     expect(emissionEntryCounts(after, after, "line").counts).toBe(true);
   });
   it.each(["removed", "kind", "policy", "scope", "template", "unknown-unit"])(
@@ -283,4 +283,12 @@ it("refuses an existing additive mass/distance contract and a second single pair
   expect(() => validateEmissionEntry(input)).toThrow("already has an entry");
   input.activeValueCount = 0;
   expect(validateEmissionEntry(input).lineRule).toBe("single");
+});
+
+it("keeps entries counting when only the component proof setting changes", () => {
+  const previous = observation();
+  const current = observation();
+  previous.lineSources.line.filePolicy = "entryFiles";
+  current.lineSources.line.filePolicy = "none";
+  expect(emissionEntryCounts(previous, current, "line")).toMatchObject({ counts: true });
 });

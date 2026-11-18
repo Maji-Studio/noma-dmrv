@@ -1,7 +1,7 @@
 import type { IsometricClient, IsometricComponentBlueprint, IsometricGhgEntryTemplate } from "@/lib/isometric";
 import type { RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
 import { normalizeTemplateDefinition, lineSourcesForObservation, enrichmentProblems, validateLineSources, type ComponentChange } from "@/lib/isometric/template-observations";
-import { enrichmentForObservation } from "./observe-removal-template";
+import { enrichmentForObservation } from "@/lib/certification/observe-removal-template";
 import { reviewLineSources } from "@/lib/certification/removal-template-review-sources";
 import { removalTemplateReviewLines as reviewLines } from "@/lib/certification/removal-template-review-lines";
 

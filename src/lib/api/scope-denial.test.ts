@@ -16,7 +16,7 @@ beforeEach(() => { vi.resetAllMocks(); env.OAUTH_PROVIDER_ENABLED = true; });
 it("records exactly the required scopes, not the challenge union", async () => {
   const response = await apiScopeDenialResponse(ctx, "/api/mcp", "id", ["feedstocks:write", "orders:write"]);
   expect(response.status).toBe(403);
-  expect(response.headers.get("www-authenticate")).toContain('scope="feedstocks:read feedstocks:write orders:write"');
+  expect(response.headers.get("www-authenticate")).toContain('scope="feedstocks:read feedstocks:write orders:read orders:write"');
   expect(mocks.record).toHaveBeenCalledExactlyOnceWith({ userId: ctx.userId, clientId: "client", organizationId: ctx.organizationId }, ["feedstocks:write", "orders:write"]);
   expect(mocks.warn).not.toHaveBeenCalled();
 });

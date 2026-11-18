@@ -40,7 +40,7 @@ Read first per CLAUDE.md: `docs/code-style.md`, `docs/architecture.md`, `docs/de
 - Per-document badge inside the panel marking registry-bound docs (receipt / role-stamped photo / BOL) vs retention-only (weighbridge ticket, other transport). Reuse/extend the `transport-leg-cert-status.ts` pattern.
 - Deferred-attachment create mode and live-panel edit mode keep today's behavior; deferred adds must carry the role metadata too (`use-deferred-attachments` path).
 
-### 4. Gate instead of block (`src/fn/certification/biochar-application-intents.ts`)
+### 4. Gate instead of block (`src/lib/certification/biochar-application-intents.ts`)
 
 - `compileBiocharApplicationIntents` / `getBiocharApplicationRegistryInputs` (`src/data-access/certifier-biochar-applications.ts:42`): when `truckMassOnArrivalKg` or `truckMassOnDepartureKg` is null, do NOT throw the SafeError. Produce a gated intent (or skip with a recorded reason) so `ensureRemovalBiocharApplications` (`src/fn/certification/biochar-applications.ts:38`) journals `lifecycleStatus: 'gated'` + `gateReason` (schema `src/db/schema/certifier-biochar-applications.ts` already supports both) and the removal submission proceeds.
 - Mind the snapshot path: intents are snapshotted pre-mutation (`removal-submission-build.ts:656`) and re-read on resume (`removal-snapshot-readers.ts:93-123`) — the gated shape must round-trip through the zod snapshot schema.

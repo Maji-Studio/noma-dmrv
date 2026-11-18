@@ -6,7 +6,7 @@ import {
   appendSyncEventBestEffort,
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
-} from "./shared";
+} from "@/lib/certification/shared";
 
 const PROTOCOL_VERSION_CHECK_OPERATION = "removal:protocol-version-check";
 

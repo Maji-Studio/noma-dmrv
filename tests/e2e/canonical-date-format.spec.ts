@@ -109,9 +109,10 @@ test("read surfaces use canonical dates while native inputs keep ISO values", as
     await expect(page.getByRole("dialog")).toContainText("Jun 13, 2026");
 
     await page.goto(`/dashboard?facility=${seededData.facility.id}`);
-    const updatedLine = page.getByText(/Live operations · updated/);
+    // "Updated 16:16" today, "Updated Nov 8, 16:16" on another day; 24-hour, facility clock.
+    const updatedLine = page.getByText(/^Updated /);
     await expect(updatedLine).toHaveText(
-      /^Live operations · updated [A-Z][a-z]{2} \d{1,2}, 20\d{2}, (?:[01]\d|2[0-3]):[0-5]\d$/,
+      /^Updated (?:[A-Z][a-z]{2} \d{1,2}(?:, 20\d{2})?, )?(?:[01]\d|2[0-3]):[0-5]\d$/,
     );
     await expect(updatedLine).not.toContainText(/\b(?:AM|PM)\b/);
   } finally {

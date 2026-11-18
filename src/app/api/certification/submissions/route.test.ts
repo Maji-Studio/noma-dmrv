@@ -3,6 +3,7 @@ import { SafeError } from "@/lib/errors";
 import { SUBMISSION_STREAM_PING_INTERVAL_MS } from "@/lib/certification/submission-progress";
 
 const mocks = vi.hoisted(() => ({
+  waitUntil: vi.fn(),
   requireOrgContext: vi.fn(),
   requireOrgRole: vi.fn(),
   checkRateLimit: vi.fn(),
@@ -10,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   submitGhgStatement: vi.fn(),
   logActionError: vi.fn(),
 }));
+
+vi.mock("@vercel/functions", () => ({ waitUntil: mocks.waitUntil }));
 
 vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: mocks.requireOrgContext,
@@ -28,7 +31,8 @@ vi.mock("@/fn/action-errors", () => ({
   logActionError: mocks.logActionError,
 }));
 
-import { POST } from "./route";
+import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
+import { maxDuration, POST } from "./route";
 
 const ORG_CONTEXT = {
   userId: "user-1",
@@ -170,7 +174,23 @@ describe("certification submission progress route", () => {
       error: new Error("database connection included private details"),
       expected: "The submission could not be completed. Try again.",
     },
-  ])("streams $name and closes the response", async ({ error, expected }) => {
+    {
+      name: "a changed stop with attempt details",
+      error: Object.assign(new SafeError("The reviewed data changed."), {
+        failureKind: "changed_since_review", attemptId: "attempt-2",
+      }),
+      expected: "The reviewed data changed.",
+      details: { failureKind: "changed_since_review", attemptId: "attempt-2" },
+    },
+    {
+      name: "an unexpected error with an attempt id",
+      error: Object.assign(new Error("database connection included private details"), {
+        failureKind: null, attemptId: "attempt-2",
+      }),
+      expected: "The submission could not be completed. Try again.",
+      details: { failureKind: null, attemptId: "attempt-2" },
+    },
+  ])("streams $name and closes the response", async ({ error, expected, details }) => {
     mocks.submitRemoval.mockRejectedValue(error);
 
     const response = await POST(
@@ -188,7 +208,7 @@ describe("certification submission progress route", () => {
     );
 
     const text = await response.text();
-    expect(text).toBe(`${JSON.stringify({ type: "error", error: expected })}\n`);
+    expect(text).toBe(`${JSON.stringify({ type: "error", error: expected, ...details })}\n`);
     expect(mocks.logActionError).toHaveBeenCalledWith(error, {
       message: "submission progress stream failed",
     });
@@ -311,4 +331,40 @@ describe("certification submission progress route", () => {
     expect(mocks.submitRemoval).not.toHaveBeenCalled();
     expect(mocks.submitGhgStatement).not.toHaveBeenCalled();
   });
+});
+
+it.each(["removal", "ghg_statement"] as const)("keeps %s work registered after stream cancellation", async (kind) => {
+  let finish!: () => void;
+  let completed = false;
+  const pending = new Promise<void>((resolve) => { finish = resolve; });
+  const submit = kind === "removal" ? mocks.submitRemoval : mocks.submitGhgStatement;
+  submit.mockImplementation(async ({ onProgress }) => {
+    await pending;
+    onProgress({ step: "removal.complete", state: "complete" });
+    completed = true;
+    return { externalId: "remote-1" };
+  });
+  const response = await POST(new Request("http://localhost/api/certification/submissions", {
+    method: "POST",
+    body: JSON.stringify(kind === "removal" ? {
+      kind, input: { removalId: "11111111-1111-4111-8111-111111111111", compilationHash: "a".repeat(64) },
+    } : {
+      kind, ghgStatementId: "22222222-2222-4222-8222-222222222222",
+      input: { reportId: "33333333-3333-4333-8333-333333333333", confirmProduction: true },
+    }),
+  }));
+  expect(mocks.waitUntil).toHaveBeenCalledOnce();
+  const registered = mocks.waitUntil.mock.calls[0][0] as Promise<void>;
+  expect(registered).toBeInstanceOf(Promise);
+  await response.body!.cancel();
+  expect(completed).toBe(false);
+  finish();
+  await registered;
+  expect(completed).toBe(true);
+  expect(mocks.logActionError).not.toHaveBeenCalled();
+});
+
+it("stops the detached core before the submission lock can be reclaimed", () => {
+  // A core outliving its claim lock could keep POSTing while another attempt re-locks the row.
+  expect(maxDuration * 1000).toBeLessThanOrEqual(LOCK_TTL_MS);
 });

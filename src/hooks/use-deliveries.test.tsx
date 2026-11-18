@@ -14,7 +14,7 @@ vi.mock("./use-biochar-products", () => ({ biocharProductKeys: {} }));
 vi.mock("./use-chain-of-custody", () => ({ chainOfCustodyKeys: {} }));
 vi.mock("./use-orders", () => ({ orderKeys: {} }));
 vi.mock("./use-storage-locations", () => ({ storageLocationKeys: {} }));
-vi.mock("./use-certification", () => ({ invalidateCertificationReadiness: vi.fn() }));
+vi.mock("./stale-reads", () => ({ invalidateCertificationReadiness: vi.fn() }));
 vi.mock("./use-dashboard-overview", () => ({ dashboardOverviewKeys: {} }));
 
 const CHUNK_SIZE = 100;

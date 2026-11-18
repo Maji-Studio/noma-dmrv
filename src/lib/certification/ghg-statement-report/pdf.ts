@@ -31,6 +31,7 @@ import {
   t,
   theme,
   v,
+  wordmarkWithSub,
 } from "@/lib/certification/evidence-ledger/pdf-theme";
 import { canonicalizePdfBytes } from "./canonical-pdf";
 import type {
@@ -302,11 +303,8 @@ function buildDocument(model: GhgStatementReportModel): ReactElement {
   const control = model.documentControl;
   const preparedAt = pinnedTimestamp(model.preparedAt);
   const masthead = v(styles.masthead, {},
-    v({ flex: 1, paddingRight: 16 }, {},
-      v(styles.wordmarkRow, {},
-        t(styles.wordmark, "noma"),
-        t(styles.wordmarkSub, "DMRV | GHG STATEMENT"),
-      ),
+    v(styles.mastheadLeft, {},
+      wordmarkWithSub("DMRV | GHG STATEMENT"),
       h(Text, { style: styles.title }, "GHG Statement Data Summary"),
       t(styles.scope, SCOPE_NOTE),
     ),

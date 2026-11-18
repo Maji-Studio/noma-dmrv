@@ -28,8 +28,11 @@
  * any data-access / "use server" coupling.
  */
 
-import { sourceBiocharMassFlowKg } from "@/lib/biochar-product-mass";
-import { tonnesToKg } from "@/lib/calculations/unit-conversions";
+import {
+  extractLineageFacts,
+  type LineageFacts,
+  type MassBalanceLineage as SankeyLineage,
+} from "./lineage-facts";
 import { displayedDifferenceKg } from "@/lib/mass-precision";
 
 export type SankeyColumnKey =
@@ -66,6 +69,8 @@ export interface SankeyExit {
 }
 
 export interface CreditBatchSankeyData {
+  /** Shared raw facts for the waterfall, extracted once before aggregation. */
+  facts: LineageFacts;
   /** Ordered main-flow columns: feedstock → runs → lots → applied. */
   columns: SankeyColumn[];
   /** Non-zero labeled exits, in flow order. */
@@ -76,33 +81,7 @@ export interface CreditBatchSankeyData {
   warnings: string[];
 }
 
-// Only the fields the aggregation reads — structurally satisfied by
-// `ChainOfCustodyData` at the call site.
-export interface SankeyLineage {
-  application: { id: string; biocharAppliedDryTons: number | null };
-  productionRun: {
-    id: string;
-    feedstockMassDryKg: number | null;
-    biocharDryMassKg: number | null;
-  } | null;
-  biocharProduct: {
-    id: string;
-    massKg: number | null;
-    moistureContentPercent: number | null;
-    composition?: unknown;
-  } | null;
-  feedstocks: {
-    id: string;
-    /** Wet allocation. Converted proportionally against run dry mass below. */
-    wetMassUsedKg: number | null;
-  }[];
-  /** Multi-run product provenance; absent on legacy one-run payloads. */
-  sources?: {
-    productionRun: NonNullable<SankeyLineage["productionRun"]>;
-    feedstocks: SankeyLineage["feedstocks"];
-    allocatedDryMassKg?: number | null;
-  }[];
-}
+export type { MassBalanceLineage as SankeyLineage } from "./lineage-facts";
 
 /** Raw residual tolerance for mass-balance warnings. */
 export const EXIT_EPSILON_KG = 0.5;
@@ -138,62 +117,8 @@ export function buildBatchSankey(
 ): CreditBatchSankeyData {
   const warnings: string[] = [];
 
-  // Dedupe shared entities across member applications: N applications may
-  // draw from the same run / lot (plan decision 1 — run-deduped roll-up).
-  const runById = new Map<string, NonNullable<SankeyLineage["productionRun"]>>();
-  const allocatedByProductId = new Map<string, number>();
-  const lotById = new Map<string, NonNullable<SankeyLineage["biocharProduct"]>>();
-  const feedstockIds = new Set<string>();
-  const applicationIds = new Set<string>();
-  let appliedKg = 0;
-  for (const lineage of lineages) {
-    applicationIds.add(lineage.application.id);
-    appliedKg += tonnesToKg(lineage.application.biocharAppliedDryTons ?? 0);
-    const sources =
-      lineage.sources && lineage.sources.length > 0
-        ? lineage.sources
-        : lineage.productionRun
-          ? [{
-              productionRun: lineage.productionRun,
-              feedstocks: lineage.feedstocks,
-            }]
-          : [];
-    for (const source of sources) {
-      const productionRun = source.productionRun;
-      runById.set(productionRun.id, productionRun);
-      for (const feedstock of source.feedstocks) {
-        feedstockIds.add(feedstock.id);
-      }
-    }
-    if (lineage.biocharProduct) {
-      lotById.set(lineage.biocharProduct.id, lineage.biocharProduct);
-      if (lineage.sources?.every(source => source.allocatedDryMassKg != null)) {
-        allocatedByProductId.set(lineage.biocharProduct.id,
-          (allocatedByProductId.get(lineage.biocharProduct.id) ?? 0) +
-          lineage.sources.reduce((sum, source) => sum + (source.allocatedDryMassKg ?? 0), 0));
-      }
-    }
-  }
-
-  let feedstockInKg = 0;
-  let runOutputKg = 0;
-  for (const run of runById.values()) {
-    // The run-derived dry input is the only dry feedstock basis. Wet bin
-    // allocations must never be substituted into this dry-mass Sankey.
-    feedstockInKg += run.feedstockMassDryKg ?? 0;
-    runOutputKg += run.biocharDryMassKg ?? 0;
-  }
-
-  // Share the dashboard's allocation-first, ingredient-excluded biochar basis.
-  // Without a dry figure, retain only the source biochar's wet mass.
-  let lotMassKg = 0;
-  for (const lot of lotById.values()) {
-    lotMassKg += sourceBiocharMassFlowKg({
-      ...lot,
-      composition: lot.composition,
-      sourceAllocatedDryMassKg: allocatedByProductId.get(lot.id) ?? null,
-    });
-  }
+  const facts = extractLineageFacts(lineages);
+  const { feedstockInKg, runOutputKg, lotMassKg, appliedKg } = facts;
 
   const conversionLoss = residual(
     feedstockInKg,
@@ -230,7 +155,7 @@ export function buildBatchSankey(
   if (unallocated.shown) {
     exits.push({
       key: "unallocated_output",
-      label: allocatedByProductId.size ? "Outside these applications" : "Not bagged into lots",
+      label: facts.hasProductAllocations ? "Outside these applications" : "Not bagged into lots",
       fromColumn: "productionRuns",
       massKg: unallocated.value,
       rawKg: unallocated.raw,
@@ -251,30 +176,31 @@ export function buildBatchSankey(
     .reduce((sum, { raw, shown, warning }) => sum + (!shown && !warning ? raw : 0), 0);
 
   return {
+    facts,
     columns: [
       {
         key: "feedstock",
         label: "Feedstock",
         massKg: feedstockInKg,
-        count: feedstockIds.size,
+        count: facts.feedstockCount,
       },
       {
         key: "productionRuns",
         label: "Production runs",
         massKg: runOutputKg,
-        count: runById.size,
+        count: facts.runs.length,
       },
       {
         key: "biocharLots",
-        label: allocatedByProductId.size ? "Allocated biochar" : "Biochar lots",
+        label: facts.hasProductAllocations ? "Allocated biochar" : "Biochar lots",
         massKg: lotMassKg,
-        count: lotById.size,
+        count: facts.products.length,
       },
       {
         key: "applied",
         label: "Applied",
         massKg: appliedKg,
-        count: applicationIds.size,
+        count: facts.applications.length,
       },
     ],
     exits,

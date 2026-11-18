@@ -1,6 +1,10 @@
 import type { JsonSchema } from "@/lib/operations/json-schema";
 import { DomainError, type DomainIssue } from "@/lib/domain-errors";
 
+function hasType(node: JsonSchema, type: string): boolean {
+  return Array.isArray(node.type) ? node.type.includes(type) : node.type === type;
+}
+
 /** Check property names against the published contract; Zod still checks values. */
 export function unknownFieldIssues(value: unknown, schema: JsonSchema): DomainIssue[] {
   function visit(value: unknown, node: JsonSchema, path: (string | number)[]): DomainIssue[] {
@@ -14,8 +18,8 @@ export function unknownFieldIssues(value: unknown, schema: JsonSchema): DomainIs
     const branches = node.anyOf ?? node.oneOf;
     if (Array.isArray(branches)) {
       const applicable = branches.filter((branch: JsonSchema) =>
-        Array.isArray(value) ? branch.type === "array" || branch.$ref
-          : value !== null && typeof value === "object" ? branch.type === "object" || branch.properties || branch.$ref
+        Array.isArray(value) ? hasType(branch, "array") || branch.$ref
+          : value !== null && typeof value === "object" ? hasType(branch, "object") || branch.properties || branch.$ref
             : true);
       const candidates = applicable.map((branch) => visit(value, branch, path));
       return candidates.sort((a, b) => a.length - b.length)[0] ?? [];

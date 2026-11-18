@@ -63,11 +63,13 @@ until something is applied.
 - Production-run dates come from `productionRunDateExpr(ctx.organizationId)`
   (`src/data-access/production-runs/date-expr.ts`), the facility-local start day. New lineage
   queries that skip it sort and display inconsistently with the rest of the app.
-- `src/lib/chain-of-custody/sankey.ts` must stay pure and dependency-light — no
-  data-access, no `"use server"` imports — so it stays unit-testable. Its narrow
-  structural params exist for that reason; widening them to DA row types breaks
-  the contract.
-- `buildBatchSankey` mirrors `buildMassAccounting`'s walk but keeps **full** run
+- `src/lib/chain-of-custody/sankey.ts` and `lineage-facts.ts` must stay pure and
+  dependency-light (no data-access, no `"use server"` imports) so they stay
+  unit-testable. The narrow structural params in `lineage-facts.ts`
+  (`MassBalanceLineage`) exist for that reason; widening them to DA row types
+  breaks the contract.
+- `extractLineageFacts` walks the lineages once for both `buildBatchSankey` and the
+  waterfall. It mirrors `buildMassAccounting`'s walk but keeps **full** run
   masses rather than attribution fractions — the exits, not fractions, account for
   mass that never reached this batch's applications. Not interchangeable.
 
@@ -148,7 +150,8 @@ inside batch context, with a "Batch roll-up" button back.
 | Data Access | `src/data-access/chain-of-custody-roll-forward.ts` | Projects member runs' roll-forwards (run → products → deliveries) |
 | Data Access | `src/data-access/chain-of-custody-geo.ts` | Geo payload (node coordinates + transport legs) |
 | Data Access | `src/data-access/chain-of-custody-trail.ts` | Trail evidence joins keyed by graph node id |
-| Pure lib | `src/lib/chain-of-custody/sankey.ts` | `buildBatchSankey` — dedupe + mass-balance aggregation |
+| Pure lib | `src/lib/chain-of-custody/lineage-facts.ts` | `extractLineageFacts`: deduped raw lineage facts shared by the Sankey and the waterfall |
+| Pure lib | `src/lib/chain-of-custody/sankey.ts` | `buildBatchSankey`: mass-balance aggregation over those facts |
 | Pure lib | `src/lib/chain-of-custody/lineage-mass-totals.ts` | Wet/dry totals per graph node and edge, rollback and roll-forward |
 | Server Action | `src/fn/chain-of-custody.ts` | Validates ids; application, batch, batch-geo, trail actions |
 | React Query Hook | `src/hooks/use-chain-of-custody.ts` | Caches by application / batch id |
@@ -163,9 +166,7 @@ inside batch context, with a "Batch roll-up" button back.
 renders them on a React Flow canvas for pan, pinch, wheel zoom and the + / − /
 fit controls. Geometry, columns and the group threshold live in
 `chain-constants.ts`; token and contrast rules are owned by
-[docs/design-system.md](design-system.md). Modelled on the buyer journey graph
-on the site (`site/src/components/site/journey/graph.js`), in the app's light
-theme.
+[docs/design-system.md](design-system.md). The graph uses the app's light theme.
 
 - **Columns by kind, in chain order** (`FLOW_COLUMNS`): feedstock, reactor,
   production run, biochar product, order, delivery, application. Empty kinds
@@ -305,7 +306,7 @@ See [docs/testing.md](testing.md) for fixtures and E2E conventions. Suites:
 - `tests/e2e/traceability.spec.ts`, `tests/e2e/carbon-viewer.spec.ts`
 - `tests/credit-batch-accounting-contract.test.ts`,
   `tests/credit-batch-context-set.test.ts`
-- `src/lib/chain-of-custody/sankey.test.ts`
+- `src/lib/chain-of-custody/sankey.test.ts`, `lineage-facts.test.ts`
 - `src/lib/chain-of-custody/lineage-mass-totals.test.ts` (shares `lineage-mass-totals-test-fixtures.ts` with the graph suite)
 - `src/components/chain-of-custody/use-chain-graph.test.ts`, `flow-layout.test.ts`, `flow-edge-geometry.test.ts`
 - `src/components/chain-of-custody/use-credit-batch-card-selection.test.ts`

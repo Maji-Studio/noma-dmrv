@@ -6,7 +6,7 @@ import { expect, it, vi } from "vitest";
 import { useCreateSupplierLocation, useUpdateSupplierLocation } from "./use-suppliers";
 import { transportLegKeys } from "./use-transport-legs";
 import { feedstockKeys } from "./use-feedstocks";
-import { certificationKeys } from "./use-certification";
+import { certificationKeys } from "./certification-query-keys";
 import { creditBatchKeys } from "./credit-batch-query-keys";
 
 vi.mock("@/fn/suppliers", () => ({

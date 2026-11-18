@@ -8,6 +8,7 @@ export const SESSION_EXPIRED = "session_expired";
 export type DomainErrorCode =
   | "validation_failed"
   | typeof SESSION_EXPIRED
+  | "account_exists"
   | "not_found"
   | "stale_version"
   | "conflict"

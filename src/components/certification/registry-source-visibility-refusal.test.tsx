@@ -6,7 +6,6 @@ import { RegistrySourceVisibilitySettings } from "./registry-source-visibility-s
 
 const save = vi.hoisted(() => ({ mutateAsync: vi.fn(), isPending: false }));
 vi.mock("@/hooks/use-certification", () => ({
-  certificationKeys: { all: ["certification"] },
   useRegistrySourceVisibility: () => ({ data: { sourceVisibility: "private", viewerCanManage: true }, isLoading: false, error: null }),
   useSaveRegistrySourceVisibility: () => save,
 }));

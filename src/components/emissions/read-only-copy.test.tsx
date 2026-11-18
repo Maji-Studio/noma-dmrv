@@ -17,6 +17,9 @@ describe("read-only Emissions copy", () => {
       expect(stoppedEntryMessage(entry, false, true)).toBe("Stopped counting after a template change.");
     }
     expect(stoppedEntryMessage(makeEntry({ canConfirm: true }), true)).toContain("confirm");
+    expect(stoppedEntryMessage(makeEntry({ canConfirm: false }), true)).toBe(
+      "Stopped counting after a template change. Enter the values again for the current component.",
+    );
   });
 
   it("H7: the template setup notice drops its Settings action and repair step", () => {

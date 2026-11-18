@@ -1,0 +1,905 @@
+import { generatedEvidenceFacts, type GeneratedEvidenceFacts } from "./generated-evidence-facts";
+import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
+export { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
+import type { SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
+import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
+import type { OrgContext } from "@/lib/auth/server";
+import { env } from "@/config/env";
+import { SafeError } from "@/lib/errors";
+import {
+  aggregateProductionRuns,
+  buildRemovalSupplierRef,
+  enrichWithTransportLegs,
+  type AggregatedProductionData,
+  type CreateDatapointRequest,
+  type IsometricGhgEntryTemplate,
+} from "@/lib/isometric";
+import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
+import {
+  isSequestrationBlueprintFamily,
+  isStorageBlueprintKey,
+} from "@/lib/isometric/storage-blueprints";
+import {
+  assertSequestrationTemplateBindings,
+  buildDirectSequestrationDatapoints,
+  RegistryMappingError,
+} from "@/lib/isometric/transformers/sequestration-binding";
+import { weightedBatchChemistry } from "@/lib/isometric/utils/durability-aggregation";
+import type { Logger } from "@/lib/log";
+import { buildBiocharApplicationReference } from "@/lib/isometric/biochar-applications";
+import {
+  buildVersionedMeasurementSampleSubmissions,
+  normalizeMeasurementSamplesForHash,
+  type DurabilityMeasurementSampleClaimArgs,
+} from "./durability-measurement-sample-snapshot";
+import {
+  assertRemovalDatesNotFuture,
+  assertReportingWindowNotInverted,
+  resolveLatestApplicationTime,
+  resolveRemovalReportingWindow,
+} from "./removal-reporting-window";
+import type { ResolvedFixedInput } from "./removal-snapshot-readers";
+import {
+  compileBiocharApplicationIntents,
+  type BiocharApplicationIntent,
+} from "./biochar-application-intents";
+import type {
+  CandidateSourceDocument,
+  ResolvedSourceBindingCandidate,
+} from "./source-candidates";
+import type { RemovalSubmissionContext } from "./certify-context-core";
+import {
+  sourceIdsForDatapointTarget,
+  type RemovalSourceBindingPlanEntry,
+} from "@/lib/certification/removal-source-bindings";
+import {
+  resolveTemplateInputs,
+  type ResolvedMonitoredInput,
+} from "./removal-template-inputs";
+import {
+  includesProductionInputs,
+  productionClaimContribution,
+} from "./production-claim-policy";
+import { normalizeSequestrationTemplateForHash } from "./removal-template-hash";
+import { normalizeCarriedEntriesForHash, normalizeEntryContributionsForHash, normalizeEntrySourceBindingForHash } from "./removal-entry-hash";
+import { planRemovalEvidence } from "./removal-evidence-plan";
+import { removalSubmissionBindingOptions, type PreparedRemovalSubmission } from "./removal-submission-prepare";
+
+export { normalizeSequestrationTemplateForHash } from "./removal-template-hash";
+
+export interface RemovalSubmissionBuild {
+  agg: AggregatedProductionData;
+  reportingWindow: { startedOn: Date; completedOn: Date };
+  candidateDocumentIds: string[];
+  candidateSourceDocuments: CandidateSourceDocument[];
+  readySourceDocumentCount: number;
+  sourceIds: string[];
+  datapointSourceIds: string[];
+  sourceBindingPlan: RemovalSourceBindingPlanEntry[];
+  semanticPayload: Record<string, unknown>;
+  generatedEvidenceFacts?: GeneratedEvidenceFacts;
+  /** Absent when transport coverage was not built: the transport lock then fails closed. */
+  transportFeedstockIds?: string[];
+  templateObservationId?: string;
+  frozenEntrySet?: { entryId: string; contentRevision: number }[];
+  monitored: ResolvedMonitoredInput[];
+  fixed: ResolvedFixedInput[];
+  datapointBodyByKey: Map<string, CreateDatapointRequest>;
+  durabilityMeasurementSampleArgs: DurabilityMeasurementSampleClaimArgs | null;
+  memberCreditBatchIds: string[];
+  biocharApplicationIntents: BiocharApplicationIntent[];
+  omittedTemplateComponentIds: string[];
+}
+
+export interface RemovalSubmissionReview {
+  template: {
+    id: string;
+    displayName: string;
+    mappingRevision: string;
+  };
+  bindings: Array<{
+    componentId: string;
+    componentBlueprintKey: string;
+    componentDisplayName?: string;
+    inputKey: string;
+    binding: "monitored" | "fixed" | "measurement-sample";
+    wireMagnitude?: number;
+    wireUnit?: string;
+    wireType?: string;
+    fixedDatapointId?: string;
+  }>;
+  measurementSamples: Array<{
+    operationKey: string;
+    label: string;
+    measuredAt: string | null;
+    values: unknown[];
+  }>;
+  directSequestrationDatapoints: Array<{
+    componentId: string;
+    inputKey: string;
+    magnitude: number;
+    unit: string;
+    type: string;
+  }>;
+  sourceIds: string[];
+  /** Candidate files whose Source IDs are materialized during submission. */
+  pendingSourceCount?: number;
+  intendedPostTargets: string[];
+  memberCreditBatches: Array<{ id: string; code: string }>;
+  productionRuns: Array<{ id: string; code: string | null }>;
+  applications: Array<{
+    id: string;
+    code: string;
+    deliveryId: string;
+    deliveryCode: string;
+  }>;
+  reportingWindow: { startedOn: string; completedOn: string };
+  /** Components this Removal leaves out: already sent with, or claimed by, an earlier Removal. */
+  omittedComponentIds?: string[];
+  productionEmissionClaims?: Array<{
+    creditBatchId: string;
+    creditBatchCode: string;
+    claimingRemovalId: string | null;
+    contribution: "production-and-delivery" | "delivery-only";
+  }>;
+}
+
+export function buildProductionEmissionClaims(
+  memberBatchClaims: RemovalSubmissionContext["memberBatchClaims"],
+  removalId: string,
+): NonNullable<RemovalSubmissionReview["productionEmissionClaims"]> {
+  return memberBatchClaims.map((batch) => ({
+    creditBatchId: batch.creditBatchId,
+    creditBatchCode: batch.code,
+    claimingRemovalId: batch.claimedByRemovalId,
+    contribution: productionClaimContribution(
+      batch.claimedByRemovalId,
+      removalId,
+    ),
+  }));
+}
+
+export interface CompiledRemovalSubmission {
+  review: RemovalSubmissionReview;
+  transportPlan: RemovalSubmissionBuild | null;
+  blockers: string[];
+  warnings: string[];
+  snapshot: {
+    materialization: "claim-time";
+    mappingRevision: string;
+    semanticPayload: Record<string, unknown>;
+  } | null;
+}
+
+export interface MaterializedRemovalSubmissionSnapshot {
+  payloadSnapshot: {
+    __mappingRevision: string;
+    templateObservationId?: string;
+    frozenEntrySet?: { entryId: string; contentRevision: number }[];
+    semantic: Record<string, unknown>;
+    generatedEvidenceFacts?: GeneratedEvidenceFacts;
+    transportFeedstockIds?: string[];
+    memberCreditBatchIds: string[];
+    sourceBindingPlan: RemovalSourceBindingPlanEntry[];
+    transport: {
+      removalSupplierRef: string;
+      omittedTemplateComponentIds: string[];
+      biocharApplicationIntents: BiocharApplicationIntent[];
+      datapointBodies: Array<{
+        rtcId: string;
+        inputKey: string;
+        body: CreateDatapointRequest;
+      }>;
+    };
+    durabilityMeasurementSamples?: {
+      submissions: ReturnType<
+        typeof buildVersionedMeasurementSampleSubmissions
+      >;
+    };
+  };
+  metadata: { supersedePreviousId: string | null };
+}
+
+export const REMOVAL_COMPILATION_FAILED_MESSAGE = "Removal submission could not be compiled from the current source data.";
+
+const DATAPOINT_POST_TARGET = "/datapoints";
+const MEASUREMENT_SAMPLE_POST_TARGET = "/measurement-samples";
+const GHG_ENTRY_POST_TARGET = "/ghg-entries";
+function hasSupportedSequestrationComponent(
+  template: IsometricGhgEntryTemplate,
+): boolean {
+  return (template.groups ?? []).some((group) =>
+    group.components.some(
+      (component) => isStorageBlueprintKey(component.blueprint_key),
+    ),
+  );
+}
+
+function emptyReview(
+  template: IsometricGhgEntryTemplate,
+): RemovalSubmissionReview {
+  return {
+    template: {
+      id: template.id,
+      displayName: template.display_name,
+      mappingRevision: MAPPING_REVISION,
+    },
+    bindings: [],
+    measurementSamples: [],
+    directSequestrationDatapoints: [],
+    sourceIds: [],
+    pendingSourceCount: 0,
+    intendedPostTargets: [],
+    memberCreditBatches: [],
+    productionRuns: [],
+    applications: [],
+    reportingWindow: { startedOn: "", completedOn: "" },
+    productionEmissionClaims: [],
+  };
+}
+
+export async function compileRemovalSubmission(
+  args: Parameters<typeof buildRemovalSubmissionBuild>[0] & {
+    /**
+     * Review-time compilation may include candidate files that submission will
+     * mirror. The submit path recompiles strictly after those mirrors persist.
+     */
+    allowPendingSources?: boolean;
+  },
+): Promise<CompiledRemovalSubmission> {
+  const unbindable = findUnbindableTemplateInputs(
+    args.prepared.removalTemplate,
+    removalSubmissionBindingOptions(args.ctx, args.prepared.lineSources),
+  );
+  if (unbindable.length > 0) {
+    return {
+      review: emptyReview(args.prepared.removalTemplate),
+      transportPlan: null,
+      blockers: [formatUnbindableTemplateInputsText(unbindable)],
+      warnings: [...(args.ctx.submissionWarnings ?? [])],
+      snapshot: null,
+    };
+  }
+  if (
+    args.ctx.entityReadinessGaps?.length === 0 &&
+    !hasSupportedSequestrationComponent(args.prepared.removalTemplate)
+  ) {
+    return {
+      review: emptyReview(args.prepared.removalTemplate),
+      transportPlan: null,
+      blockers: [
+        "The Removal template has no supported biochar sequestration component. Choose a complete Removal template for this credit batch.",
+      ],
+      warnings: [...(args.ctx.submissionWarnings ?? [])],
+      snapshot: null,
+    };
+  }
+
+  let build: RemovalSubmissionBuild;
+  try {
+    build = await buildRemovalSubmissionBuild(args);
+  } catch (error) {
+    if (error instanceof RegistryMappingError) {
+      args.log?.error(
+        {
+          groupKey: error.groupKey,
+          blueprintKey: error.blueprintKey,
+          inputKey: error.inputKey,
+        },
+        "removal registry mapping is unsupported",
+      );
+    }
+    return {
+      review: emptyReview(args.prepared.removalTemplate),
+      transportPlan: null,
+      blockers: [
+        error instanceof SafeError
+          ? error.message
+          : REMOVAL_COMPILATION_FAILED_MESSAGE,
+      ],
+      warnings: [...(args.ctx.submissionWarnings ?? [])],
+      snapshot: null,
+    };
+  }
+
+  const blockers: string[] = [];
+  const readySourceDocumentCount = build.readySourceDocumentCount;
+  const pendingSourceCount = Math.max(
+    build.candidateDocumentIds.length - readySourceDocumentCount,
+    0,
+  );
+  const tierBlocker = removalTemplateTierCompatibilityBlocker(
+    args.ctx,
+    args.prepared.removalTemplate,
+  );
+  if (tierBlocker) blockers.push(tierBlocker);
+  if (
+    !args.allowPendingSources &&
+    pendingSourceCount > 0
+  ) {
+    blockers.push(
+      `Only ${readySourceDocumentCount} of ${build.candidateDocumentIds.length} supporting files reached the registry. Submit again to retry the rest.`,
+    );
+  }
+
+  const semanticSamples = build.durabilityMeasurementSampleArgs
+    ? normalizeMeasurementSamplesForHash(
+        buildVersionedMeasurementSampleSubmissions({
+          ...build.durabilityMeasurementSampleArgs,
+          version: 1,
+        }),
+      )
+    : [];
+  const measurementSamples = semanticSamples.map((sample) => {
+    const body = sample.body as {
+      measured_at?: unknown;
+      values?: unknown;
+    };
+    return {
+      operationKey: sample.operationKey,
+      label: sample.label,
+      measuredAt:
+        typeof body.measured_at === "string" ? body.measured_at : null,
+      values: Array.isArray(body.values) ? body.values : [],
+    };
+  });
+
+  const templateComponentById = new Map(
+    args.prepared.removalTemplate.groups
+      .flatMap((group) => group.components)
+      .map((component) => [component.id, component] as const),
+  );
+  const bindings: RemovalSubmissionReview["bindings"] = [
+    ...build.monitored.map((input) => ({
+      componentId: input.removalTemplateComponentId,
+      componentBlueprintKey: input.componentBlueprintKey,
+      componentDisplayName: input.componentDisplayName,
+      inputKey: input.inputKey,
+      binding: "monitored" as const,
+      wireMagnitude: input.quantity.magnitude,
+      wireUnit: input.quantity.unit,
+      wireType: input.datapointType,
+    })),
+    ...build.fixed.map((input) => {
+      const component = templateComponentById.get(
+        input.removalTemplateComponentId,
+      );
+      const fixedValue = args.ctx.fixedInputValues?.find(
+        (value) =>
+          value.componentId === input.removalTemplateComponentId &&
+          value.inputKey === input.inputKey,
+      );
+      return {
+        componentId: input.removalTemplateComponentId,
+        componentBlueprintKey:
+          // A fixed input whose component the template no longer carries keeps a string key, saying so.
+          component?.blueprint_key ?? "Component not in the template",
+        componentDisplayName: component?.display_name,
+        inputKey: input.inputKey,
+        binding: "fixed" as const,
+        // The datapoint's own value, read with the template observation.
+        ...(fixedValue
+          ? { wireMagnitude: fixedValue.magnitude, wireUnit: fixedValue.unit }
+          : {}),
+        fixedDatapointId: input.preboundDatapointId,
+      };
+    }),
+    ...args.prepared.removalTemplate.groups.flatMap((group) =>
+      group.components
+        .filter((component) =>
+          isSequestrationBlueprintFamily(component.blueprint_key),
+        )
+        .flatMap((component) =>
+          component.inputs.map((input) => ({
+            componentId: component.id,
+            componentBlueprintKey: component.blueprint_key,
+            componentDisplayName: component.display_name,
+            inputKey: input.input_key,
+            binding: "measurement-sample" as const,
+          })),
+        ),
+    ),
+  ].sort((left, right) =>
+    `${left.componentId}::${left.inputKey}`.localeCompare(
+      `${right.componentId}::${right.inputKey}`,
+    ),
+  );
+
+  const directSequestrationDatapoints =
+    build.durabilityMeasurementSampleArgs
+      ? buildDirectSequestrationDatapoints({
+          template: args.prepared.removalTemplate,
+          measurementSampleSubmissions:
+            buildVersionedMeasurementSampleSubmissions({
+              ...build.durabilityMeasurementSampleArgs,
+              version: 1,
+            }),
+          projectId: args.prepared.externalProjectId,
+          removalId: args.removalId,
+          version: 1,
+          sourceIds: [],
+        }).map((datapoint) => ({
+          componentId: datapoint.rtcId,
+          inputKey: datapoint.inputKey,
+          magnitude: datapoint.body.quantity.magnitude,
+          unit: datapoint.body.quantity.unit ?? "",
+          type: datapoint.body.type,
+        }))
+      : [];
+
+  const review: RemovalSubmissionReview = {
+    template: {
+      id: args.prepared.removalTemplate.id,
+      displayName: args.prepared.removalTemplate.display_name,
+      mappingRevision: MAPPING_REVISION,
+    },
+    bindings,
+    omittedComponentIds: [...build.omittedTemplateComponentIds],
+    measurementSamples,
+    directSequestrationDatapoints,
+    sourceIds: [...build.sourceIds],
+    pendingSourceCount,
+    intendedPostTargets: [
+      ...(build.monitored.length > 0 ||
+      directSequestrationDatapoints.length > 0
+        ? [DATAPOINT_POST_TARGET]
+        : []),
+      ...(measurementSamples.length > 0
+        ? [MEASUREMENT_SAMPLE_POST_TARGET]
+        : []),
+      GHG_ENTRY_POST_TARGET,
+    ],
+    memberCreditBatches: args.ctx.memberBatches.map((batch) => ({
+      id: batch.id,
+      code: batch.code,
+    })),
+    productionRuns: args.ctx.runs.map((run) => ({
+      id: run.id,
+      code: "code" in run && typeof run.code === "string" ? run.code : null,
+    })),
+    applications: [
+      ...new Map(
+        args.ctx.lineages.map((lineage) => [
+          lineage.application.id,
+          {
+            id: lineage.application.id,
+            code: lineage.application.code,
+            deliveryId: lineage.delivery.id,
+            deliveryCode: lineage.delivery.code,
+          },
+        ]),
+      ).values(),
+    ],
+    reportingWindow: {
+      startedOn: build.reportingWindow.startedOn.toISOString(),
+      completedOn: build.reportingWindow.completedOn.toISOString(),
+    },
+    productionEmissionClaims: buildProductionEmissionClaims(
+      args.ctx.memberBatchClaims,
+      args.removalId,
+    ),
+  };
+
+  return {
+    review,
+    transportPlan: blockers.length === 0 ? build : null,
+    blockers,
+    warnings: [...(args.ctx.submissionWarnings ?? [])],
+    snapshot:
+      blockers.length === 0
+        ? {
+            materialization: "claim-time",
+            mappingRevision: MAPPING_REVISION,
+            semanticPayload: build.semanticPayload,
+          }
+        : null,
+  };
+}
+
+/**
+ * Materialize the claim-versioned immutable snapshot from a successful
+ * compilation. This is the only place supplier refs are assigned a ledger
+ * version, and its output is the exact source consumed by the POST phase.
+ */
+export function materializeRemovalSubmissionSnapshot(args: {
+  compiled: RemovalSubmissionBuild;
+  template: IsometricGhgEntryTemplate;
+  externalProjectId: string;
+  removalId: string;
+  nextVersion: number;
+  supersedePreviousId: string | null;
+}): MaterializedRemovalSubmissionSnapshot {
+  const {
+    compiled,
+    template,
+    externalProjectId,
+    removalId,
+    nextVersion,
+    supersedePreviousId,
+  } = args;
+  const removalSupplierRef = buildRemovalSupplierRef({
+    removalId,
+    role: "removal",
+    version: nextVersion,
+  });
+  const biocharApplicationIntents = compiled.biocharApplicationIntents.map(
+    (intent) => ({
+      ...intent,
+      supplierReference: buildBiocharApplicationReference({
+        applicationId: intent.applicationId,
+        creditBatchId: intent.creditBatchId,
+        environment: env.ISOMETRIC_ENVIRONMENT,
+        removalSubmissionVersion: nextVersion,
+      }),
+    }),
+  );
+  const finalDatapointBodies = compiled.monitored.map((input) => {
+    const supplierRefId = buildRemovalSupplierRef({
+      removalId,
+      role: "datapoint",
+      version: nextVersion,
+      inputKey: `${input.removalTemplateComponentId}-${input.inputKey}`,
+    });
+    const draftKey = `${input.removalTemplateComponentId}::${input.inputKey}`;
+    const draft = compiled.datapointBodyByKey.get(draftKey);
+    if (!draft) {
+      throw new SafeError(
+        `Registry field ${input.inputKey} in component ${input.removalTemplateComponentId} could not be prepared. Refresh the page and compile the Removal again.`,
+      );
+    }
+    return {
+      rtcId: input.removalTemplateComponentId,
+      inputKey: input.inputKey,
+      body: { ...draft, supplier_reference_id: supplierRefId },
+    };
+  });
+  const durabilityMeasurementSamples =
+    compiled.durabilityMeasurementSampleArgs
+      ? {
+          submissions: buildVersionedMeasurementSampleSubmissions({
+            ...compiled.durabilityMeasurementSampleArgs,
+            version: nextVersion,
+          }),
+        }
+      : undefined;
+  const directSequestrationDatapoints = durabilityMeasurementSamples
+    ? buildDirectSequestrationDatapoints({
+        template,
+        measurementSampleSubmissions:
+          durabilityMeasurementSamples.submissions,
+        projectId: externalProjectId,
+        removalId,
+        version: nextVersion,
+        sourceIds: [],
+      }).map((datapoint) => ({
+        ...datapoint,
+        body: {
+          ...datapoint.body,
+          source_ids: sourceIdsForDatapointTarget(
+            compiled.sourceBindingPlan,
+            {
+              componentId: datapoint.rtcId,
+              inputKey: datapoint.inputKey,
+            },
+          ),
+        },
+      }))
+    : [];
+
+  return {
+    payloadSnapshot: {
+      __mappingRevision: MAPPING_REVISION,
+      semantic: compiled.semanticPayload,
+      generatedEvidenceFacts: compiled.generatedEvidenceFacts,
+      ...(compiled.transportFeedstockIds ? { transportFeedstockIds: [...compiled.transportFeedstockIds].sort() } : {}),
+      ...(compiled.templateObservationId ? { templateObservationId: compiled.templateObservationId,
+        frozenEntrySet: compiled.frozenEntrySet ?? [] } : {}),
+      memberCreditBatchIds: compiled.memberCreditBatchIds,
+      sourceBindingPlan: compiled.sourceBindingPlan,
+      transport: {
+        removalSupplierRef,
+        omittedTemplateComponentIds:
+          compiled.omittedTemplateComponentIds,
+        biocharApplicationIntents,
+        datapointBodies: [
+          ...finalDatapointBodies,
+          ...directSequestrationDatapoints,
+        ],
+      },
+      ...(durabilityMeasurementSamples
+        ? { durabilityMeasurementSamples }
+        : {}),
+    },
+    metadata: { supersedePreviousId },
+  };
+}
+
+export function assertEntityReadinessGapsResolved(
+  entityReadinessGaps: string[] | undefined,
+): void {
+  if (!entityReadinessGaps) {
+    throw new SafeError(
+      "The Removal review did not finish. Refresh the review before submitting.",
+    );
+  }
+  if (entityReadinessGaps.length === 0) return;
+
+  throw new SafeError(
+    `Complete these fields before submitting the Removal:\n${entityReadinessGaps.join("\n")}`,
+  );
+}
+
+export class SubmissionLineageError extends SafeError {
+  readonly blockers: readonly SubmissionLineageBlocker[];
+
+  constructor(blockers: readonly SubmissionLineageBlocker[]) {
+    super(`Removal submission blocked:\n${blockers.map((blocker) => blocker.detail).join("\n")}`);
+    this.blockers = blockers.map((blocker) => ({ ...blocker, record: { ...blocker.record } }));
+  }
+}
+
+export function assertSubmissionLineageResolved(blockers: SubmissionLineageBlocker[] | undefined): void {
+  if (!blockers) {
+    throw new SafeError("The Removal review did not finish. Refresh the review before submitting.");
+  }
+  if (blockers.length > 0) {
+    throw new SubmissionLineageError(blockers);
+  }
+}
+
+export async function buildRemovalSubmissionBuild(args: {
+  orgCtx: OrgContext;
+  removalId: string;
+  ctx: RemovalSubmissionContext;
+  prepared: PreparedRemovalSubmission;
+  log?: Logger;
+  sourceIds?: string[];
+  candidateDocumentIds?: string[];
+  sourceBindingCandidates?: ResolvedSourceBindingCandidate[];
+  candidateSourceDocuments?: CandidateSourceDocument[];
+}): Promise<RemovalSubmissionBuild> {
+  const { orgCtx, removalId, ctx, log } = args;
+  const {
+    removalTemplate,
+    blueprintsByKey,
+    externalProjectId,
+    hasDurabilityComponents,
+  } = args.prepared;
+
+  assertSubmissionLineageResolved(ctx.submissionLineageBlockers);
+  assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
+  assertSequestrationTemplateBindings(removalTemplate);
+
+  const compiledBiocharApplicationIntents =
+    await compileBiocharApplicationIntents({
+    orgCtx,
+    memberBatches: ctx.memberBatchClaims,
+    environment: env.ISOMETRIC_ENVIRONMENT,
+  });
+
+  const lineageWarnings: string[] = [];
+  for (const lineage of ctx.lineages) {
+    lineageWarnings.push(
+      ...lineage.warnings.map(
+        (warning) => `Application ${lineage.application.code}: ${warning}`,
+      ),
+    );
+    if (!lineage.productionRun) {
+      throw new SafeError(
+        `Application ${lineage.application.code} has no linked production run. Link a production run before submitting.`,
+      );
+    }
+  }
+  if (lineageWarnings.length > 0) {
+    throw new SafeError(
+      `Complete the Removal traceability before submitting:\n${lineageWarnings.join("\n")}`,
+    );
+  }
+  if (ctx.runs.length === 0) {
+    throw new SafeError(
+      "This Removal's credit batches have no production runs. Add production runs before submitting.",
+    );
+  }
+
+  const baseAgg = {
+    ...aggregateProductionRuns(ctx.runs, ctx.attributionByRunId, {
+      productionRunIds: new Set(
+        ctx.memberBatchClaims
+          .filter((batch) =>
+            includesProductionInputs(batch.claimedByRemovalId, removalId),
+          )
+          .flatMap((batch) => batch.productionRunIds),
+      ),
+    }),
+    ...weightedBatchChemistry(ctx.batchesWithSamples, ctx.attributionByRunId),
+  };
+  const hasProductionContribution = ctx.memberBatchClaims.some((batch) =>
+    includesProductionInputs(batch.claimedByRemovalId, removalId),
+  );
+  if (baseAgg.warnings.length > 0) {
+    throw new SafeError(
+      `Removal submission blocked:\n${baseAgg.warnings.join("\n")}`,
+    );
+  }
+
+  if (ctx.durabilityGateBlockers.length > 0) {
+    throw new SafeError(
+      `Resolve these Sample and eligibility issues before submitting:\n${ctx.durabilityGateBlockers.join("\n")}`,
+    );
+  }
+
+  const transportAgg = enrichWithTransportLegs(baseAgg, ctx.transportLegs);
+  const transportWarnings = transportAgg.warnings.slice(baseAgg.warnings.length);
+  if (transportWarnings.length > 0) {
+    throw new SafeError(
+      `Resolve these transport issues before submitting:\n${transportWarnings.join("\n")}`,
+    );
+  }
+
+  const agg = transportAgg;
+  const latestApplicationTime = resolveLatestApplicationTime(ctx.lineages);
+  assertReportingWindowNotInverted({
+    facilityTimezone: ctx.facilityTimezone,
+    lineages: ctx.lineages,
+    runStartTimeByRunId: new Map(
+      ctx.runs.map((run) => [run.id, run.startTime]),
+    ),
+  });
+  assertRemovalDatesNotFuture({
+    productionEndTime: agg.latestEndTime,
+    latestApplicationTime,
+  });
+  const reportingWindow = resolveRemovalReportingWindow({
+    facilityTimezone: ctx.facilityTimezone,
+    earliestProductionStartTime: agg.earliestStartTime,
+    latestProductionEndTime: agg.latestEndTime,
+    latestApplicationTime,
+  });
+
+  if (ctx.submissionWarnings.length > 0) {
+    log?.warn(
+      { submissionWarnings: ctx.submissionWarnings },
+      "removal has non-blocking submission warnings",
+    );
+  }
+
+  const {
+    candidateSourceDocuments,
+    candidateDocumentIds,
+    readySourceDocumentCount,
+    sourceIds,
+    datapointSourceIds,
+    biocharApplicationIntents,
+    sourceBindingPlan,
+    semanticSourceBindingPlan,
+  } = await planRemovalEvidence({
+    orgCtx,
+    removalId,
+    ctx,
+    template: removalTemplate,
+    compiledBiocharApplicationIntents,
+    supplied: args,
+  });
+
+  const {
+    monitored,
+    fixed,
+    datapointBodyByKey,
+    omittedTemplateComponentIds,
+  } = resolveTemplateInputs({
+    template: removalTemplate,
+    lineSources: args.prepared.lineSources,
+    emissionLines: ctx.emissionLines,
+    entryContributions: ctx.removalEntryContext?.contributions,
+    blueprintsByKey,
+    agg,
+    externalProjectId,
+    sourceIds: datapointSourceIds,
+    sourceBindingPlan,
+    omitProductionComponents: !hasProductionContribution,
+  });
+  const hasOnly1000YearBatches =
+    ctx.batchesWithSamples.length > 0 &&
+    ctx.batchesWithSamples.every(
+      (batch) => batch.durabilityOption === "1000_year",
+    );
+  const durabilityMeasurementSampleArgs =
+    hasDurabilityComponents &&
+    (hasOnly1000YearBatches || ctx.facilityReferenceSoilTemperature)
+      ? {
+          removalId,
+          externalProjectId,
+          batches: ctx.batchesWithSamples,
+          attributionByRunId: ctx.attributionByRunId,
+          facilityReferenceSoilTemperature:
+            ctx.facilityReferenceSoilTemperature ?? null,
+        }
+      : null;
+  const semanticMeasurementSamples = durabilityMeasurementSampleArgs
+    ? normalizeMeasurementSamplesForHash(
+        buildVersionedMeasurementSampleSubmissions({
+          ...durabilityMeasurementSampleArgs,
+          // Supplier refs are excluded by normalizeMeasurementSamplesForHash.
+          // Avoid manufacturing a misleading `v0` preview before claim time.
+          version: 1,
+        }),
+      )
+    : [];
+
+  const carriedEntriesForHash = normalizeCarriedEntriesForHash(ctx.removalEntryContext?.contributions.carriedEntries) ?? [];
+  const semanticPayload = {
+    removalId,
+    mappingRevision: MAPPING_REVISION,
+    ...(ctx.removalEntryContext ? { templateSemanticFingerprint: ctx.removalEntryContext.semanticFingerprint,
+      ...(carriedEntriesForHash.length > 0 ? { carriedEntries: carriedEntriesForHash } : {}),
+      entryContributions: normalizeEntryContributionsForHash(ctx.removalEntryContext.contributions.manifest) } : {}),
+    externalProjectId,
+    templateId: removalTemplate.id,
+    omittedTemplateComponentIds,
+    sequestrationTemplate: normalizeSequestrationTemplateForHash(
+      removalTemplate,
+    ),
+    sourceProductionRunIds: [...agg.sourceProductionRunIds].sort(),
+    startedOn: reportingWindow.startedOn.toISOString(),
+    completedOn: reportingWindow.completedOn.toISOString(),
+    sourceIds,
+    sourceBindingPlan: semanticSourceBindingPlan.map(normalizeEntrySourceBindingForHash),
+    candidateSources: candidateSourceDocuments
+      .map((candidate) => ({
+        documentId: candidate.documentId,
+        binding: candidate.binding ? normalizeEntrySourceBindingForHash(candidate.binding) : null,
+        biocharApplicationId: candidate.biocharApplicationId,
+      }))
+      .sort((left, right) =>
+        left.documentId.localeCompare(right.documentId),
+      ),
+    ...(semanticMeasurementSamples.length > 0
+      ? { durabilityMeasurementSamples: semanticMeasurementSamples }
+      : {}),
+    biocharApplicationIntents,
+    inputs: [
+      ...monitored.map((m) => ({
+        rtcId: m.removalTemplateComponentId,
+        inputKey: m.inputKey,
+        kind: "monitored" as const,
+        value: m.quantity.magnitude,
+        unit: m.quantity.unit,
+        datapointType: m.datapointType,
+      })),
+      ...fixed.map((f) => ({
+        rtcId: f.removalTemplateComponentId,
+        inputKey: f.inputKey,
+        kind: "fixed" as const,
+        preboundDatapointId: f.preboundDatapointId,
+      })),
+    ].sort((a, b) =>
+      `${a.rtcId}::${a.inputKey}`.localeCompare(`${b.rtcId}::${b.inputKey}`),
+    ),
+  };
+  const memberCreditBatchIds = ctx.memberBatches
+    .map((b) => b.id)
+    .sort((a, b) => a.localeCompare(b));
+
+  return {
+    agg,
+    reportingWindow,
+    candidateDocumentIds,
+    candidateSourceDocuments,
+    readySourceDocumentCount,
+    sourceIds,
+    datapointSourceIds,
+    sourceBindingPlan,
+    semanticPayload,
+    generatedEvidenceFacts: generatedEvidenceFacts(ctx),
+    ...(ctx.transportCoverage ? { transportFeedstockIds: [...ctx.transportCoverage.feedstock.entityIds].sort() } : {}),
+    templateObservationId: ctx.removalEntryContext?.observationId,
+    frozenEntrySet: ctx.removalEntryContext?.contributions.entrySet,
+    monitored,
+    fixed,
+    datapointBodyByKey,
+    durabilityMeasurementSampleArgs,
+    memberCreditBatchIds,
+    biocharApplicationIntents,
+    omittedTemplateComponentIds,
+  };
+}

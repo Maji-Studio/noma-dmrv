@@ -8,7 +8,7 @@ import { onboardingKeys } from "./use-onboarding";
 const mocks = vi.hoisted(() => ({ update: vi.fn() }));
 vi.mock("@/fn/production-runs", () => ({ updateProductionRunFn: mocks.update }));
 vi.mock("@/lib/read-api/client", () => ({ getOnboardingStatusRead: vi.fn() }));
-vi.mock("./use-certification", () => ({ invalidateCertificationReadiness: vi.fn() }));
+vi.mock("./stale-reads", () => ({ invalidateCertificationReadiness: vi.fn() }));
 
 it.each([
   { previous: "facility-a", affected: ["facility-a", "facility-b"] },

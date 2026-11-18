@@ -47,7 +47,7 @@ it("preserves internal app owners, GIS MIME allowances, photo roles, sample flow
     const legacyPdf = await upload({ entityType: "application", entityId: fixture.applicationId, documentType: "pdf", fileName: "logbook.pdf", contentType: "application/pdf" }, Buffer.from("%PDF-1.7"));
     await expect(db.transaction((tx) => updateApplicationEvidenceMetadataInTransaction(ctx, tx, { documentId: legacyPdf.id, expectedVersion: legacyPdf.version, applicationEvidenceRole: "stockpile" }))).rejects.toThrow("only be set on photos");
     expect(await db.transaction((tx) => updateApplicationEvidenceMetadataInTransaction(ctx, tx, { documentId: legacyPdf.id, expectedVersion: legacyPdf.version, applicationLogbookEvidenceType: "inventory" }))).toMatchObject({ metadata: { logbookEvidenceType: "inventory" }, version: 3 });
-    await db.update(productionRuns).set({ endTime: new Date("2026-06-13T12:00:00Z"), status: "complete" }).where(eq(productionRuns.id, fixture.productionRunId));
+    await db.update(productionRuns).set({ endTime: new Date("2026-06-13T12:00:00Z"), status: "complete", outputPostedAt: new Date("2026-06-13T12:00:00Z") }).where(eq(productionRuns.id, fixture.productionRunId));
     const requestReadings = { entityType: "production_run" as const, entityId: fixture.productionRunId, documentType: "sensor_data" as const, fileName: "readings.xlsx", contentType: "text/csv", sizeBytes: 3, storageProvider: provider.name, storageBucket: provider.bucket };
     await expect(db.transaction((tx) => requestDocumentUploadInTransaction(ctx, tx, requestReadings))).rejects.toMatchObject({ code: "validation_failed" });
     const csv = Buffer.from("timestamp_utc,temperature_c,pressure_bar\n2026-06-13T09:00:00Z,500,1.2\n");

@@ -8,8 +8,8 @@ import type { Logger } from "@/lib/log";
 
 vi.mock("@/data-access/certifier-removals");
 vi.mock("@/lib/isometric/source-binding-verification");
-vi.mock("./shared", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./shared")>();
+vi.mock("@/lib/certification/shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/certification/shared")>();
   return {
     ...actual,
     appendSyncEventBestEffort: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock("./shared", async (importOriginal) => {
 import { updateRemovalSourceBindingVerification } from "@/data-access/certifier-removals";
 import { verifyRemovalSourceBindings } from "@/lib/isometric/source-binding-verification";
 import { verifyAndPersistRemovalSourceBindings } from "./removal-source-binding-verification";
-import { appendSyncEventBestEffort } from "./shared";
+import { appendSyncEventBestEffort } from "@/lib/certification/shared";
 
 const orgCtx = {
   organizationId: "org-test-1",

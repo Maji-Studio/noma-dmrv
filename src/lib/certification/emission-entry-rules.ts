@@ -1,3 +1,4 @@
+import { REENTER_EMISSION_ENTRY } from "./emission-entry-messages";
 import { z } from "zod";
 import { formatFacilityDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
@@ -135,7 +136,7 @@ export function emissionEntryCounts(
   const after = entryLine(current, componentId);
   const incompatible = {
     counts: false,
-    reason: "Enter the values again for the current template component.",
+    reason: REENTER_EMISSION_ENTRY,
     canConfirm: false,
   };
   if (
@@ -158,8 +159,8 @@ export function emissionEntryCounts(
     return incompatible;
   const change = compareTemplateObservations(previous, current)[componentId];
   const contractsMatch =
-    canonicalJson({ ...before.contract, origin: undefined, templateOrder: undefined }) ===
-    canonicalJson({ ...after.contract, origin: undefined, templateOrder: undefined });
+    canonicalJson({ ...before.contract, origin: undefined, templateOrder: undefined, filePolicy: undefined }) ===
+    canonicalJson({ ...after.contract, origin: undefined, templateOrder: undefined, filePolicy: undefined });
   if ((change === "unchanged" || change === "cosmetic") && contractsMatch)
     return { counts: true, reason: null, canConfirm: true };
   return { counts: false, reason: "Confirm this entry for the changed template component.", canConfirm: true };

@@ -24,6 +24,13 @@ describe("removalAttentionRows", () => {
     expect(drafts[0].href).toContain("r1");
   });
 
+  it("keeps a draft with unavailable readiness linked and covered", () => {
+    const rows = removalAttentionRows({ ...none, drafts: [{ removalId: "r-unavailable", code: "RM-1", createdAt, readiness: null }] }, "fac-1");
+    expect(rows.drafts[0]).toMatchObject({ entityCode: "RM-1", title: "Couldn't check. Open it to see what is left.", recordIds: ["r-unavailable"] });
+    expect(rows.drafts[0].href).toContain("removal=r-unavailable");
+    expect(rows.covered.has("r-unavailable")).toBe(true);
+  });
+
   it("counts the fixes the review lists, not the reasons", () => {
     const { drafts } = removalAttentionRows(
       { ...none, drafts: [{ removalId: "r4", code: "RM-4", createdAt, readiness: { state: "blocked", reasons: ["A.", "B.", "C.", "D.", "E."], fixCount: 1 } }] },
@@ -57,6 +64,18 @@ describe("removalAttentionRows", () => {
       ["c", "Returned by Isometric"],
     ]);
     expect(returned[0].item.href).toContain("a");
+  });
+
+  it("types every draft, rejected and returned row as a Production Removal", () => {
+    const removal = { removalId: "removal-1", code: "RM-1", createdAt };
+    const rows = removalAttentionRows({
+      drafts: [{ ...removal, readiness: null }],
+      rejected: [removal],
+      returned: [{ ...removal, correction: undefined }],
+    }, "fac-1");
+    for (const item of [...rows.drafts, ...rows.rejected, ...rows.returned.map((row) => row.item)]) {
+      expect(item).toMatchObject({ stage: "production", recordKind: "removal", recordIds: [removal.removalId] });
+    }
   });
 
   it("gives a Removal with a submission running no row", () => {

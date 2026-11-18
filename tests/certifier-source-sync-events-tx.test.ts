@@ -105,9 +105,9 @@ vi.mock("@/data-access/certifier-organization-settings", async (importOriginal) 
 });
 // The live lineage walk is covered by the mirror-flow suite; here it only has
 // to name the seeded document as a candidate for the Removal.
-vi.mock("@/fn/certification/source-candidates", async (importOriginal) => {
+vi.mock("@/lib/certification/source-candidates", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("@/fn/certification/source-candidates")>();
+    await importOriginal<typeof import("@/lib/certification/source-candidates")>();
   return { ...actual, loadCandidateDocumentsForRemovalForUser: vi.fn() };
 });
 vi.mock("@/lib/storage", () => ({
@@ -140,7 +140,7 @@ import * as certificationDA from "@/data-access/certification";
 import * as removalsDA from "@/data-access/certifier-removals";
 import * as documentsDA from "@/data-access/documents";
 import * as isometric from "@/lib/isometric";
-import * as sourceCandidates from "@/fn/certification/source-candidates";
+import * as sourceCandidates from "@/lib/certification/source-candidates";
 import { mirrorDocumentToSourceForUser } from "@/fn/certification/sources-mirror-core";
 import type { OrgContext } from "@/lib/auth/server";
 

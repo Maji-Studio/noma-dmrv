@@ -19,7 +19,7 @@ import type { LineSources } from "@/lib/isometric/template-observations/line-sou
 import { describe, expect, it } from "vitest";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
-import { buildSubmissionWarnings } from "@/fn/certification/submission-warnings";
+import { buildSubmissionWarnings } from "@/lib/certification/submission-warnings";
 
 interface ComponentSpec {
   blueprintKey: string;

@@ -14,7 +14,7 @@ QA report.
   [modern library patterns](./modern-patterns.md)
 - [Traceability](./traceability.md), [schema overview](./schema-overview.md),
   [design system](./design-system.md), and [UX writing](./ux-writing.md)
-- [Marketing site](./site.md) (`site/`, its Vercel projects and domains)
+- The marketing site lives in the private [Maji-Studio/noma-site](https://github.com/Maji-Studio/noma-site) repo.
 - [Architecture decisions](./adr/)
 
 ## Active work and unresolved decisions

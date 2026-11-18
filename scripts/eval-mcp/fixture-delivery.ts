@@ -76,7 +76,7 @@ export async function seedDeliveryFixture(caseId: DeliveryCaseId, now = new Date
       facilityId: fixture.facilityId, type: "product_bin", stockMode: "mix", formulationId: formulation.id }));
     const reactorId = await addFixtureReactor(fixture, caseId);
     await db.insert(productionRuns).values({ organizationId: org, facilityId: fixture.facilityId, reactorId,
-      code: SOURCE_RUN_CODE, status: "complete", startTime: localInstant(SOURCE_DAYS_AGO, SOURCE_START_TIME),
+      code: SOURCE_RUN_CODE, status: "complete", outputPostedAt: localInstant(SOURCE_DAYS_AGO, SOURCE_END_TIME), startTime: localInstant(SOURCE_DAYS_AGO, SOURCE_START_TIME),
       endTime: localInstant(SOURCE_DAYS_AGO, SOURCE_END_TIME), biocharStorageLocationId: source.id,
       biocharOutputKg: SOURCE_WET_KG, biocharMoisturePercent: SOURCE_MOISTURE_PERCENT, biocharDryMassKg: SOURCE_DRY_KG });
     const place = (binId: string, product: typeof MIX_PRODUCT) => createBiocharProduct(fixture.ctx, {

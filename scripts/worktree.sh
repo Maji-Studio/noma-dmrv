@@ -21,7 +21,7 @@ PG_USER="postgres"
 BASE_REF="origin/staging"
 PORT_FIRST=3101
 PORT_LAST=3199
-RESERVED_PORTS=" 3120 " # marketing site dev server
+RESERVED_PORTS=" 3120 " # local site dev (noma-site repo), allowed in WALKTHROUGH_LOCAL_ORIGINS
 NAME_PATTERN='^[a-z0-9][a-z0-9-]{0,30}$'
 # A test/e2e segment would put the dev DB inside Vitest's throwaway rule (tests/helpers/throwaway-database.ts).
 RESERVED_NAME_SEGMENT='(^|-)(test|e2e|dev)(-|$)'
@@ -150,7 +150,7 @@ cmd_new() {
   # By name only: `cp .env*` would overwrite the tracked .env.example.
   cp "$MAIN/.env.local" "$path/.env.local"
   cp "$MAIN/.env.test" "$path/.env.test"
-  for fonts in public/fonts site/public/fonts; do
+  for fonts in public/fonts; do
     if [ -d "$MAIN/$fonts" ]; then
       mkdir -p "$path/$fonts"
       cp -R "$MAIN/$fonts/." "$path/$fonts/"
@@ -194,30 +194,39 @@ Playwright in the worktree targets :$port and starts that server itself if none 
 EOF
 }
 
-pr_state() {
-  command -v gh >/dev/null || { echo "?"; return; }
-  (cd "$MAIN" && gh pr list --head "$1" --state all --json number,state \
-    --jq 'if length == 0 then "no PR" else (.[0] | "#\(.number) \(.state)") end' 2>/dev/null) || echo "?"
-}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/worktree-github.sh
+source "$SCRIPT_DIR/lib/worktree-github.sh"
 
 cmd_status() {
   local known_paths=" " known_dbs=" " found=0
-  local dbs
+  local dbs branches="" github_status="" github_available=0
+  # Read owners once for the batched GitHub lookup, never one gh call per row.
+  for dir in "$OWNERS"/*/; do
+    [ -f "$dir/owner" ] || continue
+    branches="$branches$(. "$dir/owner"; printf '%s' "$WT_BRANCH")"$'\n'
+  done
+  if [ -n "$branches" ] && github_status="$(read_worktree_github "$branches")"; then github_available=1; fi
   dbs="$(psql_admin "SELECT datname FROM pg_database WHERE datname LIKE 'noma\_dmrv\_%' ORDER BY 1" 2>/dev/null || echo "")"
-  printf '%-22s %-6s %-9s %-14s %-40s %s\n' NAME PORT SERVER PR BRANCH OWNER
+  printf '%-22s %-6s %-9s %-14s %-16s %-40s %s\n' NAME PORT SERVER PR ISSUE BRANCH OWNER
   for dir in "$OWNERS"/*/; do
     [ -f "$dir/owner" ] || continue
     found=1
     local name; name="$(basename "$dir")"
     (
       read_owner "$name"
-      local server="down" missing=""
+      local server="down" missing="" pr="?" issue="-" branch
+      [ "$github_available" = 0 ] || pr="no PR"
+      while IFS=$'\t' read -r branch row_pr row_issue; do
+        [ "$branch" = "$WT_BRANCH" ] || continue
+        pr="$row_pr"; issue="$row_issue"; break
+      done <<< "$github_status"
       port_listening "$WT_PORT" && server="up"
       [ -d "$WT_PATH" ] || missing="$missing worktree"
       for db in ${WT_DBS_CREATED:-}; do
         printf '%s\n' "$dbs" | grep -qx "$db" || missing="$missing $db"
       done
-      printf '%-22s %-6s %-9s %-14s %-40s %s\n' "$name" "$WT_PORT" "$server" "$(pr_state "$WT_BRANCH")" "$WT_BRANCH" "$OWNER_SESSION"
+      printf '%-22s %-6s %-9s %-14s %-16s %-40s %s\n' "$name" "$WT_PORT" "$server" "$pr" "$issue" "$WT_BRANCH" "$OWNER_SESSION"
       [ -z "$missing" ] || echo "    missing:$missing"
     )
     # shellcheck disable=SC1090,SC1091

@@ -45,6 +45,19 @@ describe("useFixProgress", () => {
     expect(out.entries.map((e) => [e.item.id, e.fixed])).toEqual([["check:samples", true]]);
   });
 
+  it("does not seed the list while the first build is read, so a check the build later hands to a row is not shown as fixed", async () => {
+    const out = { entries: [] as FixEntry[] };
+    const collect = (entries: FixEntry[]) => { out.entries = entries; };
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<Probe items={[item("check:emissions")]} onEntries={collect} holdNew />);
+    });
+    expect(out.entries).toEqual([]);
+    // The build lands: the blocked Diesel row now carries what the check said.
+    await act(async () => renderer.update(<Probe items={[item("component:diesel")]} onEntries={collect} holdNew={false} />));
+    expect(out.entries.map((e) => [e.item.id, e.fixed])).toEqual([["component:diesel", false]]);
+  });
+
   it("adds a genuinely new item once the fresh build lands", async () => {
     const out = { entries: [] as FixEntry[] };
     const collect = (entries: FixEntry[]) => { out.entries = entries; };

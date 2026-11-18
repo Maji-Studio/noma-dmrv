@@ -1,3 +1,7 @@
+import { LINE_FILE_MISSING_INSTRUCTION } from "@/lib/certification/emission-entry-messages";
+import { lineFileEvidenceFacts } from "../../../tests/helpers/line-file-evidence-facts";
+import { deriveBatchEmissionLines } from "./emission-lines";
+import { buildCreditBatchOpenItems } from "@/lib/credit-batches/open-items";
 import { describe, expect, it } from "vitest";
 import {
   buildRemovalRequirementsChecklist,
@@ -6,6 +10,7 @@ import {
 } from "./readiness";
 import { certCheckLabel } from "./requirement-labels";
 import { removalTemplateBlocker } from "./removal-template-blockers";
+import { EMPTY_REMOVAL_TEMPLATE_MESSAGE, DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE } from "./removal-submission-conditions";
 import type { RemovalBlocker } from "./removal-blockers";
 import { batchLinesToDecide, deriveBatchHealth, type BatchHealthFacts } from "./batch-health";
 
@@ -93,6 +98,37 @@ describe("Removal template requirement split", () => {
       ["templateLines", "met", "Components decided"],
     ]);
     expect(deriveRemovalReadiness(input).state).toBe("ready");
+  });
+
+  it("blocks an empty template with the preparation message and skips its lines", () => {
+    const input = facts({ emptyRemovalTemplate: true });
+    const [set, lines] = templateChecks(input);
+    expect(set).toMatchObject({ key: "templateSet", status: "unmet", detail: EMPTY_REMOVAL_TEMPLATE_MESSAGE });
+    expect(lines.status).toBe("skipped");
+    expect(deriveRemovalReadiness(input)).toMatchObject({ state: "blocked", reasons: [EMPTY_REMOVAL_TEMPLATE_MESSAGE] });
+  });
+
+  it("keeps template and downstream checks evaluable when durability submission is unavailable", () => {
+    const input = facts({
+      durabilitySubmissionUnavailable: true,
+      feedstockTypeMappingGaps: [{ creditBatchId: "batch", creditBatchCode: "CB-1", feedstockTypeId: "type", feedstockTypeName: "Wood" }],
+      requiredTransport: [{ category: "feedstock", count: 0, aggregationWarning: null }],
+    });
+    const withoutUnavailable = facts({ ...input, durabilitySubmissionUnavailable: false });
+    const checks = buildRemovalRequirementsChecklist(input);
+    expect(templateChecks(input).map(check => check.status)).toEqual(["met", "met"]);
+    expect(checks.filter(check => check.key !== "durability")).toEqual(
+      buildRemovalRequirementsChecklist(withoutUnavailable).filter(check => check.key !== "durability"),
+    );
+    for (const key of ["durability", "feedstockTypeMapping", "transport"]) {
+      expect(checks).toContainEqual(expect.objectContaining({ key, status: "unmet" }));
+    }
+    expect(checks.find(check => check.key === "durability")?.detail).toBe(DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE);
+    expect(deriveRemovalReadiness(input)).toMatchObject({
+      state: "blocked",
+      reasons: [...deriveRemovalReadiness(withoutUnavailable).reasons, DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE],
+    });
+    expect(deriveRemovalReadiness(input).reasons).toHaveLength(3);
   });
 
   it.each(["hasMapping", "hasOrgCredentials"] as const)("skips both checks without %s", (key) => {
@@ -243,4 +279,18 @@ it.each(["project-scope", "unrecognized-component", "ambiguous"] as const)("rout
     templateBlockerCodes: reason === "ambiguous" ? ["templateLinesNeedReview"] : [],
     templateFixTargets: reason === "ambiguous" ? ["templateLineReview"] : ["templateLines"],
   });
+});
+
+it("uses File missing for component proof in readiness, batch health and open items", () => {
+  const { batch, observation } = lineFileEvidenceFacts();
+  batch.lineFiles = [];
+  const emissionLines = deriveBatchEmissionLines({ ...batch, ...observation, problems: [], enrichmentComplete: true });
+  const blocker = emissionLines[0].blocker!;
+  const check = buildRemovalRequirementsChecklist(facts({ emissionLineBlockers: [blocker] })).find(check => check.key === "emissions")!;
+  expect(certCheckLabel(check)).toBe("File missing");
+  const health = deriveBatchHealth(batchFacts({ emissionLines }));
+  expect(health.state).toBe("incomplete");
+  const items = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true, health, emissionLines });
+  expect(items.blocking).toContainEqual(expect.objectContaining({ title: "File missing",
+    instruction: LINE_FILE_MISSING_INSTRUCTION, target: { tab: "emissions" } }));
 });

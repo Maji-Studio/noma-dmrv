@@ -1,5 +1,6 @@
+import { realColumn } from "./real-column";
 import { check, doublePrecision, foreignKey, index, jsonb, pgTable,
-  integer, text, timestamp, unique, uuid, real, date } from "drizzle-orm/pg-core";
+  integer, text, timestamp, unique, uuid, date } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import type { GisBoundary } from "@/lib/geojson/types";
 import {
@@ -48,7 +49,7 @@ export const applications = pgTable(
     gpsLongitude: doublePrecision("gps_longitude"),
 
     // Field details
-    fieldSizeHa: real("field_size_ha").notNull(),
+    fieldSizeHa: realColumn("field_size_ha").notNull(),
     cropType: text("crop_type"),
     applicationMethodType: applicationMethod("application_method"), // manual/mechanical
     fieldIdentifier: text("field_identifier"), // Field name/parcel ID
@@ -63,7 +64,7 @@ export const applications = pgTable(
     //   'baseline' → computed from soil_temperature_measurements (≥10/site-month)
     //   'global_database' → from approved external dataset
     soilTemperatureSource: soilTemperatureSource("soil_temperature_source"),
-    soilTemperatureC: real("soil_temperature_c"), // Annual average for this application site
+    soilTemperatureC: realColumn("soil_temperature_c"), // Annual average for this application site
 
     // --- CO2e Calculation Results ---
     // These are the per-application calculated outputs
@@ -119,11 +120,11 @@ export const soilTemperatureMeasurements = pgTable(
       .notNull(),
 
     measurementDate: date("measurement_date").notNull(),
-    temperatureC: real("temperature_c").notNull(),
+    temperatureC: realColumn("temperature_c").notNull(),
 
     // Measurement method (ISO 4974 or equivalent)
     measurementMethod: text("measurement_method"),
-    measurementDepthCm: real("measurement_depth_cm"),
+    measurementDepthCm: realColumn("measurement_depth_cm"),
 
     // Location within field
     gpsLatitude: doublePrecision("gps_latitude"),

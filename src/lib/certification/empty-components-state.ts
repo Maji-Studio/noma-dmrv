@@ -4,7 +4,7 @@
  * what is empty; this file only reads its answer.
  */
 import { pluralize } from "@/lib/copy-utils";
-import type { loadRemovalEmptyLines } from "@/fn/certification/removal-empty-lines-core";
+import type { loadRemovalEmptyLines } from "@/lib/certification/removal-empty-lines-core";
 
 /** What the server reports for a Removal's empty components. */
 export type RemovalEmptyComponents = Awaited<ReturnType<typeof loadRemovalEmptyLines>>;

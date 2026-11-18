@@ -25,6 +25,7 @@ import {
   storageLocations,
 } from "@/db/schema";
 import { getDashboardOverview } from "@/data-access/dashboard-overview";
+import { getDashboardBatchScope } from "@/data-access/dashboard-batch-scope";
 import { getOnboardingStatus } from "@/data-access/onboarding";
 import { deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { TEST_SITE_POSITION,
@@ -48,6 +49,9 @@ const OVERVIEW_QUERY_BUDGET = 19;
 const OVERVIEW_RETURNED_BRANCH_QUERY_BUDGET = 24;
 /** Statements one onboarding status read may send for a selected facility. */
 const ONBOARDING_QUERY_BUDGET = 2;
+/** Selection + accounting/forwards/chemistry/provenance + Removal ids + transaction
+ * control + one scoped activity UNION. Every query is set-based regardless of batch count. */
+const BATCH_SCOPE_QUERY_BUDGET = 18;
 const BATCH_COUNT = 3;
 
 interface Fixture {
@@ -97,7 +101,7 @@ beforeAll(async () => {
         facilityId: facility.id,
         reactorId: reactor.id,
         code: `QB-PR${n}-${tag}`,
-        status: "complete" as const,
+        status: "complete" as const, outputPostedAt: new Date(`2026-07-0${n + 1}T16:00:00Z`),
         biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
         startTime: new Date(`2026-07-0${n + 1}T08:00:00Z`),
         endTime: new Date(`2026-07-0${n + 1}T16:00:00Z`),
@@ -130,7 +134,6 @@ beforeAll(async () => {
         feedstockTypeId: feedstockType.id,
         productionProcessId: process.id,
         code: `QB-CB${n}-${tag}`,
-        status: n === 0 ? ("pending" as const) : ("draft" as const),
         startDate: "2026-07-01",
         endDate: "2026-07-31",
       })),
@@ -169,6 +172,30 @@ afterAll(async () => {
 });
 
 describe("dashboard query budget", () => {
+  it("reads batch scope with the same round trips for one, many and one more batch", async () => {
+    if (!dbReachable || !fixture) return;
+    const ctx = makeTestOrgContext();
+    const { facilityId, batchIds } = fixture;
+    const single = await countQueries(() => getDashboardBatchScope(ctx, facilityId, batchIds[0]));
+    const all = await countQueries(() => getDashboardBatchScope(ctx, facilityId, null));
+    expect(single.result.stationTotals.production).toBe(1);
+    expect(all.result.stationTotals.production).toBe(BATCH_COUNT);
+    expect(all.queries).toBe(single.queries);
+    expect(all.queries).toBeLessThanOrEqual(BATCH_SCOPE_QUERY_BUDGET);
+    const [extra] = await db.insert(creditBatches).values({
+      organizationId: TEST_ORG_ID, facilityId,
+      feedstockTypeId: fixture.feedstockTypeId, productionProcessId: fixture.processId,
+      code: `QB-SCOPE-${facilityId.slice(0, 8)}`, startDate: "2026-08-01", endDate: "2026-08-31",
+    }).returning({ id: creditBatches.id });
+    try {
+      const again = await countQueries(() => getDashboardBatchScope(ctx, facilityId, null));
+      expect(again.result.batchIds).toHaveLength(BATCH_COUNT + 1);
+      expect(again.queries).toBe(all.queries);
+    } finally {
+      await db.delete(creditBatches).where(eq(creditBatches.id, extra.id));
+    }
+  });
+
   it("reads the overview within budget and independent of batch count", async () => {
     if (!dbReachable || !fixture) return;
     const ctx = makeTestOrgContext();
@@ -181,12 +208,6 @@ describe("dashboard query budget", () => {
     expect(result.kpis.find((kpi) => kpi.key === "feedstockProcessed")?.value).toBe(6);
     expect(result.stations.find((s) => s.key === "feedstock")?.attention).toBe(1);
     expect(result.stations.find((s) => s.key === "production")?.total).toBe(BATCH_COUNT);
-    expect(result.certification.pendingBatches).toBe(1);
-    expect(result.certification.batches.map((b) => b.status).sort()).toEqual([
-      "draft",
-      "draft",
-      "pending",
-    ]);
     // Activity: newest first, ISO dates, runs and batches interleaved by date.
     const activityTitles = result.activity.map((item) => item.title);
     expect(activityTitles.filter((t) => t === "Production run completed")).toHaveLength(BATCH_COUNT);
@@ -197,26 +218,27 @@ describe("dashboard query budget", () => {
     expect(result.activity.find((item) => item.title === "Feedstock received")?.dateIso).toBe(
       "2026-06-22T00:00:00.000Z",
     );
-    // Attention: flags before pending batches, the overdue pending batch counted
-    // once. It holds no Removal, so it is not awaiting verification (#1528).
+    // Attention: flags before batches. Every batch's period has ended and none
+    // holds a Removal, so none awaits verification (#1528); they fold into one
+    // grouped row without a date.
     expect(result.attention.map((item) => item.title)).toEqual([
       "Feedstock record missing data",
-      "Period ended · not submitted yet",
+      "Period ended, not submitted yet",
     ]);
-    expect(result.attention[1]?.date).toBe("2026-07-31");
+    expect(result.attention[1]).toMatchObject({ count: BATCH_COUNT, date: null });
     // Timestamp-backed dates stay UTC instants (a zone-less string would
     // shift the day for viewers outside UTC); date-only columns stay text.
     const feedstockDate = result.attention[0]?.date;
     expect(feedstockDate).toBeInstanceOf(Date);
     expect((feedstockDate as Date).toISOString()).toBe("2026-06-20T00:00:00.000Z");
-    // "N open" counts records: the feedstock record, the batch, each gap's affected records.
+    // "N open" counts records: the feedstock record, the batches, each gap's affected records.
     expect(result.attentionTotal).toBe(
-      1 + 1 + result.structuralGaps.reduce((total, gap) => total + gap.count, 0),
+      1 + BATCH_COUNT + result.structuralGaps.reduce((total, gap) => total + gap.count, 0),
     );
-    // The overdue batch lights Production, where the attention view shows it (#1532 F5).
+    // The overdue batches light Production, where the attention view shows them (#1532 F5).
     expect(result.stations.find((s) => s.key === "production")).toMatchObject({
-      attention: 1,
-      reasons: [{ state: "warning", text: "1 credit batch not submitted" }],
+      attention: BATCH_COUNT,
+      reasons: [{ state: "warning", text: `${BATCH_COUNT} credit batches not submitted` }],
     });
     expect(queries).toBeLessThanOrEqual(OVERVIEW_QUERY_BUDGET);
 
@@ -252,7 +274,7 @@ describe("dashboard query budget", () => {
         getDashboardOverview(makeTestOrgContext(), lineage.facilityId, "all"),
       );
       // Submitted and not returned: it waits on the verifier, so no row.
-      expect(result.attention.map((item) => item.title)).not.toContain("Period ended · not submitted yet");
+      expect(result.attention.map((item) => item.title)).not.toContain("Period ended, not submitted yet");
       expect(result.attention.map((item) => item.title)).not.toContain("Returned by Isometric");
       expect(queries).toBeLessThanOrEqual(OVERVIEW_RETURNED_BRANCH_QUERY_BUDGET);
     } finally {

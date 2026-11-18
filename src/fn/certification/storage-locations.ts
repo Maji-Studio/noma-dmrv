@@ -33,11 +33,11 @@ import {
   performRegistryCreate,
   supplierRefLookup,
   type RegistryExternalMutationReporter,
-} from "./registry-create";
+} from "@/lib/certification/registry-create";
 import {
   appendSyncEventBestEffort,
   ISOMETRIC_PROVIDER,
-} from "./shared";
+} from "@/lib/certification/shared";
 
 export const STORAGE_LOCATION_ENTITY_TYPE = "customerLocation";
 export const STORAGE_LOCATION_OPERATION_PREFIX = "storage-location:";

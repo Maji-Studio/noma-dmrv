@@ -8,7 +8,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { FormDialogContext, type DialogFormState } from "@/components/ui/form-dialog-context";
 
 vi.mock("@/hooks/use-certification", () => ({
-  certificationKeys: { all: ["certification"] },
   useRegistrySourceVisibility: () => ({
     data: { sourceVisibility: "private", viewerCanManage: true },
     isLoading: false,

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { ENTRY_FILE_MISSING_INSTRUCTION } from "@/lib/certification/emission-entry-messages";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { RemovalCorrection } from "@/lib/certification/removal-entry-correction";
@@ -67,7 +68,7 @@ describe("ResubmitRemovalAction", () => {
   });
 });
 
-it.each([{ unavailableMessages: [] }, { unavailableMessages: ["Add a file for each emissions entry with a value.", "Second blocker."] }])("shows unavailable comparison copy and only the first blocker: %j", ({ unavailableMessages }) => {
+it.each([{ unavailableMessages: [] }, { unavailableMessages: [ENTRY_FILE_MISSING_INSTRUCTION, "Second blocker."] }])("shows unavailable comparison copy and only the first blocker: %j", ({ unavailableMessages }) => {
   render(<RemovalResubmitNotice correction={correction({ resubmitNeeded: true, comparison: "unavailable", unavailableMessages })} facilityId={FACILITY} />);
   expect(screen.getByRole("status").textContent).toBe(
     `noma could not compare this Removal with what it sent.${unavailableMessages[0] ? ` ${unavailableMessages[0]}` : ""} Resubmit it, then resubmit GHG Statement Jul 1 to Sep 30, 2026.`,

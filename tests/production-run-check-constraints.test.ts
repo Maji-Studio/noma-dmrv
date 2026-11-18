@@ -32,7 +32,7 @@ async function withRunFixture(assert: (tx: DbTransaction, values: RunValues) => 
       }).returning();
       await assert(tx, {
         organizationId: TEST_ORG_ID, facilityId: facility.id, reactorId: reactor.id,
-        code: `PR-CHECK-${tag}`, status: "complete", startTime: START_TIME, endTime: END_TIME,
+        code: `PR-CHECK-${tag}`, status: "complete", startTime: START_TIME, endTime: END_TIME, outputPostedAt: END_TIME,
         biocharOutputKg: OUTPUT_WET_KG, biocharMoisturePercent: OUTPUT_MOISTURE_PERCENT,
         biocharStorageLocationId: bin.id,
       });
@@ -44,6 +44,12 @@ async function withRunFixture(assert: (tx: DbTransaction, values: RunValues) => 
 }
 
 describe("production_runs complete output check constraint", () => {
+  it.each([undefined, null])("refuses a complete run without output posting time: %s", async (outputPostedAt) => {
+    await expect(withRunFixture(async (tx, values) => {
+      await tx.insert(productionRuns).values({ ...values, outputPostedAt });
+    })).rejects.toMatchObject({ cause: { code: "23514", constraint: "production_runs_complete_has_output_posted_at" } });
+  });
+
   it.each([undefined, null])("refuses a complete run without moisture: %s", async (moisture) => {
     await expect(withRunFixture(async (tx, values) => {
       await tx.insert(productionRuns).values({ ...values, biocharMoisturePercent: moisture });
@@ -63,7 +69,7 @@ describe("production_runs complete output check constraint", () => {
   it("accepts a running run without moisture, output or bin", async () => {
     await withRunFixture(async (tx, values) => {
       const [saved] = await tx.insert(productionRuns).values({
-        ...values, status: "running", endTime: null,
+        ...values, status: "running", endTime: null, outputPostedAt: null,
         biocharMoisturePercent: null, biocharOutputKg: null, biocharStorageLocationId: null,
       }).returning();
       expect(saved).toMatchObject({ status: "running", biocharMoisturePercent: null });

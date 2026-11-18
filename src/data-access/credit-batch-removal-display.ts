@@ -33,7 +33,7 @@ export interface BatchRemovalDisplayFacts {
   /** The Removal's current GHG Statement, for the dashboard's returned-Removal lineage read. */
   ghgStatementId: string | null;
   submission: RemovalDisplaySubmission | null;
-  /** Every submitted or accepted version, for the phase the batch page reads. */
+  /** Every submitted, accepted or superseded version, for the phase the batch page reads. */
   submittedVersions: SubmissionDisplayFacts[];
 }
 
@@ -59,6 +59,7 @@ function outerRemovalVersions(...extra: SQL[]) {
 /** The display facts of one version; the payload carries only its reporting window. */
 const versionFactsSql = sql`
   'status', ${certificationSubmissions.status},
+  'externalId', ${certificationSubmissions.externalId},
   'metadata', ${certificationSubmissions.metadata},
   'payloadSnapshot', jsonb_build_object('semantic', jsonb_build_object(
     'startedOn', ${certificationSubmissions.payloadSnapshot} -> 'semantic' -> 'startedOn',
@@ -82,14 +83,14 @@ function latestRemovalDisplaySubmissionSql(ctx: OrgContext) {
   return sql<RemovalDisplaySubmission | null>`(${latest})`;
 }
 
-/** Every submitted or accepted version of the outer `certifier_removals` row. */
+/** Every submitted, accepted or superseded version of the outer `certifier_removals` row. */
 function submittedRemovalVersionsSql(ctx: OrgContext) {
   requireOrgScope(ctx);
   const versions = db.select({
     value: sql<SubmissionDisplayFacts[]>`coalesce(jsonb_agg(jsonb_build_object(${versionFactsSql})), '[]'::jsonb)`,
   }).from(certificationSubmissions).where(and(
     eq(certificationSubmissions.organizationId, ctx.organizationId),
-    outerRemovalVersions(inArray(certificationSubmissions.status, ["submitted", "accepted"])),
+    outerRemovalVersions(inArray(certificationSubmissions.status, ["submitted", "accepted", "superseded"])),
   ));
   return sql<SubmissionDisplayFacts[]>`(${versions})`;
 }

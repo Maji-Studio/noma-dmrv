@@ -29,3 +29,5 @@ export {
   type CreditBatchActivityInput,
   type CreditBatchActivitySummaryInput,
 } from "./credit-batch-activity";
+
+export { readDashboardBatchScope, type DashboardBatchScopeInput } from "./dashboard-batch-scope";

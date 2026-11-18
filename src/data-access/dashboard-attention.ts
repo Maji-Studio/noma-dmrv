@@ -8,7 +8,7 @@
  *     while they fit `ATTENTION_PER_CHECK`, else one grouped row with the count
  *
  * Credit batches are the exception: their rows depend on the Removal display
- * state, so the overview reads every pending batch and `creditBatchAttention`
+ * state, so the overview reads every active batch and `creditBatchAttention`
  * decides, and the queue counts them from that read.
  *
  * Every predicate is facility- and org-scoped and skips archived rows. The
@@ -23,7 +23,7 @@ import {
   productionRuns,
 } from "@/db/schema";
 import { and, eq, isNull, or, type SQL } from "drizzle-orm";
-import { findInterruptedRemoval, type DerivedStatus } from "@/lib/certification/status";
+import { findInterruptedRemoval, hasSubmittedRemoval, type DerivedStatus } from "@/lib/certification/status";
 import { applicationHasEvidenceGapSql } from "./application-evidence-sql";
 
 /** Complete production runs missing either mass reading. */
@@ -57,10 +57,10 @@ export function feedstocksMissingDataWhere(
 }
 
 /**
- * Pending credit batches. Whether one needs attention depends on its holding
+ * Active credit batches. Whether one needs attention depends on its holding
  * Removals' display state, which only JS derives (`creditBatchAttention`).
  */
-export function pendingBatchesWhere(
+export function activeBatchesWhere(
   organizationId: string,
   facilityId: string,
 ): SQL | undefined {
@@ -68,11 +68,10 @@ export function pendingBatchesWhere(
     eq(creditBatches.organizationId, organizationId),
     eq(creditBatches.facilityId, facilityId),
     isNull(creditBatches.archivedAt),
-    eq(creditBatches.status, "pending"),
   );
 }
 
-export const PERIOD_ENDED_NOT_SUBMITTED_TITLE = "Period ended · not submitted yet";
+export const PERIOD_ENDED_NOT_SUBMITTED_TITLE = "Period ended, not submitted yet";
 
 /**
  * A closed period waits on the verifier ("submitted"), on the operator's
@@ -95,15 +94,15 @@ export function capOrGroup<T>(rows: readonly T[], total: number, group: () => T)
 }
 
 /**
- * What a pending batch puts in Needs attention, from its Removals' display
+ * What an active batch puts in Needs attention, from its Removals' display
  * state (#1528). Each interrupted Removal gets its own row, and the batch then
  * shows no period row. Otherwise a closed period is "submitted" (awaiting
  * verification) only once a Removal is submitted (its phase, as on the batch
  * page: a newer draft does not undo an earlier submitted version), and
  * "returned" when such a Removal reads as returned by the verifier (the
  * persisted Returned rule the batch's to-dos and record locks use); with no
- * Removal or only a draft it is "notSubmitted". The batch status alone cannot
- * say this: it stays pending after submission.
+ * Removal or only a draft it is "notSubmitted". Registry position comes
+ * from the certification ledger.
  */
 export function creditBatchAttention(
   batch: { endDate: string | null },
@@ -116,7 +115,7 @@ export function creditBatchAttention(
     return { interrupted: true, period: null };
   }
   if (!batch.endDate || batch.endDate >= todayStr) return { interrupted: false, period: null };
-  if (!removals.some((removal) => removal.phase === "submitted")) return { interrupted: false, period: "notSubmitted" };
+  if (!hasSubmittedRemoval(removals)) return { interrupted: false, period: "notSubmitted" };
   const returned = removals.some((removal) => removal.id != null && returnedRemovalIds.has(removal.id));
   return { interrupted: false, period: returned ? "returned" : "submitted" };
 }

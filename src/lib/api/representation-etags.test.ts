@@ -3,9 +3,13 @@ import { expect, it } from "vitest";
 import { driverEtag, facilityEtag, feedstockEtag, feedstockTypeEtag, storageLocationEtag, supplierEtag, vehicleEtag, productionRunEtag, biocharProductEtag, formulationEtag, labSampleEtag, creditBatchEtag, customerEtag, orderEtag, deliveryEtag, documentEtag } from "./representation-etags";
 
 it("builds strong ETags from row version and representation revision", () => {
-  for (const etag of [driverEtag, feedstockTypeEtag, vehicleEtag, labSampleEtag, creditBatchEtag, orderEtag, documentEtag]) {
+  for (const etag of [driverEtag, feedstockTypeEtag, vehicleEtag, labSampleEtag, orderEtag, documentEtag]) {
     expect(etag({ version: 7 })).toBe('"7.1"');
   }
+});
+
+it("uses revision 2 for the credit batch representation without status", () => {
+  expect(creditBatchEtag({ version: 7 })).toBe('"7.2"');
 });
 
 it("uses revision 2 for formulations with description and archive state", () => {

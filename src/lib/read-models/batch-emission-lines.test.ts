@@ -1,3 +1,4 @@
+import { listEmissionLineFilesForBatches } from "@/data-access/emission-line-files";
 import { loadBatchEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 vi.mock("@/data-access/emission-entry-carry", () => ({ loadBatchEmissionEntryCarry: vi.fn() }));
 import { legacyTransportObservation } from "../../../tests/helpers/legacy-transport-observation";
@@ -41,6 +42,7 @@ import { withTemplateOrder } from "@/lib/isometric/template-observations/templat
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(listEmissionLineFilesForBatches).mockResolvedValue([]);
   vi.mocked(loadBatchEmissionEntryCarry).mockResolvedValue([]);
   vi.mocked(listEmissionLineCommentsForBatches).mockResolvedValue([]);
   vi.mocked(getCreditBatchById).mockResolvedValue({
@@ -298,7 +300,7 @@ it("shows re-entry for unit changes and keeps other lines healthy", async () => 
     })) as never,
   );
   const lines = await loadReadyLines();
-  expect(lines[0]).toMatchObject({ state: "needsReview", total: null, blocker: { code: "lineNeedsReview", message: "Enter the values again for the current template component." }, entries: [expect.objectContaining({ counts: false, canConfirm: false })] });
+  expect(lines[0]).toMatchObject({ state: "needsReview", total: null, blocker: { code: "lineNeedsReview", message: "Enter the values again for the current component." }, entries: [expect.objectContaining({ counts: false, canConfirm: false })] });
   expect(lines[1]).toMatchObject({ state: "filled", total: { magnitude: "1", unit: "kWh" }, removedFromTemplate: false });
   expect(lines.every((line) => line.comment === null)).toBe(true);
   vi.mocked(listEmissionLineCommentsForBatches).mockResolvedValue([
@@ -317,3 +319,5 @@ it("marks a stored legacy pair for review", () => {
   const [line] = buildBatchEmissionLines(observation, [], new Map(), { automaticFigures: {} });
   expect(line.state).toBe("needsReview");
 });
+
+vi.mock("@/data-access/emission-line-files", () => ({ listEmissionLineFilesForBatches: vi.fn() }));

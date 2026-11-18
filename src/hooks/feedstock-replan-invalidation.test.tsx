@@ -8,7 +8,7 @@ import { creditBatchKeys } from "./credit-batch-query-keys";
 import { invalidateAfterFeedstockReplan } from "./feedstock-replan-invalidation";
 import { useRecordLoss } from "./use-bin-movements";
 import { chainOfCustodyKeys } from "./use-chain-of-custody";
-import { certificationKeys } from "./use-certification";
+import { certificationKeys } from "./certification-query-keys";
 import { productionRunKeys } from "./use-production-runs";
 
 const { recordLoss } = vi.hoisted(() => ({ recordLoss: vi.fn() }));

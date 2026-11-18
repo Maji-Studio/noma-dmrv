@@ -43,8 +43,6 @@ import type { logger } from "@/lib/log";
 import { getStorageProvider } from "@/lib/storage";
 import { mirrorDocumentToSourceForUser } from "./sources-mirror-core";
 
-export { stableLedgerContentHash } from "./evidence-ledger-models";
-
 const PDF_MIME = "application/pdf";
 
 export type LedgerLog = ReturnType<typeof logger.child>;

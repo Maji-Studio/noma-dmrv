@@ -1,10 +1,9 @@
 /**
- * HeroKpiBand — the Flow Hero's 4-stat band: one bordered strip divided into
- * equal cells (mono micro label over a bold value), per the hero design.
- * A null value means no data in the period, never a fabricated zero: the
- * cell's detail line ("no measured runs in period") moves into the value slot
- * as the reason, so the cell says it once. The delta vs the previous equal
- * period rides along as a quiet mono suffix.
+ * HeroKpiBand — the dashboard's 4-stat band: one bordered strip divided into
+ * equal cells (label over a bold value). A mass value carries its basis in
+ * the unit ("2.4 t dry"). A null value means the figure is unknown, never a
+ * fabricated zero: the value slot shows a muted bar named "No value" for
+ * assistive tech, with no written reason. A real zero reads "0 t dry".
  *
  * Cells avoid <p>/<h*> elements — the global element type rules are unlayered
  * and would override the band's utility sizing (see globals.css typography).
@@ -17,22 +16,29 @@ import { InfoHint } from "@/components/ui/tooltip";
 /** Pinned so server and client format the number identically (no hydration drift). */
 const NUMBER_LOCALE = "en-US";
 
-/** The detail line as the reason in the value slot: sentence case, like any value. */
-function reasonOf(detail: string): string {
-  return detail.charAt(0).toUpperCase() + detail.slice(1);
-}
-
-function formatValue(kpi: DashboardKpi & { value: number }): string {
-  const digits = Math.abs(kpi.value) >= 100 ? 0 : 1;
-  return kpi.value.toLocaleString(NUMBER_LOCALE, {
+function formatValue(value: number): string {
+  if (value === 0) return "0";
+  const digits = Math.abs(value) >= 100 ? 0 : 1;
+  return value.toLocaleString(NUMBER_LOCALE, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
 }
 
-function formatDelta(deltaPercent: number): string {
-  const rounded = Math.round(deltaPercent);
-  return rounded > 0 ? `+${rounded}%` : `${rounded}%`;
+/** The mass basis rides in the unit ("2.4 t dry"); CO₂e names its own. */
+function unitOf(kpi: DashboardKpi): string {
+  return kpi.key === "co2eStored" ? kpi.unit : `${kpi.unit} dry`;
+}
+
+/** A muted bar for "no figure", drawn in CSS. It says no reason: an empty bar is clear enough. */
+function EmptyFigure() {
+  return (
+    <span
+      role="img"
+      aria-label="No value"
+      className="inline-block h-4 w-24 bg-[var(--color-text-tertiary)] align-middle"
+    />
+  );
 }
 
 interface HeroKpiBandProps {
@@ -68,53 +74,26 @@ export function HeroKpiBand({ kpis, isLoading }: HeroKpiBandProps) {
       className="grid grid-cols-2 border-[1.5px] border-[var(--ink)] bg-[var(--paper)] lg:grid-cols-4"
       data-testid="dashboard-kpis"
     >
-      {cells.map((kpi, index) => (
-        <div key={kpi.key} className={`px-20 py-16 ${CELL_BORDERS(index)}`}>
-          <div className="flex min-h-24 items-center gap-4">
-            <span className="body-caption text-[var(--clr-dark-purple-60)]">
-              {kpi.label}
-            </span>
-            {kpi.hint && (
-              <InfoHint label={`More about ${kpi.label}`}>
-                {kpi.hint}
-              </InfoHint>
-            )}
-          </div>
-          <div className="mt-6 text-[26px] font-bold leading-[1.15] text-[var(--ink)]">
-            {kpi.value == null ? (
-              <span className="body-small font-normal text-[var(--color-text-tertiary)]">{reasonOf(kpi.detail)}</span>
-            ) : formatValue({ ...kpi, value: kpi.value })}
-            {kpi.value != null && (
-              // The type class resets margins, so the gap sits on a wrapper.
-              <span className="ml-4">
-                <span className="body-caption font-medium text-[var(--clr-dark-purple-60)]">
-                  {kpi.unit}
-                  {kpi.deltaPercent != null && (
-                    <span
-                      className="ml-6"
-                      style={{
-                        color:
-                          Math.round(kpi.deltaPercent) >= 0
-                            ? "var(--st-ok)"
-                            : "var(--st-wait)",
-                      }}
-                    >
-                      {formatDelta(kpi.deltaPercent)}
-                    </span>
-                  )}
-                </span>
-              </span>
-            )}
-          </div>
-          {kpi.value != null && (
-            <div className="mt-4">
-              <p className="body-caption text-[var(--color-text-tertiary)]">
-                {kpi.detail}
-              </p>
+      {cells.map((kpi, index) => {
+        return (
+          <div key={kpi.key} className={`px-20 py-16 ${CELL_BORDERS(index)}`}>
+            {/* Top aligned, so the (i) sits level when a label wraps on a phone. */}
+            <div className="flex min-h-24 items-start gap-4">
+              <span className="body-caption text-[var(--clr-dark-purple-60)]">{kpi.label}</span>
+              {kpi.hint && <InfoHint label={`More about ${kpi.label}`}>{kpi.hint}</InfoHint>}
             </div>
-          )}
-        </div>
-      ))}
+            <div className="mt-6 text-[26px] font-bold leading-[1.15] text-[var(--ink)]">
+              {kpi.value == null ? <EmptyFigure /> : formatValue(kpi.value)}
+              {kpi.value != null && (
+                // The type class resets margins, so the gap sits on a wrapper.
+                <span className="ml-4">
+                  <span className="body-caption font-medium text-[var(--clr-dark-purple-60)]">{unitOf(kpi)}</span>
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -13,8 +13,8 @@ vi.mock("@/hooks/use-emission-entries", () => ({
   useCreateEmissionEntry: () => ({ isPending: mutations.pending, mutateAsync: mutations.create }),
   useUpdateEmissionEntry: () => ({ isPending: false, mutateAsync: mutations.update }),
   useReplaceEmissionEntry: () => ({ isPending: false, mutateAsync: mutations.replace }),
-  invalidateEmissionEntryReads: vi.fn(),
 }));
+vi.mock("@/hooks/stale-reads", () => ({ invalidateEmissionEntryReads: vi.fn() }));
 vi.mock("@/components/ui/slide-over-panel", () => {
   const Plain = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
   const Footer = ({ children, preview }: { children?: React.ReactNode; preview?: React.ReactNode }) => (

@@ -25,11 +25,47 @@ MCP, stock adjustments (lost mass and stock counts) and multi-bin runs are not r
   with that claim, including draft Removals. If the ownership write wins first,
   `src/fn/certification/removal-submission-freshness.ts:assertClaimedRemovalPayloadFresh`
   rebuilds and compares the semantic hash, but
-  `src/fn/certification/removal-submission-build.ts:buildRemovalSubmissionBuild`
+  `src/lib/certification/removal-submission-build.ts:buildRemovalSubmissionBuild`
   keeps `transportFeedstockIds` outside the semantic payload. Decide how to
   revalidate that counted-ID snapshot when ownership changes without changing
   the semantic hash (for example equal transport totals with unchanged evidence
   sources). Artifact serialization alone does not prove this snapshot is fresh.
+
+## Refresh rules outside `stale-reads.ts` (#1634)
+
+- `src/hooks/stale-reads.ts` holds the certification readiness and emission
+  entry kinds of change. Three modules still list their own stale reads:
+  `src/hooks/feedstock-replan-invalidation.ts`,
+  `src/hooks/document-lock-refresh.ts` and
+  `src/hooks/use-transport-distance-refresh.ts`. Move each into
+  `stale-reads.ts` with a cache-state test when it is next touched.
+
+## Review step and submit gate disagree (`certification/readiness-gate-drift`, #1639)
+
+- Six states block the review step while the before-confirmation prefix returns
+  nothing in `src/fn/certification/removal-blockers-gate.ts:collectContextRemovalBlockers`:
+  missing transport, incomplete transport, production gap, future dated
+  measurements, delivery evidence and durability eligibility.
+  `src/lib/certification/removal-submission-build.ts:buildRemovalSubmissionBuild`
+  refuses them later in the submit by design. No change planned.
+- Pinned in the known drift table at
+  `src/fn/certification/removal-readiness-gate-parity.test.ts:knownDrift`.
+  When a state is fixed, move its row to the agreement table.
+- A credit batch whose pinned Removal template has no groups still reads healthy
+  and can be picked for a Removal in
+  `src/lib/certification/batch-health-facts.ts:toBatchHealthFacts`.
+  The Removal then reads blocked in
+  `src/lib/certification/readiness-facts.ts:toRemovalReadinessFacts`.
+  The submit gate refuses it via
+  `src/lib/certification/removal-submission-conditions.ts:isEmptyRemovalTemplate`.
+  No change is planned until an empty production template is seen in practice.
+  The durability-unavailable block is also a Removal readiness block only,
+  by decision in #1639's review
+  (`src/lib/certification/removal-submission-conditions.ts:isDurabilitySubmissionUnavailable`).
+- The larger "one blocker list" refactor was out of scope for #1635 because
+  facts are computed once in
+  `src/lib/certification/removal-context-build.ts:buildRemovalContext`
+  and only projected. The drift found here is tracked in #1639.
 
 ## Open design picks (`ui/design-picks`)
 
@@ -65,6 +101,16 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
   gives (+) slots a 44px minimum but not batch bars: a batch of a few days is a
   bar a few pixels wide. Needs a design decision for bars whose 44px hit areas
   would overlap.
+
+## Credit batch state outside /credit-batches (#1046) - **deferred**
+
+- The stored credit batch status is gone (#1046). The facility Emissions
+  overview, the credit batch pickers and the Energy list no longer show one,
+  and none shows where the batch stands with Isometric yet. The state that
+  `/credit-batches` shows (`src/lib/credit-batches/batch-state.ts:creditBatchStateOf`)
+  needs each batch's health summary, a per-batch readiness read those surfaces
+  do not load. Resolve by deciding which surfaces need the state and adding a
+  bounded read for them ([design decision](./design-decisions.md#credit-batches-and-locks)).
 
 ## Answering components for a kept batch's older template - **open**
 
@@ -206,7 +252,7 @@ code today; breaking one compiles cleanly and fails silently.
   required at submission for sampled 1,000-year credit batches by the replicate
   gate (`evaluateSampled1000YearReplicates` in
   `src/lib/certification/durability-1000-replicates.ts`, called by
-  `src/fn/certification/durability-readiness.ts`). Dropping the percentage-to-fraction
+  `src/lib/certification/durability-readiness.ts`). Dropping the percentage-to-fraction
   conversion puts a 100× error into a credit-bearing input.
 
 ## Schema
@@ -307,7 +353,7 @@ companion inherits this file's schema, invariants, and resolution rules.
   `sampling-required-for-mrv / mass_distance_based_ci_emissions /
   mass_distance` (`INPUT_MAPPING`, the certify field registry tuples and the
   transport categories are projections of it). The authoring doc now omits that
-  legacy row. `src/fn/certification/certify-transport-coverage.ts:deriveRequiredTransportCategories`
+  legacy row. `src/lib/certification/certify-transport-coverage.ts:deriveRequiredTransportCategories`
   derives required categories from the live template, so a category the template
   drops is silently no longer collected or submitted.
 - Two explanations are open and only a registry probe separates them: the
@@ -523,7 +569,7 @@ selectors. See [`docs/testing.md`](./testing.md).
   the failing summary query and shows a warning banner, and
   `deriveRemovalReadiness` (`src/lib/certification/readiness.ts`) blocks
   readiness when `!facts.hasMapping`.
-- **Still open:** `safeListIfConfigured` (`src/fn/certification/shared.ts`) —
+- **Still open:** `safeListIfConfigured` (`src/lib/certification/shared.ts`) —
   treat 404/422 as non-retryable, return an empty/flagged result instead of
   throwing, and surface a warning chip on the registry-connection card (M).
 
@@ -587,19 +633,6 @@ locations, no new site can be registered. `needs-registry-check`: whether
 `GET /storage_locations` supports server-side filtering by
 `supplier_reference_id`, which would remove the scan entirely.
 
-### Crash-window interruption still loses the confirmed-write marker (`certification/interrupted-marker-crash-window`)
-
-The interrupted markers written by
-`recordClaimedRemovalSubmissionFailureBestEffort`
-(`src/fn/certification/removal-submission-failure.ts`) and the GHG create path
-are in-process best-effort writes inside a `catch`; a SIGTERM/timeout mid-POST
-records nothing. On retry `readRemovalSubmissionExternalMutation` reports
-`"none"`, so payload drift retires the draft without
-`preserveForReconciliation` and the next version re-POSTs datapoints and
-measurement samples under new version-suffixed supplier refs — a duplicate
-GHG entry. **Resolve via:** persisting an attempt-started marker before the
-first registry POST, or reconciling by unversioned keys.
-
 ### Order/delivery repoint does not guard the target lineage (`orders/repoint-target-lineage-guard`)
 
 `updateSample` and `updateApplication` call the certification lineage guard on
@@ -632,7 +665,7 @@ null-method facet branch in `src/data-access/applications.ts` is unreachable
 PR #660 (titled as gap routing) also made `productionReadinessGapForScope`
 (`src/lib/certification/production-readiness-from-lineage.ts`) return a gap for
 any completed member run with zero applications, and `hasSubmittableRuns` in
-`src/fn/certification/certify-context-core.ts` turns that into a hard blocker
+`src/lib/certification/certify-context-core.ts` turns that into a hard blocker
 for the whole Removal. Batch membership is date-window auto-assignment
 (`src/data-access/credit-batch-membership.ts`), and biochar is typically
 applied weeks after production, so a run completed late in a crediting period

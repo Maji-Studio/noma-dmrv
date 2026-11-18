@@ -7,8 +7,7 @@
  * string. Renamed tokens are the usual cause (see the token trap in
  * docs/design-system.md).
  *
- * The app (`src/`) and the marketing site (`site/src/`) are checked as
- * separate scopes, because the site never loads `src/app/globals.css`.
+ * The app source (`src/`) is checked as one scope.
  *
  * Like `check-spacing-scale.ts` this is a heuristic, not a parser. A property
  * counts as defined when any file in its scope declares it in CSS (`--x:`,
@@ -24,7 +23,6 @@ import { extname, join, relative } from "node:path";
 const ROOT = process.cwd();
 const SCOPES = [
   { name: "app", dir: "src", extensions: [".ts", ".tsx", ".css", ".js", ".mjs"] },
-  { name: "site", dir: "site/src", extensions: [".astro", ".ts", ".js", ".mjs", ".css"] },
 ];
 const SKIPPED_DIRS = new Set(["node_modules", "generated"]);
 /** Same reason as the spacing check: tests may assert on broken references. */

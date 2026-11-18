@@ -1,3 +1,4 @@
+import { ENTRY_FILE_MISSING_INSTRUCTION, REENTER_EMISSION_ENTRY } from "@/lib/certification/emission-entry-messages";
 import { describe, expect, it } from "vitest";
 import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
 import type { RemovalBlocker } from "@/lib/certification/removal-blockers";
@@ -161,4 +162,18 @@ describe("review items", () => {
       expect(blockersOutsideRows([unbindable], [blockedRow()], { text: sentence, componentIds: ["lab", "other"] })).toEqual([unbindable]);
     });
   });
+});
+
+it.each([
+  ["lineNeedsReview", REENTER_EMISSION_ENTRY],
+  ["entryMissingEvidence", ENTRY_FILE_MISSING_INSTRUCTION],
+] as const)("keeps one visible repair for a %s shared by the check, row and contribution", (code, message) => {
+  const row = blockedRow({ blocked: { items: [{ message, batchCodes: [BATCHES[0].code], fixes: [] }] } });
+  const items = buildReviewItems({
+    checks: [check({ key: "emissions", detail: message })],
+    blockers: [{ code, message, fixTarget: "emissions", lineRef: { componentId: "lab", displayName: "Lab electricity" } }],
+    blockedRows: [row], creditBatches: BATCHES, facilityId: FACILITY, unbindableText: null, unbindableComponentIds: [],
+  });
+  expect(items).toHaveLength(1);
+  expect(items[0]).toMatchObject({ id: "component:lab", title: "Lab electricity", explanation: message, lines: [] });
 });

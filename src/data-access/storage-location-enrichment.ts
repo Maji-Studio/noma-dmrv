@@ -291,13 +291,15 @@ export async function enrichStorageLocationRows(
         }>(sql`
           WITH events AS (
             SELECT
-              storage_location_id,
+              fs.storage_location_id,
               'in' as activity_type,
-              created_at,
-              mass_wet_kg as mass_kg,
-              mass_dry_kg,
-              'Feedstock received' as label
-            FROM feedstocks WHERE organization_id = ${ctx.organizationId} AND storage_location_id IN (${storageLocationIdsSql})
+              fs.created_at,
+              fs.mass_wet_kg as mass_kg,
+              fs.mass_dry_kg,
+              'Feedstock received' as label,
+              0::bigint as posting_sequence,
+              'feedstock:' || fs.id::text as event_key
+            FROM feedstocks fs WHERE fs.organization_id = ${ctx.organizationId} AND fs.storage_location_id IN (${storageLocationIdsSql})
             UNION ALL
             SELECT
               prfd.storage_location_id,
@@ -311,7 +313,9 @@ export async function enrichStorageLocationRows(
                   3
                 )
               END as mass_dry_kg,
-              'Feedstock used'
+              'Feedstock used',
+              0::bigint,
+              'draw:' || prfd.id::text
             FROM production_run_feedstock_draws prfd
             JOIN production_runs pr
               ON pr.id = prfd.production_run_id
@@ -322,13 +326,15 @@ export async function enrichStorageLocationRows(
               AND prfd.storage_location_id IN (${storageLocationIdsSql})
             UNION ALL
             SELECT
-              biochar_storage_location_id,
+              pr.biochar_storage_location_id,
               'in',
-              created_at,
-              biochar_output_kg,
-              biochar_dry_mass_kg,
-              'Biochar produced'
-            FROM production_runs WHERE organization_id = ${ctx.organizationId} AND biochar_storage_location_id IN (${storageLocationIdsSql})
+              pr.created_at,
+              pr.biochar_output_kg,
+              pr.biochar_dry_mass_kg,
+              'Biochar produced',
+              0::bigint,
+              'production:' || pr.id::text
+            FROM production_runs pr WHERE pr.organization_id = ${ctx.organizationId} AND pr.biochar_storage_location_id IN (${storageLocationIdsSql})
             UNION ALL
             SELECT
               bp.source_biochar_storage_location_id,
@@ -336,7 +342,9 @@ export async function enrichStorageLocationRows(
               bp.created_at,
               SUM(bpsa.allocated_wet_mass_kg),
               SUM(bpsa.allocated_dry_mass_kg),
-              COALESCE(f.name, ${PURE_BIOCHAR_LABEL})
+              COALESCE(f.name, ${PURE_BIOCHAR_LABEL}),
+              0::bigint,
+              'product-out:' || bp.id::text
             FROM biochar_products bp
             LEFT JOIN biochar_product_source_allocations bpsa
               ON bpsa.biochar_product_id = bp.id
@@ -368,7 +376,9 @@ export async function enrichStorageLocationRows(
                 sql.raw("bp.composition"),
                 ctx.organizationId,
               )},
-              COALESCE(f.name, ${PURE_BIOCHAR_LABEL})
+              COALESCE(f.name, ${PURE_BIOCHAR_LABEL}),
+              0::bigint,
+              'product-in:' || bp.id::text
             FROM biochar_products bp
             LEFT JOIN formulations f
               ON bp.formulation_id = f.id
@@ -383,23 +393,39 @@ export async function enrichStorageLocationRows(
               ABS(${binMovements.massDeltaKg}),
               NULL,
               CASE
+                WHEN ${binMovements.lane} = 'feedstock'
+                  AND EXISTS (
+                    SELECT 1 FROM bin_movements original
+                    WHERE original.id = ${binMovements.correctsMovementId}
+                      AND original.organization_id = ${ctx.organizationId}
+                      AND original.storage_location_id = ${binMovements.storageLocationId}
+                      AND original.lane = 'feedstock'
+                      AND original.movement_type = 'loss'
+                  )
+                THEN CASE WHEN ${binMovements.movementType} = 'loss'
+                  THEN 'Lost mass corrected' ELSE 'Lost mass deleted' END
                 WHEN ${binMovements.movementType} = 'loss' THEN 'Recorded loss'
                 ELSE 'Stock-take adjustment'
-              END
+              END,
+              ${binMovements.postingSequence},
+              'movement:' || ${binMovements.id}::text
             FROM ${binMovements}
             WHERE ${binMovements.organizationId} = ${ctx.organizationId}
               AND ${binMovements.storageLocationId} IN (${storageLocationIdsSql})
           )
-          SELECT DISTINCT ON (storage_location_id)
-            storage_location_id,
-            activity_type,
-            created_at as activity_date,
-            mass_kg,
-            mass_dry_kg,
-            label
+          SELECT DISTINCT ON (events.storage_location_id)
+            events.storage_location_id,
+            events.activity_type,
+            events.created_at as activity_date,
+            events.mass_kg,
+            events.mass_dry_kg,
+            events.label
           FROM events
-          WHERE storage_location_id IS NOT NULL
-          ORDER BY storage_location_id, created_at DESC
+          WHERE events.storage_location_id IS NOT NULL
+          -- Replacements are inserted after reversals with the same created_at.
+          -- Their bigserial posting sequence, unlike random UUIDs, preserves that order.
+          ORDER BY events.storage_location_id, events.created_at DESC,
+            events.posting_sequence DESC, events.event_key DESC
         `),
         // Enrichment also needs the source-allocation aggregate from the biochar lane.
         deriveLaneStock(ctx, tx, { storageLocationIds }),

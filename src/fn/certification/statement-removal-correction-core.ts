@@ -2,7 +2,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { listNomaSentRemovalsForRemoteEntries, listStatementRemovalIdentities } from "@/data-access/removal-entry-correction";
 import { logger } from "@/lib/log";
 import { SafeError } from "@/lib/errors";
-import { compareRemovalCurrentContent } from "./removal-content-comparison-core";
+import { compareRemovalCurrentContent } from "@/lib/certification/removal-content-comparison-core";
 import { comparisonUnavailableClause } from "@/lib/removal-correction-copy";
 
 /** Must run inside withGhgVerifierSubmissionLock. Lineage/evidence writers share

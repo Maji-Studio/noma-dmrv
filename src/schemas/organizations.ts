@@ -5,7 +5,6 @@
  * server trust boundary can't drift.
  */
 import { z } from "zod";
-import { passwordSchema } from "@/schemas/auth";
 
 export const orgRoleSchema = z.enum(["admin", "member"]);
 export type OrgRoleValue = z.infer<typeof orgRoleSchema>;
@@ -147,7 +146,6 @@ export const invitationIdSchema = z.object({
 
 export const invitationBootstrapSchema = invitationIdSchema.extend({
   name: z.string().trim().min(1, "Name is required."),
-  password: passwordSchema,
 });
 export type InvitationBootstrapInput = z.infer<
   typeof invitationBootstrapSchema

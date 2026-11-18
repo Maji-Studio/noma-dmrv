@@ -145,7 +145,8 @@ export function blockerItems(
   return blockers.map((blocker) => {
     const title = blockerTitle(blocker);
     const message = removalLineBlockerMessage(blocker);
-    const fix = removalFindingFixLink(blocker, facilityId, memberBatchIds);
+    // A blocker that names its credit batch (File missing) leads to that batch's Emissions tab even when the Removal has several.
+    const fix = removalFindingFixLink(blocker, facilityId, blocker.creditBatchId ? [blocker.creditBatchId] : memberBatchIds);
     return {
       id: blockerId(blocker, occurrences),
       title,

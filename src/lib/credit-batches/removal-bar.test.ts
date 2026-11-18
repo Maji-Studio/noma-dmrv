@@ -46,7 +46,7 @@ function model(slices: Slice[], removals: Removal[], notAppliedDryKg: number | n
       notInRemovalDryKg: sum(slices.filter((row) => row.removalId === null)),
       notAppliedDryKg,
     },
-    milestones: { firstRemovalSubmittedAt: null, firstRemovalSubmittedCode: null, ghgStatement: null },
+    milestones: { firstRemovalSubmittedAt: null, firstRemovalSubmittedCode: null, ghgStatements: [] },
   };
 }
 

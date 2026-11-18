@@ -91,7 +91,7 @@ beforeAll(async () => {
   // Earlier draws are ineligible: a complete unbatched run and a batched running run.
   const extraRuns = await db.insert(productionRuns).values([
     { ...site, reactorId: fixture.runs[0].reactorId, code: `E2E-ENERGY-UNBATCHED-${fixture.tag}`,
-      status: "complete", startTime: new Date("2026-09-02T08:00:00Z"), endTime: new Date("2026-09-02T12:00:00Z"),
+      status: "complete", outputPostedAt: new Date("2026-09-02T12:00:00Z"), startTime: new Date("2026-09-02T08:00:00Z"), endTime: new Date("2026-09-02T12:00:00Z"),
       feedstockWetMassKg: FEEDSTOCK_DRAW_KG, feedstockMoisturePercent: 0, feedstockMassDryKg: FEEDSTOCK_DRAW_KG,
       biocharOutputKg: FEEDSTOCK_DRAW_KG, biocharMoisturePercent: 0, biocharDryMassKg: FEEDSTOCK_DRAW_KG,
       biocharStorageLocationId: fixture.source.id },

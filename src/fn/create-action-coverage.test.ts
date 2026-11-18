@@ -51,13 +51,15 @@ const EXCEPTION: Record<string, string> = {
   "certification/emission-zeros#recordEmissionZerosFn": "Reuses zero entries and checks the removal version.",
   "feedstock-types#importIsometricFeedstockTypeFn": "Refuses an already imported isometricFeedstockTypeId.",
   "organizations#createOrganizationAction": "platform create outside an org; replays through its own store keyed by parseCreateIntentKey",
-  "invitation-bootstrap#bootstrapInvitationAccountAction": "Pre-sign-in bootstrap refuses an existing account.",
+  "first-run#createFirstAdminAction": "Creates the first account only while no user exists, under an advisory lock; a retry is refused.",
+  "invitation-bootstrap#bootstrapInvitationAccountAction": "Pre-sign-in bootstrap creates only a pending user; retries send a cooldown-limited setup email.",
   "certification/create-removal-with-batches#createRemovalWithBatchesAction": "Rechecks ungrouped batches under row locks.",
   "certification/ghg-statements#createGhgStatementDraft": "External POST adopts or refuses a matching remote statement under a facility lock.",
   "certification/sources#mirrorDocumentToSource": "Reconciles external uploads and uses insert-or-get locally.",
   "organizations#inviteMemberAction": "Owner-approved retry replaces the pending invitation through Better Auth.",
   "organizations#resendInvitationAction": "Replaces one pending invitation in a transaction; a retry replaces it again and the newest link wins.",
   "documents#requestUpload": "Duplicates leave pending uploads reclaimed by the upload sweep; evidence create is single-flight.",
+  "emission-line-files#attachEmissionLineFileFn": "An anchor holds several files; a retry adds another pending upload that the upload sweep reclaims if it is never confirmed.",
   "production-run-reading-imports#importProductionRunReadingsFromDocumentFn": "Seed-only unmounted importer deduplicates timestamps.",
   "bin-movements#recordStockTakeFn": "Legacy unmounted action; useRecordStockTake has no caller.",
   "certification/ghg-statement-reports#prepareGhgStatementReport": "Reuses preparationKey under certification artifact and facility locks.",
@@ -68,6 +70,10 @@ const EXCEPTION: Record<string, string> = {
 };
 
 const NOT_CREATE: Record<string, string> = {
+  "certification/removal-resend#checkRemovalRegistryPresence": "Reads whether Isometric still has a sent Removal; writes nothing.",
+  "certification/removal-resend#prepareRemovalResend": "Retires an existing sent version so the next submit creates its successor; idempotent.",
+  "emission-line-files#replaceEmissionLineFilesFn": "Retires an existing versioned file set; the next attach creates its successor.",
+  "invitation-bootstrap#resendInvitationSetPasswordAction": "Sends a cooldown-limited setup email for an existing pending user.",
   "profile#changeEmailFn": "Requests confirmation to change the caller’s existing account email.",
   "organizations#renameOrganizationAction": "Renames an existing organization.",
   "organizations#leaveOrganizationAction": "Removes the caller's own existing membership.",

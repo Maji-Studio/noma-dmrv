@@ -150,7 +150,7 @@ export async function createLineageFixture(
         biocharOutputKg: 300,
         biocharMoisturePercent: 5,
         biocharDryMassKg: 285,
-        status: blockingVia === "none" ? "running" : "complete",
+        status: blockingVia === "none" ? "running" : "complete", outputPostedAt: blockingVia === "none" ? null : new Date("2026-06-13T12:00:00Z"),
       })
       .returning({ id: productionRuns.id });
 
@@ -245,7 +245,6 @@ export async function createLineageFixture(
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
         productionProcessId: productionProcess.id,
-        status: "pending",
         startDate: "2026-06-01",
         endDate: "2026-06-30",
         certifier: "isometric",

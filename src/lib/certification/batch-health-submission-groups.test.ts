@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
-import { buildSubmissionLineageBlockers } from "@/fn/certification/certify-lineage-blockers";
+import { buildSubmissionLineageBlockers } from "@/lib/certification/certify-lineage-blockers";
 import { deriveBatchHealth, type BatchHealthFacts } from "./batch-health";
 import { recordHref } from "@/lib/record-links";
 import { batchHealthFixLinkFor } from "./batch-health-links";

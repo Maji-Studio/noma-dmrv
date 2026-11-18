@@ -41,14 +41,13 @@ import {
   useRemovalPreflightSummaries,
   useRemovalsForFacility,
 } from "@/hooks/use-certification";
-import { deriveRemovalWorkflowStatus } from "@/lib/certification/status";
+import { deriveRemovalShownStatus } from "@/lib/certification/removal-shown-status";
 import { formatDateRange, formatDayString } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { SubmittedOnCell, submittedOnSortingFn, submittedOnText } from "./submitted-on-cell";
 import { CertificationStatusBadge } from "./certification-status-badge";
 import { NewRemovalDialog } from "./new-removal-dialog";
-import { CORRECTION_NEEDED_LABEL, RemovalCorrectionCell } from "./removal-correction-needed";
-import { correctionStatus } from "@/lib/removal-correction-copy";
+import { RemovalCorrectionCell } from "./removal-correction-needed";
 import { useRecordLocks } from "@/hooks/use-record-locks";
 import type { RecordLockView, RecordLockViews } from "@/lib/record-lock-view";
 import { RemovalDetailSheet } from "./removal-detail-sheet";
@@ -57,7 +56,6 @@ import { formatRegistryRecord, registryRecordUrl } from "./registry-record";
 import {
   buildRemovalListRows,
   type RemovalListRow,
-  listStatusLabel,
 } from "./removal-list-state";
 
 export function RemovalsList({ initialCreate = false, canManage = false }: { initialCreate?: boolean; canManage?: boolean } = {}) {
@@ -220,27 +218,18 @@ function MemberBatchesCell({ summary }: { summary: RemovalListRow }) {
 }
 
 export function StatusCell({ summary, lock }: { summary: RemovalListRow; lock?: RecordLockView }) {
-  const status = deriveRemovalWorkflowStatus({
-    local: summary.local,
-    lockInFlight: summary.lockInFlight,
-    submissionInterrupted: summary.submissionInterrupted,
-    enrichmentStatus: summary.enrichmentStatus,
-    readiness: summary.readiness,
-  });
-  // A returned Removal with its correction window open names that state in
-  // place of its own status, and #1134's lock-based cell steps aside.
-  const shown = summary.correction ? correctionStatus(summary.correction) : status;
+  const shown = deriveRemovalShownStatus({ workflow: summary, correction: summary.correction });
 
   return (
     <span className="flex flex-col items-start gap-4">
       <CertificationStatusBadge
         entityType="removal"
         entityId={summary.removalId}
-        status={shown.value}
-        label={shown === status ? listStatusLabel(status) : shown.label}
+        status={shown.list.value}
+        label={shown.list.label}
       />
-      <RemovalCorrectionCell lock={summary.correction ? undefined : lock} />
-      {status.canRetry && (
+      <RemovalCorrectionCell lock={shown.showLockCell ? lock : undefined} />
+      {shown.workflow.canRetry && (
         <Button
           variant="default"
           size="small"
@@ -334,16 +323,8 @@ const createColumns = (
     id: "status",
     header: "Status",
     accessorFn: (summary) => {
-      const status = deriveRemovalWorkflowStatus({
-        local: summary.local,
-        lockInFlight: summary.lockInFlight,
-        submissionInterrupted: summary.submissionInterrupted,
-        enrichmentStatus: summary.enrichmentStatus,
-        readiness: summary.readiness,
-      });
-      const correction = summary.correction;
-      const returned = correction ? ` ${correctionStatus(correction).label}` : locks[summary.removalId]?.returnedBy.length ? ` ${CORRECTION_NEEDED_LABEL}` : "";
-      return `${listStatusLabel(status)}${returned}`;
+      const returnedByLock = !!locks[summary.removalId]?.returnedBy.length;
+      return deriveRemovalShownStatus({ workflow: summary, correction: summary.correction, returnedByLock }).searchText;
     },
     cell: StatusColumnCell,
   },

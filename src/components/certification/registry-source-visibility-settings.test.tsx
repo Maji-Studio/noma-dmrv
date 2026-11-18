@@ -7,8 +7,6 @@ const hookState = vi.hoisted(() => ({
 }));
 
 vi.mock("@/hooks/use-certification", () => ({
-  // Read by use-fleet through the entity-select quick-add dialogs.
-  certificationKeys: { all: ["certification"] },
   useRegistrySourceVisibility: () => ({
     data: {
       sourceVisibility: hookState.sourceVisibility,

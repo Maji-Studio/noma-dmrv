@@ -1,3 +1,11 @@
+import { listEmissionEntryDraftContenders } from "@/data-access/emission-entry-contenders";
+import { batchComponentFileLocked } from "@/lib/certification/component-file-lock";
+import { loadComponentFileReservations } from "@/data-access/component-file-reservations";
+import { groupEmissionLineFiles } from "@/lib/certification/emission-line-file-facts";
+import { listEmissionLineFilesForBatches } from "@/data-access/emission-line-files";
+import { listDocumentUploadsForDocuments } from "@/data-access/certifier-document-uploads";
+import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
+import { recordsNeedFile } from "@/lib/isometric/template-observations/file-policies";
 import type { LateEntryFacts } from "@/lib/certification/late-entry-view";
 import { mergeEntryCarryFacts } from "@/lib/certification/merge-entry-carry-facts";
 import { loadBatchEmissionEntryCarry } from "@/data-access/emission-entry-carry";
@@ -24,7 +32,7 @@ type StoredEntries = Awaited<ReturnType<typeof listEmissionEntriesForBatches>>;
 /** Shared display read for an already authorized set of batches. */
 export async function loadBatchesEmissionLines(
   ctx: OrgContext,
-  batches: readonly { id: string; removalTemplateId: string | null }[],
+  batches: readonly { id: string; removalTemplateId: string | null; productionEmissionsClaimedByRemovalId?: string | null; productionEmissionsClaimReservedBySubmissionId?: string | null }[],
   { comments = false }: { comments?: boolean } = {},
 ): Promise<Map<string, BatchEmissionLinesResult>> {
   if (!batches.length) return new Map();
@@ -41,12 +49,20 @@ export async function loadBatchesEmissionLines(
   const readyIdSet = new Set(readyIds);
   const previousIds = [...new Set(storedEntries.filter((entry) => readyIdSet.has(entry.creditBatchId))
     .map((entry) => entry.observationId))].filter((id) => !byId.has(id));
-  const [previous, automatic, storedComments, carryEntries] = await Promise.all([
+  const claimedReadyIds = batches.filter((batch) => readyIdSet.has(batch.id) && batch.productionEmissionsClaimedByRemovalId).map((batch) => batch.id);
+  const [previous, automatic, storedComments, carryEntries, lineFiles, contenders, fileReservations] = await Promise.all([
     getTemplateObservationsByIds(ctx, previousIds),
     loadBatchesEmissionAutomaticFacts(ctx, readyIds),
     comments && readyIds.length ? listEmissionLineCommentsForBatches(ctx, readyIds) : [],
     loadBatchEmissionEntryCarry(ctx, readyIds),
+    listEmissionLineFilesForBatches(ctx, readyIds),
+    // Only a claimed batch can reopen through its claiming Removal's correction window.
+    claimedReadyIds.length ? listEmissionEntryDraftContenders(ctx, claimedReadyIds, undefined, undefined, { savedOnly: true }) : [],
+    loadComponentFileReservations(ctx, batches.flatMap(batch => batch.productionEmissionsClaimReservedBySubmissionId ? [batch.productionEmissionsClaimReservedBySubmissionId] : [])),
   ]);
+  // A file Isometric already holds cannot be removed; the slot offers Replace for it instead.
+  const claimedFileIds = lineFiles.flatMap((row) => row.document && claimedReadyIds.includes(row.anchor.creditBatchId) ? [row.document.id] : []);
+  const sentDocumentIds = new Set((await listDocumentUploadsForDocuments(ctx, ISOMETRIC_PROVIDER, claimedFileIds)).map((upload) => upload.documentId));
   for (const observation of previous) byId.set(observation.id, observation);
   const entriesByBatch = new Map<string, typeof storedEntries>();
   for (const entry of storedEntries) {
@@ -66,7 +82,11 @@ export async function loadBatchesEmissionLines(
     if (!batch.removalTemplateId) return [batch.id, { status: "blocked", blocker: "unpinnedTemplate", storedEntries: stored }];
     if (!observation) return [batch.id, { status: "blocked", blocker: "templateNotFullyRead", storedEntries: stored }];
     const entries = mergeEntryCarryFacts(deriveEmissionEntryFacts(stored, observation, byId), carryEntries);
-    const lines = buildBatchEmissionLines(observation, entries, byId, automatic[batch.id], commentsByBatch.get(batch.id));
+    const recordsFileLocked = batchComponentFileLocked(batch, fileReservations, contenders);
+    // A claimed batch that is not locked is open through its Removal's correction window.
+    const recordsFileReplaceable = !!batch.productionEmissionsClaimedByRemovalId && !recordsFileLocked;
+    const lines = buildBatchEmissionLines(observation, entries, byId, { ...automatic[batch.id], recordsFileLocked, recordsFileReplaceable },
+      commentsByBatch.get(batch.id), groupEmissionLineFiles(lineFiles.filter(row => row.anchor.creditBatchId === batch.id)), sentDocumentIds);
     return [batch.id, { status: "ready", lines, storedEntries: stored }];
   }));
 }
@@ -76,8 +96,10 @@ export function buildBatchEmissionLines(
   observation: EntryObservation,
   entries: readonly (ReturnType<typeof deriveEmissionEntryFacts>[number] & LateEntryFacts)[],
   previousObservations: ReadonlyMap<string, EntryObservation | null>,
-  automaticFacts: Pick<BatchEmissionLineFacts, "automaticFigures" | "automaticRecordCounts" | "feedstockTransportCountedOn">,
+  automaticFacts: Pick<BatchEmissionLineFacts, "automaticFigures" | "automaticRecordCounts" | "feedstockTransportCountedOn" | "recordsFileLocked" | "recordsFileReplaceable">,
   comments: Awaited<ReturnType<typeof listEmissionLineCommentsForBatches>> = [],
+  lineFiles: NonNullable<BatchEmissionLineFacts["lineFiles"]> = [],
+  sentDocumentIds: ReadonlySet<string> = new Set(),
 ) {
   const currentComponents = new Set(observation.definition.groups.flatMap((group) => group.components.map((component) => component.id)));
   const commentsByComponent = new Map(comments.map((comment) => [comment.componentId, comment]));
@@ -88,6 +110,7 @@ export function buildBatchEmissionLines(
     problems: validateLineSources(observation.definition, observation.lineSources),
     enrichmentComplete: isEnrichmentComplete(observation.definition, observation.enrichment),
     ...automaticFacts,
+    lineFiles,
     entries,
   }).map((line) => {
     const component = definition.groups
@@ -113,8 +136,17 @@ export function buildBatchEmissionLines(
     // Retired entry components remain visible for re-entry, but their comments do not.
     const removedFromTemplate = !currentComponents.has(line.componentId);
     const comment = removedFromTemplate ? undefined : commentsByComponent.get(line.componentId);
+    const file = lineFiles.find(row => row.anchor.componentId === line.componentId);
     return {
       ...line,
+      lineFile: line.filePolicy === "lineFile" ? { anchorId: file?.anchor.id ?? null,
+        version: file?.anchor.version ?? null,
+        documents: (file?.documents ?? []).map((document) => ({ ...document, sent: sentDocumentIds.has(document.id) })),
+        /** No add or remove: claimed or reserved without an open correction window. */
+        locked: !!automaticFacts.recordsFileLocked,
+        /** The correction window is open and Isometric holds a file of the set, so the set can be replaced. */
+        canReplace: !!automaticFacts.recordsFileReplaceable && (file?.documents ?? []).some((document) => sentDocumentIds.has(document.id)),
+        needsFile: !automaticFacts.recordsFileLocked && recordsNeedFile(line.filePolicy, line.records?.figure?.magnitude ?? "0"), policy: line.filePolicy } : null,
       label: line.displayName,
       description: component.description,
       inputShape,
