@@ -60,6 +60,8 @@ it.each([
   { interrupt: true, shrink: false },
   { interrupt: false, shrink: true },
 ])("submits a returned Removal through claim and freshness: %j", async ({ interrupt, shrink }) => {
+  // Component-file windows read the latest sent version through the real ledger.
+  vi.mocked(ledger.getLatestSubmissionsForEntities).mockImplementation((await vi.importActual<typeof ledger>("@/data-access/certification")).getLatestSubmissionsForEntities);
   returnedEntryIds.splice(0, returnedEntryIds.length, ORIGINAL_EXTERNAL_ID);
   // Restore transaction lock exports hidden by the general orchestrator harness.
   Object.assign(await import("@/data-access/facility-durability-lock"),

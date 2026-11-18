@@ -7,7 +7,7 @@ import { readPerCorrectionUnion } from "./emission-entry-corrections";
 import type { StatementReads } from "./record-lock-lineage";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import { applications } from "@/db/schema/application";
 import { certifierRemovals, certificationSubmissions } from "@/db/schema/certification";
 import { creditBatchApplications, creditBatches } from "@/db/schema/credits";
@@ -17,7 +17,7 @@ import { requireOrgScope, type Executor } from "./utils";
 
 /** Every unsubmitted Removal is a contender, even before it acquires a ledger row.
  * forComponentFiles is a file-only projection; never use it for entry ownership/corrections. */
-export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBatchIds: string[], executor: Executor & Pick<typeof db, "selectDistinct"> = db, claimedAttempt?: { removalId: string; submissionId?: string }, { savedOnly = false, forComponentFiles = false }: { savedOnly?: boolean; forComponentFiles?: boolean } = {}): Promise<EntryContender[]> {
+export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBatchIds: string[], executor: typeof db | DbTransaction = db, claimedAttempt?: { removalId: string; submissionId?: string }, { savedOnly = false, forComponentFiles = false }: { savedOnly?: boolean; forComponentFiles?: boolean } = {}): Promise<EntryContender[]> {
   requireOrgScope(ctx);
   if (!creditBatchIds.length) return [];
   const members = await executor.select({ removalId: creditBatchApplications.removalId }).from(creditBatchApplications)
@@ -51,7 +51,7 @@ export async function listEmissionEntryDraftContenders(ctx: OrgContext, creditBa
   const lineageByBatch = await readPerCorrectionUnion(ctx, executor, rows.map((row) => row.creditBatchId), async union =>
     (await getCertifiedLineageForBatches(ctx, executor, union, statementReads, excludeSubmissionId, savedOnly)).map(row => row.recordLockRemoval));
   const facts = [...lineageByBatch.values()].flat();
-  const missing = forComponentFiles ? await registryMissingComponentFileRemovalIds(ctx, executor, ids) : new Set<string>();
+  const missing = forComponentFiles ? await registryMissingComponentFileRemovalIds(ctx, ids, executor) : new Set<string>();
   return ids.flatMap((removalId) => {
     const group = rows.filter((row) => row.removalId === removalId && !hasFreshRemovalDeletionLease(row.metadata));
     const fact = facts.find((item) => item.id === removalId);

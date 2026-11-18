@@ -156,6 +156,8 @@ it.each(["run", "distance"] as const)("detects a %s-only correction, fences the 
   vi.mocked(claims.claimSubmissionDraft).mockImplementation(realClaims.claimSubmissionDraft);
   vi.mocked(claims.getLatestSubmission).mockImplementation(realClaims.getLatestSubmission);
   vi.mocked(claims.getLatestSubmissionWithExecutor).mockImplementation(realClaims.getLatestSubmissionWithExecutor);
+  // Component-file windows read the latest sent version through the real ledger.
+  vi.mocked(ledger.getLatestSubmissionsForEntities).mockImplementation((await vi.importActual<typeof ledger>("@/data-access/certification")).getLatestSubmissionsForEntities);
   vi.mocked(claims.recordConfirmedSubmissionIdentity).mockImplementation(realClaims.recordConfirmedSubmissionIdentity);
   vi.mocked(claims.markSubmissionAttemptStarted).mockImplementation(realClaims.markSubmissionAttemptStarted);
   const realReservations = await vi.importActual<typeof reservations>("@/data-access/production-claim-reservations");

@@ -15,6 +15,7 @@ import { getTemplateObservationsByIds } from "@/data-access/removal-template-obs
 import { loadBatchesEmissionAutomaticFacts } from "@/data-access/batch-emission-automatic-figures";
 import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
 import { requireOrgFacility } from "@/data-access/utils";
+import { registryMissingComponentFileRemovalIds } from "@/data-access/component-file-corrections";
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
 import { SafeError } from "@/lib/errors";
 import type { BatchEmissionLineFacts } from "@/lib/certification/emission-lines";
@@ -70,6 +71,9 @@ export async function loadBatchEmissionContext(
     if (rollups[id]?.batch.facilityId !== facilityId) throw new SafeError("Credit batch was not found.");
   }
   const claimedBatchIds = ids.filter(id => rollups[id].batch.productionEmissionsClaimedByRemovalId);
+  // Send again: only a claimer whose sent version Isometric lost reads component files differently from entries.
+  const missingClaimers = await registryMissingComponentFileRemovalIds(ctx,
+    [...new Set(claimedBatchIds.map(id => rollups[id].batch.productionEmissionsClaimedByRemovalId!))]);
   const [storedEntries, automatic, contenders, availableApplications, lineFiles, fileReservations, fileContenders] = await Promise.all([
     listEmissionEntriesForBatches(ctx, ids),
     loadBatchesEmissionAutomaticFacts(ctx, ids),
@@ -77,7 +81,7 @@ export async function loadBatchEmissionContext(
     listEmissionEntryAvailableApplications(ctx, ids),
     listEmissionLineFilesForBatches(ctx, ids),
     loadComponentFileReservations(ctx, ids.flatMap(id => rollups[id].batch.productionEmissionsClaimReservedBySubmissionId ? [rollups[id].batch.productionEmissionsClaimReservedBySubmissionId!] : [])),
-    claimedBatchIds.length ? listEmissionEntryDraftContenders(ctx, claimedBatchIds, undefined, claimedAttempt, { forComponentFiles: true }) : [],
+    missingClaimers.size ? listEmissionEntryDraftContenders(ctx, claimedBatchIds, undefined, claimedAttempt, { forComponentFiles: true }) : undefined,
   ]);
   const carryKey = JSON.stringify([ctx.organizationId, facilityId, claimedAttempt]);
   let carryRead = carryReads?.get(carryKey);
@@ -112,7 +116,7 @@ export async function loadBatchEmissionContext(
     ));
     const entries = mergeEntryCarryFacts(deriveEmissionEntryFacts(stored, observation, previousObservations), carryContext.entries);
     result[id] = { lineFiles: groupEmissionLineFiles(lineFiles.filter(row => row.anchor.creditBatchId === id)),
-      recordsFileLocked: batchComponentFileLocked({ ...rollups[id].batch, id }, fileReservations, fileContenders), productionReservationSubmissionId: rollups[id].batch.productionEmissionsClaimReservedBySubmissionId, entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
+      recordsFileLocked: batchComponentFileLocked({ ...rollups[id].batch, id }, fileReservations, fileContenders ?? contenders), productionReservationSubmissionId: rollups[id].batch.productionEmissionsClaimReservedBySubmissionId, entries, previousObservations, automaticFigures: automatic[id].automaticFigures, contenders,
       entriesWithoutRemoval: entriesWithoutRemoval(entries, contenders, liveReservationIds, availableApplications) };
   }
   for (const contender of contenders.filter((item) => loadCorrection && item.contenderKind === "correction")) {

@@ -187,7 +187,7 @@ export async function discoverEmissionCorrectionScope(ctx: OrgContext, executor:
 }
 
 async function loadCorrectionWindows(
-  ctx: OrgContext, executor: Executor, batchId: string,
+  ctx: OrgContext, executor: DbTransaction, batchId: string,
   discovery: Awaited<ReturnType<typeof discoverEmissionCorrectionScope>>, facts: RecordLockRemoval[],
 ) {
   requireOrgScope(ctx);
@@ -201,7 +201,7 @@ async function loadCorrectionWindows(
   const baseHolders = holders(discovery.baseBatchIds);
   const windows = new Map<string, CorrectionWindow>();
   const componentFileWindows = new Set<string>();
-  const missing = await registryMissingComponentFileRemovalIds(ctx, executor, ids);
+  const missing = await registryMissingComponentFileRemovalIds(ctx, ids, executor);
   for (const fact of facts) {
     const union = [...new Set([
       ...(baseHolders.has(fact.id) ? discovery.baseBatchIds : []),

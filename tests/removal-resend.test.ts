@@ -266,6 +266,11 @@ it("reopens component-file upload after retirement while sent entry corrections 
     await expect(upload()).resolves.toMatchObject({ entityType: "emission_line", uploadStatus: "pending" });
     await expect(updateEmissionEntry(f.ctx, { id: entry.id, expectedVersion: entry.version, note: "Correction" }))
       .rejects.toMatchObject({ code: "certification_locked" });
+    // Once a newer version is sent, the lost one no longer reopens the file.
+    await db.insert(certificationSubmissions).values({ organizationId: f.ctx.organizationId, provider: "isometric",
+      submissionType: "removal", localEntityType: "removal", localEntityId: f.removal.id, version: 2, status: "submitted",
+      externalId: `remote-v2-${f.removal.id}`, submittedAt: new Date(), payloadHash: crypto.randomUUID(), payloadSnapshot: {} });
+    await expect(upload()).rejects.toMatchObject({ code: "certification_locked" });
   } finally {
     await db.delete(certifierSyncEvents).where(eq(certifierSyncEvents.organizationId, f.ctx.organizationId));
     await db.delete(certifierProjects).where(eq(certifierProjects.organizationId, f.ctx.organizationId));
