@@ -245,7 +245,7 @@ it.each(["stale", "rejected", "correction", "closed", "other-removal", "other-ba
   // Only a claimed batch with an open correction window can replace its set; this fixture holds no files.
   expect(result.lines[0].lineFile?.canReplace).toBe(false);
   expect(result.lines[0].blocker?.code).toBe(locked ? undefined : "lineMissingEvidence");
-  if (claimed) expect(listEmissionEntryDraftContenders).toHaveBeenCalledWith(ctx, ["ready"], undefined, undefined, { savedOnly: true });
+  if (claimed) expect(listEmissionEntryDraftContenders).toHaveBeenCalledWith(ctx, ["ready"], undefined, undefined, { savedOnly: true, forComponentFiles: true });
   else expect(listEmissionEntryDraftContenders).not.toHaveBeenCalled();
 });
 
