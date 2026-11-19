@@ -5,6 +5,11 @@ import { SafeError } from "@/lib/errors";
 import { compareRemovalCurrentContent } from "@/lib/certification/removal-content-comparison-core";
 import { comparisonUnavailableClause } from "@/lib/removal-correction-copy";
 
+function removalSubject(codes: readonly string[]): string {
+  const unique = [...new Set(codes)].sort();
+  return unique.length === 1 ? `Removal ${unique[0]}` : `Removals ${unique.join(", ")}`;
+}
+
 /** Must run inside withGhgVerifierSubmissionLock. Lineage/evidence writers share
  * that artifact fence, so the checked facts remain stable through provider I/O.
  * Eligibility for editing is deliberately not an input to this comparison.
@@ -12,6 +17,10 @@ import { comparisonUnavailableClause } from "@/lib/removal-correction-copy";
 export async function assertStatementRemovalsCurrent(ctx: OrgContext, statementId: string, remoteEntryIds?: readonly string[], compareMembers = true): Promise<void> {
   if (remoteEntryIds) {
     const mapped = await listNomaSentRemovalsForRemoteEntries(ctx, statementId, remoteEntryIds);
+    // Isometric decides membership by reporting period, and a sent GHG entry
+    // cannot be deleted through the API, so only Isometric can drop the old one.
+    const supersededCodes = mapped.filter(row => row.isSuperseded).map(row => row.code);
+    if (supersededCodes.length) throw new SafeError(`This GHG Statement still lists an old version of ${removalSubject(supersededCodes)} at Isometric. Ask Isometric to remove the old version from the GHG Statement, then use Sync from registry on the GHG Statements page and try again.`);
     const missing = mapped.filter(row => row.ghgStatementId !== statementId);
     if (missing.length) {
       const codes = missing.map(row => row.code).sort().join(", ");

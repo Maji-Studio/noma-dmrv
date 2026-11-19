@@ -1,7 +1,8 @@
 import { REMOVAL_MEMBERSHIP_STATUSES } from "@/lib/certification/removal-membership";
 import { coversBatches, type CoveredContenders } from "@/lib/certification/covered-contenders";
 import { getEffectiveReportingPeriodEndOn } from "./certifier-ghg-statements";
-import { and, desc, eq, isNotNull, inArray } from "drizzle-orm";
+import { and, desc, eq, gt, isNotNull, inArray, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import { certificationSubmissions, certifierRemovals, certifierGhgStatements } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -64,8 +65,19 @@ export async function getSentRemovalForComparison(ctx: OrgContext, removalId: st
 export async function listNomaSentRemovalsForRemoteEntries(ctx: OrgContext, statementId: string, externalIds: readonly string[]) {
   requireOrgScope(ctx);
   if (!externalIds.length) return [];
-  return db.selectDistinct({ id: certifierRemovals.id, code: certifierRemovals.code,
+  // Retired drafts also use superseded. Require a newer remotely sent version,
+  // independent of whether that newer entry is included in this statement.
+  const newer = alias(certificationSubmissions, "newer_removal_submission");
+  return db.selectDistinct({ isSuperseded: sql<boolean>`${and(eq(certificationSubmissions.status, "superseded"), isNotNull(newer.id))}`,
+    id: certifierRemovals.id, code: certifierRemovals.code,
     ghgStatementId: certifierRemovals.ghgStatementId }).from(certificationSubmissions)
+    .leftJoin(newer, and(eq(newer.organizationId, ctx.organizationId),
+      eq(newer.provider, certificationSubmissions.provider),
+      eq(newer.submissionType, certificationSubmissions.submissionType),
+      eq(newer.localEntityType, certificationSubmissions.localEntityType),
+      eq(newer.localEntityId, certificationSubmissions.localEntityId),
+      gt(newer.version, certificationSubmissions.version),
+      isNotNull(newer.submittedAt), isNotNull(newer.externalId)))
     .innerJoin(certifierRemovals, and(eq(certifierRemovals.organizationId, ctx.organizationId),
       eq(certifierRemovals.id, certificationSubmissions.localEntityId)))
     .innerJoin(certifierGhgStatements, and(eq(certifierGhgStatements.organizationId, ctx.organizationId),
