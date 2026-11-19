@@ -1,6 +1,6 @@
 import { logActionError } from "@/fn/action-errors";
 /** Real PostgreSQL coverage. Do not run in a sandbox without a test database. */
-import { certifierBiocharApplications, creditBatches, feedstockTypes, productionProcesses } from "@/db/schema";
+import { certifierBiocharApplications, creditBatches, feedstockTypes, productionProcesses, productionRuns, emissionEntries } from "@/db/schema";
 import { createBiocharApplicationChain } from "./helpers/biochar-application-chain";
 import { buildCreateBiocharApplicationRequest } from "@/lib/isometric/biochar-applications";
 import { IsometricApiError } from "@/lib/isometric/client";
@@ -20,6 +20,12 @@ import { REMOVAL_RESEND_OPERATION } from "@/lib/certification/removal-registry-p
 import { REMOVAL_SUBMISSION_CLAIM_POLICY } from "@/lib/isometric/utils/submission-claim";
 import { isSentRemoval } from "@/lib/record-lock";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } from "./helpers/test-org";
+import { attachEmissionLineFile } from "@/data-access/emission-line-files";
+import { updateEmissionEntry, createEmissionEntry } from "@/data-access/emission-entries";
+import { getLockedCertifiedLineageForBatches } from "@/data-access/certification-lineage-guards";
+import { loadBatchesEmissionLines } from "@/lib/read-models/batches-emission-lines";
+import { createEmissionLineFileFixture, cleanupEmissionLineFileFixture, claimEmissionLineFileFixture,
+  COMPONENT_ID, FILE_UPLOAD, FILE_STORAGE } from "./helpers/emission-line-file-fixture";
 import { insertRemovalFixture } from "./helpers/removal-fixture";
 
 vi.mock("@/fn/action-errors", () => ({ logActionError: vi.fn() }));
@@ -27,6 +33,7 @@ vi.mock("@/fn/action-errors", () => ({ logActionError: vi.fn() }));
 const remote = vi.hoisted(() => ({ get: vi.fn(), paginateAll: vi.fn() }));
 vi.mock("@/data-access/certifier-credentials", () => ({ resolveIsometricClient: vi.fn(async () => remote) }));
 
+const RESEND_ELECTRICITY_KWH = 0.5;
 const ctx = makeTestOrgContext();
 const removalIds: string[] = [];
 const facilityIds: string[] = [];
@@ -228,4 +235,45 @@ it("names multiple surviving Applications once and points to Certify", async () 
   await expect(retireMissingRemovalSubmission(ctx, first.input, async () => "missing", async () => "present"))
     .rejects.toThrow(`Applications ${codes[0]} and ${codes[1]} are still in Isometric. Delete them in Certify, then press Send again.`);
   expect(await getLatestSubmission(ctx, first.key)).toEqual(first.submission);
+});
+
+it("reopens component-file upload after retirement while sent entry corrections stay locked", async () => {
+  const f = await createEmissionLineFileFixture();
+  try {
+    await db.update(productionRuns).set({ electricityKwh: RESEND_ELECTRICITY_KWH }).where(and(
+      eq(productionRuns.organizationId, f.ctx.organizationId), eq(productionRuns.id, f.run.id),
+    ));
+    const entry = await createEmissionEntry(f.ctx, { creditBatchId: f.batch.id, componentId: COMPONENT_ID,
+      occurredOn: "2026-01-10", values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "1", unit: "kWh" }] });
+    await db.insert(certifierProjects).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id,
+      provider: "isometric", externalFacilityId: `fcl_${f.facility.id}`, externalProjectId: "project" });
+    await claimEmissionLineFileFixture(f, "claimed", { semantic: { externalProjectId: "project", inputs: [] } });
+    await db.update(emissionEntries).set({ sentByRemovalId: f.removal.id }).where(and(
+      eq(emissionEntries.organizationId, f.ctx.organizationId), eq(emissionEntries.id, entry.id),
+    ));
+    const upload = () => attachEmissionLineFile(f.ctx, { creditBatchId: f.batch.id, componentId: COMPONENT_ID, upload: FILE_UPLOAD }, FILE_STORAGE);
+    await expect(upload()).rejects.toMatchObject({ code: "certification_locked" });
+    await expect(retireMissingRemovalSubmission(f.ctx, { facilityId: f.facility.id, removalId: f.removal.id },
+      async () => "missing", async () => "missing")).resolves.toMatchObject({ prepared: true });
+    const lineage = await db.transaction(tx => getLockedCertifiedLineageForBatches(f.ctx, tx, [f.batch.id]));
+    expect(lineage.some(row => row.recordLockRemoval.id === f.removal.id)).toBe(true);
+    const lines = await loadBatchesEmissionLines(f.ctx, [{ ...f.batch,
+      removalTemplateId: f.observation.externalTemplateId, productionEmissionsClaimedByRemovalId: f.removal.id }]);
+    const read = lines.get(f.batch.id);
+    expect(read?.status).toBe("ready");
+    if (read?.status !== "ready") throw new Error("Expected readable component files");
+    expect(read.lines.find(line => line.componentId === COMPONENT_ID)?.lineFile).toMatchObject({ locked: false, needsFile: true });
+    await expect(upload()).resolves.toMatchObject({ entityType: "emission_line", uploadStatus: "pending" });
+    await expect(updateEmissionEntry(f.ctx, { id: entry.id, expectedVersion: entry.version, note: "Correction" }))
+      .rejects.toMatchObject({ code: "certification_locked" });
+    // Once a newer version is sent, the lost one no longer reopens the file.
+    await db.insert(certificationSubmissions).values({ organizationId: f.ctx.organizationId, provider: "isometric",
+      submissionType: "removal", localEntityType: "removal", localEntityId: f.removal.id, version: 2, status: "submitted",
+      externalId: `remote-v2-${f.removal.id}`, submittedAt: new Date(), payloadHash: crypto.randomUUID(), payloadSnapshot: {} });
+    await expect(upload()).rejects.toMatchObject({ code: "certification_locked" });
+  } finally {
+    await db.delete(certifierSyncEvents).where(eq(certifierSyncEvents.organizationId, f.ctx.organizationId));
+    await db.delete(certifierProjects).where(eq(certifierProjects.organizationId, f.ctx.organizationId));
+    await cleanupEmissionLineFileFixture(f);
+  }
 });

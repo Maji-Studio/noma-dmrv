@@ -6,7 +6,7 @@ import { DomainError } from "@/lib/domain-errors";
 import { effectiveFilePolicy } from "@/lib/isometric/template-observations/file-policies";
 import { entryLine } from "@/lib/certification/emission-entry-rules";
 import { componentFileLocked } from "@/lib/certification/component-file-lock";
-import { emissionCorrectionWindow } from "./emission-entry-corrections";
+import { emissionComponentFileCorrectionOpen } from "./emission-entry-corrections";
 import { lockEmissionEntryBatch } from "./emission-entry-lock";
 import { getLatestTemplateObservation } from "./removal-template-observations";
 import { nextVersion } from "./row-version";
@@ -23,7 +23,7 @@ export async function lockEmissionLineFileBatch(ctx: OrgContext, tx: DbTransacti
   if (!line || effectiveFilePolicy(line.contract) !== "lineFile")
     throw new DomainError("validation_failed", "This component does not use a credit batch file. Review its proof setting.");
   const claimingRemovalId = batch.productionEmissionsClaimedByRemovalId;
-  const correctionOpen = claimingRemovalId && emissionCorrectionWindow(ctx, tx, batch.id, claimingRemovalId);
+  const correctionOpen = claimingRemovalId && emissionComponentFileCorrectionOpen(ctx, tx, batch.id, claimingRemovalId);
   const reservationId = batch.productionEmissionsClaimReservedBySubmissionId;
   const [reservation] = reservationId ? await tx.select().from(certificationSubmissions).where(and(
     eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.id, reservationId),

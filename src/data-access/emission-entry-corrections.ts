@@ -13,9 +13,10 @@ import { loadEmissionEntryHolds } from "./emission-entry-holds";
 import { listCarryRemovalMembers } from "./emission-entry-carry-queries";
 import { getLatestTemplateObservation } from "./removal-template-observations";
 import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
+import { registryMissingComponentFileRemovalIds } from "./component-file-corrections";
 
 type CorrectionWindow = { window: RemovalEntryWindow; carried: boolean };
-type CorrectionScope = { batchIds: string[]; receiverIds: Set<string>; artifactIds: Set<string>; windows: Map<string, CorrectionWindow> };
+type CorrectionScope = { batchIds: string[]; receiverIds: Set<string>; artifactIds: Set<string>; windows: Map<string, CorrectionWindow>; componentFileWindows: Set<string> };
 const scopes = new WeakMap<DbTransaction, Map<string, CorrectionScope>>();
 const scopeKey = (ctx: OrgContext, batchId: string) => `${ctx.organizationId}:${batchId}`;
 
@@ -28,9 +29,9 @@ export async function lockEmissionCorrectionScope(ctx: OrgContext, tx: DbTransac
   const { batchIds } = discovery;
   const lineage = await getLockedCertifiedLineageForBatches(ctx, tx, batchIds);
   const facts = lineage.map((row) => row.recordLockRemoval);
-  const windows = await loadCorrectionWindows(ctx, tx, batchId, discovery, facts);
+  const { windows, componentFileWindows } = await loadCorrectionWindows(ctx, tx, batchId, discovery, facts);
   const cache = scopes.get(tx) ?? new Map<string, CorrectionScope>();
-  cache.set(key, { batchIds, receiverIds: new Set(discovery.receiverUnions.keys()), windows, artifactIds: new Set(facts.flatMap((fact) => [`removal:${fact.id}`, ...fact.statements.map((statement) => `statement:${statement.id}`)])) });
+  cache.set(key, { batchIds, receiverIds: new Set(discovery.receiverUnions.keys()), windows, componentFileWindows, artifactIds: new Set(facts.flatMap((fact) => [`removal:${fact.id}`, ...fact.statements.map((statement) => `statement:${statement.id}`)])) });
   scopes.set(tx, cache);
 }
 
@@ -47,7 +48,10 @@ export async function revalidateEmissionCorrectionScope(ctx: OrgContext, tx: DbT
   if (facts.some((fact) => !scope.artifactIds.has(`removal:${fact.id}`) || fact.statements.some((statement) => !scope.artifactIds.has(`statement:${statement.id}`)))) {
     throw new CertificationLineageChangedError();
   }
-  const windows = await loadCorrectionWindows(ctx, tx, batchId, discovery, facts);
+  const { windows, componentFileWindows } = await loadCorrectionWindows(ctx, tx, batchId, discovery, facts);
+  for (const id of scope.componentFileWindows) {
+    if (!componentFileWindows.has(id)) scope.componentFileWindows.delete(id);
+  }
   for (const id of scope.windows.keys()) {
     if (!windows.has(id)) scope.windows.delete(id);
   }
@@ -57,6 +61,12 @@ export async function revalidateEmissionCorrectionScope(ctx: OrgContext, tx: DbT
 export function emissionCorrectionWindow(ctx: OrgContext, tx: DbTransaction, batchId: string, removalId: string) {
   requireOrgScope(ctx);
   return scopes.get(tx)?.get(scopeKey(ctx, batchId))?.windows.get(removalId)?.window;
+}
+
+/** Component files have their own Send again exception; entry windows remain unchanged. */
+export function emissionComponentFileCorrectionOpen(ctx: OrgContext, tx: DbTransaction, batchId: string, removalId: string) {
+  requireOrgScope(ctx);
+  return scopes.get(tx)?.get(scopeKey(ctx, batchId))?.componentFileWindows.has(removalId) === true;
 }
 
 /** Membership is captured under the same artifact locks as correction eligibility. */
@@ -177,7 +187,7 @@ export async function discoverEmissionCorrectionScope(ctx: OrgContext, executor:
 }
 
 async function loadCorrectionWindows(
-  ctx: OrgContext, executor: Executor, batchId: string,
+  ctx: OrgContext, executor: DbTransaction, batchId: string,
   discovery: Awaited<ReturnType<typeof discoverEmissionCorrectionScope>>, facts: RecordLockRemoval[],
 ) {
   requireOrgScope(ctx);
@@ -190,6 +200,8 @@ async function loadCorrectionWindows(
   const holders = (union: string[]) => new Set(members.filter(row => union.includes(row.creditBatchId)).map(row => row.removalId));
   const baseHolders = holders(discovery.baseBatchIds);
   const windows = new Map<string, CorrectionWindow>();
+  const componentFileWindows = new Set<string>();
+  const missing = await registryMissingComponentFileRemovalIds(ctx, ids, executor);
   for (const fact of facts) {
     const union = [...new Set([
       ...(baseHolders.has(fact.id) ? discovery.baseBatchIds : []),
@@ -197,12 +209,18 @@ async function loadCorrectionWindows(
     ])];
     if (!union.length) continue;
     const groupHolders = holders(union);
-    if (!isRemovalCorrectionWindowOpen(fact, facts.filter(holder => groupHolders.has(holder.id)))) continue;
+    const shared = facts.filter(holder => groupHolders.has(holder.id));
+    // Same rule for both; only a Removal Isometric lost has its own checks waived, and only for component files.
+    const fileOpen = isRemovalCorrectionWindowOpen(fact, shared, { ownReturnedNotRequired: missing.has(fact.id) });
+    const entryOpen = isRemovalCorrectionWindowOpen(fact, shared);
+    if (!fileOpen && !entryOpen) continue;
     const group = members.filter(row => row.removalId === fact.id);
     const window = deriveRemovalEntryWindow(group, group.map(row => row.applicationDate));
-    if (window) windows.set(fact.id, { window, carried: !group.some(row => row.creditBatchId === batchId) });
+    if (!window) continue;
+    if (fileOpen) componentFileWindows.add(fact.id);
+    if (entryOpen) windows.set(fact.id, { window, carried: !group.some(row => row.creditBatchId === batchId) });
   }
-  return windows;
+  return { windows, componentFileWindows };
 }
 
 /** Read once per correction union, retaining a result for each distinct batch. */

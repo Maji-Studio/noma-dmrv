@@ -1,5 +1,6 @@
 import { loadComponentFileReservations } from "@/data-access/component-file-reservations";
 vi.mock("@/data-access/component-file-reservations", () => ({ loadComponentFileReservations: vi.fn() }));
+vi.mock("@/data-access/component-file-corrections", () => ({ registryMissingComponentFileRemovalIds: vi.fn(async () => new Set<string>()) }));
 import { listEmissionLineFilesForBatches } from "@/data-access/emission-line-files";
 import { removalEntryOwner } from "@/lib/certification/removal-emission-contributions";
 import { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
