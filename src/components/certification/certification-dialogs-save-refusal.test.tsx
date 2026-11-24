@@ -120,7 +120,7 @@ describe("MethodBPrerequisitesSetup refusals", () => {
 });
 
 describe("FacilityCertifierForm refusals", () => {
-  const renderForm = (isProduction = false) =>
+  const renderForm = () =>
     render(
       <FacilityCertifierForm
         facilityId={FACILITY_ID}
@@ -131,7 +131,7 @@ describe("FacilityCertifierForm refusals", () => {
           },
           availableProjects: [{ id: "prj_test", name: "Test project" }],
           linkHints: [],
-          isProduction,
+          isProduction: false,
         } as never}
       />,
     );
