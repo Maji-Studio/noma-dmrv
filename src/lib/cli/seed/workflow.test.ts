@@ -218,17 +218,6 @@ describe("Mafinga operator-action seed", () => {
     expect(saveFacilityCertifierMapping).not.toHaveBeenCalled();
   });
 
-  it("never confirms the production prompt on the operator's behalf", async () => {
-    stubCredentialedRegistry();
-    vi.stubEnv("ISOMETRIC_DEMO_FACILITY_ID", "fcl_demo");
-    vi.mocked(saveFacilityCertifierMapping).mockImplementationOnce(async (input) => {
-      expect(input.confirmProduction).toBe(false);
-      return { success: true, data: {} } as Awaited<ReturnType<typeof saveFacilityCertifierMapping>>;
-    });
-    await seedRegistryAndTypes(randomUUID(), new SeedCounts());
-    expect(saveFacilityCertifierMapping).toHaveBeenCalledTimes(1);
-  });
-
   it("rejects incomplete readings imports instead of claiming success", async () => {
     vi.mocked(importProductionRunReadingsFromDocumentFn).mockResolvedValueOnce({ success: true, data: { insertedRows: 0 } } as Awaited<ReturnType<typeof importProductionRunReadingsFromDocumentFn>>);
     await expect(seedReadings(randomUUID(), new Date("2026-09-08T05:00:00Z"), new SeedCounts())).rejects.toThrow("expected 96 inserted rows, got 0");

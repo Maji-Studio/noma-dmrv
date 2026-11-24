@@ -145,15 +145,6 @@ describe("FacilityCertifierForm refusals", () => {
     await expectAtField(message, "externalFacilityId-error");
   });
 
-  it("shows the production confirmation refusal under the checkbox", async () => {
-    // The shape saveFacilityCertifierMapping returns when the box is not ticked in production.
-    const message = "Confirm you want to save against the production Isometric environment.";
-    mocks.saveMapping.mockRejectedValue(refusal("confirmProduction", message));
-    const view = renderForm(true);
-    fireEvent.submit(view.container.querySelector("form")!);
-    await expectAtField(message);
-  });
-
   it("keeps a registry failure in the footer with its exact text", async () => {
     mocks.saveMapping.mockRejectedValue(new Error("Isometric did not respond."));
     const view = renderForm();

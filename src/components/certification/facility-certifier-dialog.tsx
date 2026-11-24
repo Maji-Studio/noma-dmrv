@@ -25,7 +25,6 @@ import type { FacilityCertifierMapping } from "@/fn/certification/facility-mappi
 import { useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { DEFAULT_PROTOCOL_SLUG } from "@/config/certification";
-import { ProductionConfirmation } from "./production-confirmation";
 import { ConfirmActionDialog } from "./confirm-action-dialog";
 import { Notice } from "@/components/ui/notice";
 
@@ -80,14 +79,13 @@ export function FacilityCertifierForm({
   onCancel,
   presentation,
 }: FacilityCertifierFormProps) {
-  const { mapping, availableProjects, linkHints, isProduction } = loaderData;
+  const { mapping, availableProjects, linkHints } = loaderData;
 
   const defaultValues: SaveMappingInput = {
     facilityId,
     externalProjectId: mapping?.externalProjectId ?? "",
     protocolSlug: mapping?.protocolSlug ?? DEFAULT_PROTOCOL_SLUG,
     externalFacilityId: mapping?.externalFacilityId ?? "",
-    confirmProduction: false,
   };
 
   const {
@@ -266,20 +264,6 @@ export function FacilityCertifierForm({
               {...register("externalFacilityId")}
             />
           </FormField>
-
-          {isProduction && (
-            <ProductionConfirmation
-              actionLabel={
-                mapping
-                  ? "update this facility's production Isometric link"
-                  : "link this facility to the production Isometric registry"
-              }
-              consequenceLabel="Future submissions from this facility will use production."
-              registerProps={register("confirmProduction")}
-              errorMessage={errors.confirmProduction?.message}
-            />
-          )}
-
         </>
       )}
 
