@@ -485,8 +485,8 @@ distances. Lists have no ETags; location detail reads and writes use the locatio
 version. See [party locations](./api-master-data.md#party-locations) for distance
 inputs, archived destinations, defaults, fills and delete refusals. Orders expose
 list and id-or-code reads under `orders:read`. Both read scopes are on by default.
-Storage locations use representation revision 4, exposing `formulationId`,
-`stockMode` and `drawOrder`, and accept `type` and `formulationId` list filters.
+Storage locations use representation revision 5, exposing `formulationId`,
+`stockMode`, `drawOrder` and `uncarbonized`, and accept `type` and `formulationId` list filters.
 For feedstock bins, `mix` means Mass weighted over remaining deliveries; `split`
 means In order, using `oldest_first` or `newest_first`. Feedstock bins have no sub-bins.
 
