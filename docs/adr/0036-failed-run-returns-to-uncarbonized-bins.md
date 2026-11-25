@@ -1,7 +1,6 @@
 # Failed-run returns to uncarbonized bins
 
-Status: Accepted. The storage substrate and writer are implemented separately
-from lifecycle guards, actions and operator UI.
+Status: Accepted.
 
 ## Decision
 
@@ -46,18 +45,23 @@ history. Registry return can release Sent but cannot release stock dependencies.
 
 ## Lifecycle contract
 
-The completed feature must refuse reopening and material-basis changes while
+The lifecycle guards refuse reopening and material-basis changes while
 active returns exist, including indirect allocation rewrites. Unchanged
-allocations may proceed. Deletion must be refused whenever return history exists,
+allocations may proceed. Deletion is refused whenever return history exists,
 even after full reversal. Reversing every return releases the active dependency,
 not its retained audit evidence. The existing Failed to Cancelled refusal stays.
-Lifecycle and record-lock wiring are a separate implementation step and must land
-before exposing the command through actions or UI.
 
 ## Boundaries
 
 No re-pyrolysis, transfers, emissions or credit-batch membership changes are
 introduced. Future transfers need paired conserved legs carrying the same
 provenance. Return, reversal and replacement remain linked movement events;
-a return is never labeled intake or stock count. Public REST/MCP commands and
-run material-balance/Sankey presentation are separate work.
+a return is never labeled intake or stock count. Public REST/MCP commands remain separate work.
+
+## Rejected alternative and reuse
+
+A separate reverse-lineage table was rejected: it would duplicate movement facts
+and require a second stock and provenance ledger. The #33 projection reads the
+`bin_movements` return rows through `source_production_run_id` and
+`feedstock_dry_delta_kg`. The #34 transfers reuse the same table and columns for
+paired conserved legs, rather than introducing a separate lineage store.

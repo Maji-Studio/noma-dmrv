@@ -1,3 +1,4 @@
+import { productionRunReturnKeys } from "./production-run-return-query-keys";
 import type { QueryClient } from "@tanstack/react-query";
 import { activityKeys } from "./activity-query-keys";
 import { creditBatchKeys } from "./credit-batch-query-keys";
@@ -14,6 +15,7 @@ import { productionRunKeys } from "./use-production-runs";
 export function invalidateAfterFeedstockReplan(queryClient: QueryClient) {
   for (const queryKey of [
     productionRunKeys.all,
+    productionRunReturnKeys.all,
     creditBatchKeys.all,
     chainOfCustodyKeys.all,
     certificationKeys.all,

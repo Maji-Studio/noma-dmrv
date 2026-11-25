@@ -1,7 +1,7 @@
 import { toReturnMovement } from '@/lib/production-run-returns/movement';
 import { and, eq, sql } from 'drizzle-orm';
 import { db, type DbTransaction } from '@/db';
-import { binMovements } from '@/db/schema';
+import { binMovements, type BinMovement } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { retryTransaction } from '@/lib/db/transaction-retry';
 import { DomainError } from '@/lib/domain-errors';
@@ -51,15 +51,16 @@ export async function correctProductionRunReturnInTransaction(ctx: OrgContext, t
     inputSnapshot: { ...original.inputSnapshot, version: RETURN_SNAPSHOT_VERSION, actorId: ctx.userId,
       payloadHash: requestFingerprint(payload), correction: payload, kind: 'reversal' },
   }).returning();
+  let replacement: BinMovement | null = null;
   if (input.replacement) {
     const refreshed = await getProductionRunReturnAllowance(ctx, input.sourceProductionRunId, tx);
-    await insertReturn(ctx, tx, refreshed, input.replacement, {
+    replacement = await insertReturn(ctx, tx, refreshed, input.replacement, {
       idempotencyKey: `return-replacement:${requestFingerprint({ idempotencyKey })}`, payload,
       correctsMovementId: original.id, createdAt,
     });
   }
   await assertReturnBalances(ctx, tx, affectedBins);
-  options.capture?.(source.run.id, toReturnMovement(original), { reversal: toReturnMovement(reversal), replacement: input.replacement });
+  options.capture?.(source.run.id, toReturnMovement(original), { reversal: toReturnMovement(reversal), replacement: replacement ? toReturnMovement(replacement) : null });
   return reversal;
 }
 

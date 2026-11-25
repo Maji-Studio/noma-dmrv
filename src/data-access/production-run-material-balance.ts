@@ -1,3 +1,4 @@
+import { activeReturns, RETURN_MOVEMENT_TYPES } from '@/lib/production-run-returns/active-returns';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
 import { binMovements, productionRuns, storageLocations } from '@/db/schema';
@@ -18,17 +19,16 @@ export async function getProductionRunMaterialBalance(ctx: OrgContext, runId: st
   }).from(productionRuns)
     .leftJoin(binMovements, and(eq(binMovements.organizationId, ctx.organizationId),
       eq(binMovements.sourceProductionRunId, productionRuns.id),
-      inArray(binMovements.movementType, ['failed_run_return', 'failed_run_return_reversal'])))
+      inArray(binMovements.movementType, [...RETURN_MOVEMENT_TYPES])))
     .leftJoin(storageLocations, and(eq(storageLocations.organizationId, ctx.organizationId),
       eq(storageLocations.id, binMovements.storageLocationId)))
     .where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, runId)))
     .orderBy(binMovements.occurredAt, binMovements.postingSequence);
   const run = rows[0];
   if (!run) throw new SafeError('Production run not found.');
-  const reversed = new Set(rows.flatMap(({ movement }) =>
-    movement?.movementType === 'failed_run_return_reversal' && movement.correctsMovementId ? [movement.correctsMovementId] : []));
+  const activeIds = new Set(activeReturns(rows.flatMap(({ movement }) => movement ? [movement] : [])).map(row => row.id));
   const returns = rows.flatMap(({ movement, destinationCode, destinationName }) => {
-    if (!movement || movement.movementType !== 'failed_run_return' || reversed.has(movement.id)) return [];
+    if (!movement || !activeIds.has(movement.id)) return [];
     return [{ movementId: movement.id, storageLocationId: movement.storageLocationId, destinationCode, destinationName,
       wetMassKg: movement.massDeltaKg, dryMassKg: movement.feedstockDryDeltaKg!, moistureRatio: movement.moistureRatioUsed!,
       occurredAt: movement.occurredAt!, createdAt: movement.createdAt }];

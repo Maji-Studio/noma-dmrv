@@ -1,4 +1,4 @@
-import { toReturnMovement } from '@/lib/production-run-returns/movement';
+import { toReturnMovement, type ReturnMovement } from '@/lib/production-run-returns/movement';
 import { db, type DbTransaction } from '@/db';
 import { binMovements, type BinMovement } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
@@ -6,15 +6,18 @@ import { retryTransaction } from '@/lib/db/transaction-retry';
 import { assertReturnTime, remainingReturnDryKg, returnMassBasis, RETURN_SNAPSHOT_VERSION } from '@/lib/production-run-returns/mass';
 import { recordProductionRunReturnSchema, type RecordProductionRunReturnInput, type ReturnMeasurement } from '@/schemas/production-run-returns';
 import { findMovementRequest, lockMovementRequest, requestFingerprint } from '../bin-movement-requests';
-import { getFeedstockBinStock } from '../feedstock-bin-ledger';
+import { replayFeedstockBinStock } from '../feedstock-bin-ledger';
 import { SafeError } from '@/lib/errors';
 import { requireOrgScope } from '../utils';
 import { lockReturnSource } from './locks';
 import { validateReturnDestination } from './queries';
 
+/** A boundary before every event: replay validates the bin's whole history, empty-at-switch checks included. */
+const WHOLE_HISTORY_BOUNDARY = { occurredAt: '' } as const;
+
 export const RETURN_REPLAY_CONFLICT = 'Return was not saved because this request already has different values. Start a new return entry.';
 /** The operation runner supplies its transactional capture. Replays never capture again. */
-export interface ReturnWriteOptions { capture?: (sourceRunId: string, before: object | null, after: object) => void }
+export interface ReturnWriteOptions { capture?: (sourceRunId: string, before: ReturnMovement | null, after: ReturnMovement | { reversal: ReturnMovement; replacement: ReturnMovement | null }) => void }
 export type LockedReturnSource = Awaited<ReturnType<typeof lockReturnSource>>;
 
 export async function insertReturn(ctx: OrgContext, tx: DbTransaction, source: LockedReturnSource, input: ReturnMeasurement,
@@ -42,7 +45,7 @@ export async function insertReturn(ctx: OrgContext, tx: DbTransaction, source: L
 export async function assertReturnBalances(ctx: OrgContext, tx: DbTransaction, binIds: readonly string[]) {
   requireOrgScope(ctx);
   for (const binId of new Set(binIds)) {
-    const stock = await getFeedstockBinStock(ctx, binId, tx);
+    const stock = await replayFeedstockBinStock(ctx, binId, tx, { boundary: WHOLE_HISTORY_BOUNDARY });
     if (stock.currentWetKg < 0 || stock.entries.some(entry => entry.afterWetKg < 0)) {
       throw new SafeError('Return was not saved. A bin would have negative wet stock. Review its movement history.');
     }

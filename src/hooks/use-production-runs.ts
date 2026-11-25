@@ -1,3 +1,4 @@
+import { productionRunReturnKeys } from "./production-run-return-query-keys";
 import { EXACT_ID_FILTER_MAX as EXACT_ID_CHUNK_SIZE } from "@/lib/exact-id-filter";
 import { useExactIdChunkedList } from "./exact-id-chunked-list";
 import { useIntentMutation } from "./use-create-intent-key";
@@ -291,6 +292,7 @@ export function useUpdateProductionRun(
       return { previousRun, previousLists };
     },
     onSuccess: async (data, variables, context) => {
+      void queryClient.invalidateQueries({ queryKey: productionRunReturnKeys.all });
       patchListCachesWithSavedRow(queryClient, productionRunKeys.lists(), data);
       const previousFacilityId = context?.previousRun?.facilityId;
       // Update cache with actual server data

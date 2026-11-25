@@ -131,7 +131,7 @@ export async function deleteProductionRunInTransaction(
     ), "certification_locked");
 
     if ((await getProductionRunReturnHistory(ctx, productionRunId, tx)).length) {
-      throw new DomainError("certification_locked", "This production run has return history and cannot be deleted. Keep it for the return audit trail.");
+      throw inUseDeleteRefusal(`Production run ${locked.code} ${IN_USE_DELETE_MARKER} it has return history. Keep it for the return audit trail.`, ["productionRunId"], { code: "certification_locked" });
     }
 
     const dependentProduct = await getProductionRunDependentProduct(

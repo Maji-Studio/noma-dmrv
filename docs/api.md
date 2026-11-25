@@ -903,6 +903,7 @@ as name clashes, do not carry it. HTTP status is 409 for all of them.
 | Formulation, feedstock type | Their dependents | `conflict` | the record's own id field | Dependent codes (for example `orderCodes`) where the refusal lists them |
 | Feedstock | Production runs | `certification_locked` | `/feedstockId` | None |
 | Production run | Biochar products, credit batches, or both | `conflict` | `/productionRunId` | None; the top-level `conflict` is the first dependent record |
+| Production run | Return history, including fully reversed returns | `certification_locked` | `/productionRunId` | None |
 | Order | Deliveries, including archived ones | `certification_locked` | `/orderId` | `deliveryCode`, `deliveryId` (the delivery with the lowest code); `deliveries` (`{ id, code }` for each delivery the message names, up to the name cap, in code order) |
 | Reactor | Production runs | `conflict` | `/reactorId` | None; Server Actions only, no REST or MCP delete |
 

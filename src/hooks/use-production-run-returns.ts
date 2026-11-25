@@ -23,12 +23,8 @@ import {
 } from "@/fn/production-run-returns";
 import type { CorrectProductionRunReturnInput, RecordProductionRunReturnInput } from "@/schemas/production-run-returns";
 
-export const productionRunReturnKeys = {
-  all: ["productionRunReturns"] as const,
-  rows: (runId: string) => [...productionRunReturnKeys.all, "rows", runId] as const,
-  eligibility: (runId: string) => [...productionRunReturnKeys.all, "eligibility", runId] as const,
-  balance: (runId: string) => [...productionRunReturnKeys.all, "balance", runId] as const,
-};
+import { productionRunReturnKeys } from "./production-run-return-query-keys";
+export { productionRunReturnKeys } from "./production-run-return-query-keys";
 
 /** The returns of one run, newest entries last, with who recorded each and what corrected it. */
 export function useProductionRunReturns(runId: string, enabled = true) {

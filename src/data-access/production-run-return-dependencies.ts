@@ -1,3 +1,4 @@
+import { activeReturns, RETURN_MOVEMENT_TYPES } from '@/lib/production-run-returns/active-returns';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { DbTransaction } from '@/db';
 import { binMovements } from '@/db/schema';
@@ -13,8 +14,7 @@ export async function readActiveProductionRunReturns(
   const history = await reader.select().from(binMovements).where(and(
     eq(binMovements.organizationId, ctx.organizationId),
     inArray(binMovements.sourceProductionRunId, [...runIds]),
-    inArray(binMovements.movementType, ['failed_run_return', 'failed_run_return_reversal']),
+    inArray(binMovements.movementType, [...RETURN_MOVEMENT_TYPES]),
   ));
-  const reversed = new Set(history.filter(row => row.movementType === 'failed_run_return_reversal').map(row => row.correctsMovementId));
-  return history.filter(row => row.movementType === 'failed_run_return' && !reversed.has(row.id));
+  return activeReturns(history);
 }

@@ -44,7 +44,6 @@ export const ITEM_ICONS: Record<WaterfallItemKey, Icon> = {
   conversion_loss: FlameIcon,
   unallocated_output: ArrowSquareOutIcon,
   in_storage: WarehouseIcon,
-  dumped_back: WarehouseIcon,
   applied: MapPinIcon,
 };
 

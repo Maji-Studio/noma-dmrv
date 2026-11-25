@@ -730,7 +730,7 @@ export async function updateProductionRunInTransaction(
           data,
         );
 
-      if (data.facilityId !== undefined && normalizedFeedstockDraws === undefined) {
+      if (!feedstockDrawsChanged && (lockedTargetFacilityId !== locked.facilityId || lockedTargetStatus !== locked.status)) {
         await validateProductionRunFeedstockDrawSources(
           ctx,
           tx,

@@ -1,3 +1,4 @@
+import { returnActivitySnapshot } from '@/lib/production-run-returns/activity';
 import { toReturnMovement, type ReturnMovement } from '@/lib/production-run-returns/movement';
 import type { BinMovement } from '@/db/schema';
 import { recordProductionRunReturnInTransaction, correctProductionRunReturnInTransaction } from '@/data-access/production-run-returns';
@@ -11,7 +12,11 @@ async function captureReturn(scope: OperationScope, write: (options: ReturnWrite
   let captured = false;
   const result = await write({ capture: (sourceRunId, before, after) => {
     captured = true;
-    scope.activity.capture(sourceRunId, before ? { ...before } : null, { ...after });
+    scope.activity.capture(sourceRunId, before ? returnActivitySnapshot(before, 'returned') : null,
+      'reversal' in after
+        ? { ...returnActivitySnapshot(before, 'returned'), ...returnActivitySnapshot(after.reversal, 'reversed'),
+          ...returnActivitySnapshot(after.replacement, 'replacement') }
+        : returnActivitySnapshot(after, 'returned'));
   } });
   if (!captured) scope.activity.skip();
   else {

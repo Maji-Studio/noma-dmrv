@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { binMovements, facilities, feedstocks, feedstockTypes, productionRunFeedstocks, productionRunFeedstockDraws, productionRuns, storageLocations, users } from '@/db/schema';
+import { binMovements, feedstockBinMethodChanges, facilities, feedstocks, feedstockTypes, productionRunFeedstocks, productionRunFeedstockDraws, productionRuns, storageLocations, users } from '@/db/schema';
 import { recordProductionRunReturn, recordProductionRunReturnInTransaction, correctProductionRunReturn, getProductionRunReturnHistory } from '@/data-access/production-run-returns';
 import { deriveLaneStock } from '@/data-access/lane-stock-derivation';
 import { getFeedstockBinStock, replayFeedstockBinStock } from '@/data-access/feedstock-bin-ledger';
@@ -41,19 +41,19 @@ function correction(originalId: string, replacement: RecordProductionRunReturnIn
 }
 
 beforeEach(async () => {
-  fixture = await createProductionRunFixture('return');
-  foreign = await createProductionRunFixture('return-foreign');
+  fixture = await createProductionRunFixture(`return-${crypto.randomUUID()}`);
+  foreign = await createProductionRunFixture(`return-foreign-${crypto.randomUUID()}`);
   actorId = `return-actor-${crypto.randomUUID()}`;
   await db.insert(users).values({ id: actorId, name: 'Return test actor', email: `${actorId}@example.test` });
   fixture.ctx.userId = actorId;
   binId = await taggedBin();
   secondBinId = await taggedBin();
   const [intake] = await db.insert(feedstocks).values({ organizationId: fixture.ctx.organizationId, facilityId: fixture.facilityId,
-    supplierId: fixture.supplierId, storageLocationId: fixture.binId, feedstockTypeId: fixture.feedstockTypeId, code: 'RETURN-INTAKE',
+    supplierId: fixture.supplierId, storageLocationId: fixture.binId, feedstockTypeId: fixture.feedstockTypeId, code: `RETURN-INTAKE-${crypto.randomUUID()}`,
     deliveryDate: new Date('2026-01-01T00:00:00Z'), status: 'complete', massWetKg: CONSUMED_WET_KG, massDryKg: 50, moistureContentPercent: 50 }).returning();
   intakeId = intake.id;
   const [run] = await db.insert(productionRuns).values({ organizationId: fixture.ctx.organizationId, facilityId: fixture.facilityId,
-    reactorId: fixture.reactorId, code: 'RETURN-RUN', status: 'failed', startTime: new Date('2026-01-02T09:00:00Z'),
+    reactorId: fixture.reactorId, code: `RETURN-RUN-${crypto.randomUUID()}`, status: 'failed', startTime: new Date('2026-01-02T09:00:00Z'),
     endTime: new Date('2026-01-02T10:00:00Z'), feedstockWetMassKg: CONSUMED_WET_KG, feedstockMoisturePercent: 20, feedstockMassDryKg: CONSUMED_DRY_KG }).returning();
   runId = run.id;
   await db.insert(productionRunFeedstockDraws).values({ organizationId: fixture.ctx.organizationId, productionRunId: runId, storageLocationId: fixture.binId, wetMassKg: CONSUMED_WET_KG });
@@ -62,6 +62,7 @@ beforeEach(async () => {
 afterEach(async () => {
   if (fixture) {
     await db.delete(binMovements).where(eq(binMovements.organizationId, fixture.ctx.organizationId));
+    await db.delete(feedstockBinMethodChanges).where(eq(feedstockBinMethodChanges.organizationId, fixture.ctx.organizationId));
     await removeIntakeFixture(fixture);
   }
   if (foreign) await removeIntakeFixture(foreign);
@@ -69,6 +70,23 @@ afterEach(async () => {
 }, TIMEOUT_MS);
 
 describe('failed-run return writer and ledger', { timeout: TIMEOUT_MS }, () => {
+  it.each(['return', 'correction'] as const)('refuses a backdated %s that makes a historical In order switch nonempty', async kind => {
+    await db.update(storageLocations).set({ stockMode: 'mix' }).where(eq(storageLocations.id, binId));
+    await recordProductionRunReturn(fixture.ctx, input());
+    await createBinMovement(fixture.ctx, { storageLocationId: binId, lane: 'feedstock', movementType: 'loss', massDeltaKg: -50,
+      occurredAt: new Date('2026-01-02T14:00:00Z'), reason: 'Empty measured pile', idempotencyKey: crypto.randomUUID() });
+    await db.insert(feedstockBinMethodChanges).values({ organizationId: fixture.ctx.organizationId, storageLocationId: binId,
+      previousStockMode: 'mix', stockMode: 'split', previousDrawOrder: 'oldest_first', drawOrder: 'oldest_first',
+      effectiveAt: new Date('2026-01-02T16:00:00Z'), createdBy: actorId });
+    await db.update(storageLocations).set({ stockMode: 'split' }).where(eq(storageLocations.id, binId));
+    const late = await recordProductionRunReturn(fixture.ctx, input({ wetMassKg: 10, occurredAt: '2026-01-02T17:00:00Z' }));
+    const backdated = input({ wetMassKg: 20, occurredAt: '2026-01-02T15:00:00Z' });
+    await expect(kind === 'return' ? recordProductionRunReturn(fixture.ctx, backdated)
+      : correctProductionRunReturn(fixture.ctx, correction(late.id, backdated))).rejects.toThrow('switched to In order');
+    expect(await getProductionRunReturnHistory(fixture.ctx, runId)).toHaveLength(2);
+    expect((await getFeedstockBinStock(fixture.ctx, binId)).currentWetKg).toBe(10);
+  });
+
   it('adds stock to an empty tagged bin with frozen provenance and matching aggregate/timeline', async () => {
     const saved = await recordProductionRunReturn(fixture.ctx, input({ wetMassKg: 160, moisturePercent: 50 }));
     expect(saved).toMatchObject({ createdBy: actorId, massDeltaKg: 160, feedstockDryDeltaKg: 80, sourceProductionRunId: runId });
@@ -131,13 +149,13 @@ describe('failed-run return writer and ledger', { timeout: TIMEOUT_MS }, () => {
   });
 
   it.each(['untagged', 'untyped', 'wrong-type', 'wrong-lane', 'archived', 'wrong-facility'] as const)('refuses %s destinations', async mode => {
-    const [otherType] = await db.insert(feedstockTypes).values({ organizationId: fixture.ctx.organizationId, code: 'RETURN-OTHER', name: 'Other', category: 'forestry', usage: 'pyrolysis' }).returning();
+    const [otherType] = await db.insert(feedstockTypes).values({ organizationId: fixture.ctx.organizationId, code: `RETURN-OTHER-${crypto.randomUUID()}`, name: 'Other', category: 'forestry', usage: 'pyrolysis' }).returning();
     const patch = mode === 'untagged' ? { uncarbonized: false } : mode === 'untyped' ? { feedstockTypeId: null }
       : mode === 'wrong-type' ? { feedstockTypeId: otherType.id } : mode === 'wrong-lane' ? { type: 'biochar_bin' as const, uncarbonized: false }
         : mode === 'archived' ? { archivedAt: new Date() } : { facilityId: foreign.facilityId };
     if (mode === 'wrong-facility') {
       const [other] = await db.select().from(facilities).where(eq(facilities.id, foreign.facilityId));
-      const [otherFacility] = await db.insert(facilities).values({ ...other, id: crypto.randomUUID(), organizationId: fixture.ctx.organizationId, code: 'RETURN-OTHER-FAC' }).returning();
+      const [otherFacility] = await db.insert(facilities).values({ ...other, id: crypto.randomUUID(), organizationId: fixture.ctx.organizationId, code: `RETURN-OTHER-FAC-${crypto.randomUUID()}` }).returning();
       await db.update(storageLocations).set({ facilityId: otherFacility.id }).where(eq(storageLocations.id, binId));
       await expect(recordProductionRunReturn(fixture.ctx, input())).rejects.toThrow('same type and facility');
     } else {
@@ -190,7 +208,7 @@ describe('failed-run return writer and ledger', { timeout: TIMEOUT_MS }, () => {
 
   it('refuses mixed types while allowing multiple allocations of one type', async () => {
     const [intake] = await db.select().from(feedstocks).where(eq(feedstocks.id, intakeId));
-    const [second] = await db.insert(feedstocks).values({ ...intake, id: crypto.randomUUID(), code: 'RETURN-SECOND', massWetKg: 50, massDryKg: 25 }).returning();
+    const [second] = await db.insert(feedstocks).values({ ...intake, id: crypto.randomUUID(), code: `RETURN-SECOND-${crypto.randomUUID()}`, massWetKg: 50, massDryKg: 25 }).returning();
     await db.update(productionRunFeedstocks).set({ wetMassUsedKg: 50 }).where(eq(productionRunFeedstocks.productionRunId, runId));
     await db.insert(productionRunFeedstocks).values({ organizationId: fixture.ctx.organizationId, productionRunId: runId, feedstockId: second.id, wetMassUsedKg: 50 });
     const original = await recordProductionRunReturn(fixture.ctx, input());

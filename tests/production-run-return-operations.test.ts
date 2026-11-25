@@ -19,20 +19,20 @@ let input: RecordProductionRunReturnInput;
 let actorId: string;
 
 beforeEach(async () => {
-  fixture = await createProductionRunFixture('return-operation');
-  foreign = await createProductionRunFixture('return-operation-foreign');
+  fixture = await createProductionRunFixture(`return-operation-${crypto.randomUUID()}`);
+  foreign = await createProductionRunFixture(`return-operation-foreign-${crypto.randomUUID()}`);
   actorId = `return-operation-${crypto.randomUUID()}`;
   await db.insert(users).values({ id: actorId, name: 'Test actor', email: `${actorId}@example.test` });
   fixture.ctx.userId = actorId;
   const [destination] = await db.insert(storageLocations).values({ organizationId: fixture.ctx.organizationId,
-    facilityId: fixture.facilityId, code: 'RETURN', name: 'Returned material', type: 'feedstock_bin',
+    facilityId: fixture.facilityId, code: `RETURN-${crypto.randomUUID()}`, name: `Returned material ${crypto.randomUUID()}`, type: 'feedstock_bin',
     uncarbonized: true, feedstockTypeId: fixture.feedstockTypeId }).returning();
   const [intake] = await db.insert(feedstocks).values({ organizationId: fixture.ctx.organizationId, facilityId: fixture.facilityId,
-    supplierId: fixture.supplierId, storageLocationId: fixture.binId, feedstockTypeId: fixture.feedstockTypeId, code: 'RETURN-INTAKE',
+    supplierId: fixture.supplierId, storageLocationId: fixture.binId, feedstockTypeId: fixture.feedstockTypeId, code: `RETURN-INTAKE-${crypto.randomUUID()}`,
     deliveryDate: new Date('2026-01-01T00:00:00Z'), status: 'complete', massWetKg: CONSUMED_WET_KG,
     massDryKg: CONSUMED_DRY_KG, moistureContentPercent: 20 }).returning();
   const [run] = await db.insert(productionRuns).values({ organizationId: fixture.ctx.organizationId, facilityId: fixture.facilityId,
-    reactorId: fixture.reactorId, code: 'RETURN-RUN', status: 'failed', startTime: new Date('2026-01-02T09:00:00Z'),
+    reactorId: fixture.reactorId, code: `RETURN-RUN-${crypto.randomUUID()}`, status: 'failed', startTime: new Date('2026-01-02T09:00:00Z'),
     endTime: new Date('2026-01-02T10:00:00Z'), feedstockWetMassKg: CONSUMED_WET_KG,
     feedstockMoisturePercent: 20, feedstockMassDryKg: CONSUMED_DRY_KG }).returning();
   await db.insert(productionRunFeedstockDraws).values({ organizationId: fixture.ctx.organizationId, productionRunId: run.id,
@@ -73,7 +73,12 @@ describe('app-only failed-run return operations', { timeout: TIMEOUT_MS }, () =>
     expect(() => JSON.stringify(replay)).not.toThrow();
     expect(await activities()).toMatchObject([{ entityType: 'production_run', entityId: input.sourceProductionRunId,
       productionRunId: input.sourceProductionRunId, facilityId: fixture.facilityId,
-      actorUserId: actorId, operationId: 'record_production_run_return', source: 'form' }]);
+      actorUserId: actorId, operationId: 'record_production_run_return', source: 'form', changes: {
+        returnedMovementId: { from: null, to: saved.id },
+        returnedStorageLocationId: { from: null, to: input.storageLocationId },
+        returnedWetMassKg: { from: null, to: 50 }, returnedDryMassKg: { from: null, to: 40 },
+        returnedMoistureRatio: { from: null, to: 0.2 },
+      } }]);
     expect(await getProductionRunReturnHistory(fixture.ctx, input.sourceProductionRunId)).toHaveLength(1);
   });
 
@@ -88,7 +93,20 @@ describe('app-only failed-run return operations', { timeout: TIMEOUT_MS }, () =>
     expect(reversal).toMatchObject({ massDeltaKg: -50, feedstockDryDeltaKg: -40 });
     expect(replay).toEqual(reversal);
     expect(() => JSON.stringify({ reversal, replay })).not.toThrow();
-    expect(await activities()).toHaveLength(2);
+    const events = await activities();
+    expect(events).toHaveLength(2);
+    const history = await getProductionRunReturnHistory(fixture.ctx, input.sourceProductionRunId);
+    const replacement = history.find(row => row.movementType === 'failed_run_return' && row.id !== original.id)!;
+    expect(events.find(event => event.operationId === 'correct_production_run_return')?.changes).toMatchObject({
+      reversedMovementId: { from: null, to: reversal.id }, reversedCorrectsMovementId: { from: null, to: original.id },
+      reversedStorageLocationId: { from: null, to: input.storageLocationId },
+      reversedWetMassKg: { from: null, to: -50 }, reversedDryMassKg: { from: null, to: -40 },
+      reversedMoistureRatio: { from: null, to: 0.2 },
+      replacementMovementId: { from: null, to: replacement.id },
+      replacementStorageLocationId: { from: null, to: input.storageLocationId },
+      replacementWetMassKg: { from: null, to: 60 }, replacementDryMassKg: { from: null, to: 48 },
+      replacementMoistureRatio: { from: null, to: 0.2 },
+    });
     expect(await getProductionRunReturnHistory(fixture.ctx, input.sourceProductionRunId)).toHaveLength(3);
     expect(await getProductionRunReturnEligibility(fixture.ctx, input.sourceProductionRunId)).toMatchObject({
       eligible: true, consumedDryKg: 80, returnedDryKg: 48, remainingDryKg: 32,
