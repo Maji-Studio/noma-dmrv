@@ -15,7 +15,7 @@ export interface FeedstockReplayEvent {
   id: string;
   occurredAt: string;
   recordedAt: string;
-  kind: 'intake' | 'run_draw' | 'ingredient_draw' | 'loss' | 'count';
+  kind: 'intake' | 'run_draw' | 'ingredient_draw' | 'loss' | 'count' | 'failed_run_return';
   wetDeltaKg: number | null;
   sourceId?: string | null;
   code?: string | null;
@@ -92,7 +92,7 @@ export function replayFeedstockDraws(events: readonly FeedstockReplayEvent[], cu
     const repaid = delta > 0 && unattributed < 0 ? minimum(delta, -unattributed) : BigInt(0);
     unattributed += repaid;
     const addition = delta - repaid;
-    if (event.kind === 'intake' && delta > 0) {
+    if ((event.kind === 'intake' || event.kind === 'failed_run_return') && delta > 0) {
       holdings.set(event.id, (holdings.get(event.id) ?? BigInt(0)) + addition);
     }
     else if (delta > 0) {

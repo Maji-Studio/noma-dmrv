@@ -1,7 +1,9 @@
 import { relations, sql } from 'drizzle-orm';
-import { bigserial, check, foreignKey, index, jsonb, pgTable, text, timestamp, unique, uuid, type AnyPgColumn, type PgTableExtraConfigValue } from 'drizzle-orm/pg-core';
+import { bigserial, check, foreignKey, index, jsonb, pgTable, text, timestamp, unique, uniqueIndex, uuid, type AnyPgColumn, type PgTableExtraConfigValue } from 'drizzle-orm/pg-core';
 import { organizations, users } from './auth';
 import { binMovementLane, binMovementType } from './common';
+import { productionRuns } from './production';
+import { feedstockTypes } from './feedstock';
 import { storageLocations } from './facilities';
 import { exactMassKg, fraction, massKg } from './numeric-families';
 
@@ -53,6 +55,9 @@ export const binMovements = pgTable(
     outputDryDeltaKg: exactMassKg('output_dry_delta_kg'),
     balanceBeforeDryKg: exactMassKg('balance_before_dry_kg'),
     balanceAfterDryKg: exactMassKg('balance_after_dry_kg'),
+    sourceProductionRunId: uuid('source_production_run_id'),
+    returnedFeedstockTypeId: uuid('returned_feedstock_type_id'),
+    feedstockDryDeltaKg: massKg('feedstock_dry_delta_kg'),
     correctsMovementId: uuid('corrects_movement_id'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
@@ -61,6 +66,41 @@ export const binMovements = pgTable(
     unique('bin_movements_org_idempotency_unique').on(table.organizationId, table.idempotencyKey),
     foreignKey({ columns: [table.storageLocationId, table.organizationId], foreignColumns: [storageLocations.id, storageLocations.organizationId] }),
     foreignKey({ columns: [table.correctsMovementId, table.organizationId], foreignColumns: [binMovements.id as AnyPgColumn, binMovements.organizationId as AnyPgColumn] }),
+    foreignKey({ columns: [table.sourceProductionRunId, table.organizationId], foreignColumns: [productionRuns.id, productionRuns.organizationId] }).onDelete('restrict'),
+    foreignKey({ columns: [table.returnedFeedstockTypeId, table.organizationId], foreignColumns: [feedstockTypes.id, feedstockTypes.organizationId] }).onDelete('restrict'),
+    index('bin_movements_source_run_idx').on(table.organizationId, table.sourceProductionRunId),
+    // Only a failed-run return reversal has a source run and a negative wet delta
+    // (bin_movements_return_contract). The predicate avoids the enum: a value
+    // added in the same migration cannot be used before it is committed.
+    uniqueIndex('bin_movements_one_return_reversal').on(table.organizationId, table.correctsMovementId)
+      .where(sql`${table.sourceProductionRunId} is not null and ${table.massDeltaKg} < 0`),
+    check('bin_movements_return_contract', sql`${table.movementType}::text not in ('failed_run_return', 'failed_run_return_reversal') or (
+      ${table.lane} = 'feedstock' and ${table.outputKind} is null
+      and ${table.sourceProductionRunId} is not null and ${table.returnedFeedstockTypeId} is not null
+      and ${table.feedstockDryDeltaKg} is not null and ${table.occurredAt} is not null
+      and ${table.moistureRatioUsed} is not null and ${table.moistureRatioUsed} >= 0 and ${table.moistureRatioUsed} < 1
+      and ${table.idempotencyKey} is not null and length(trim(${table.idempotencyKey})) > 0
+      and ${table.inputSnapshot} is not null and jsonb_typeof(${table.inputSnapshot}) = 'object'
+      and ${table.inputSnapshot} ?& array['version', 'sourceRunVersion', 'actorId', 'consumedDryKg', 'consumedWetKg', 'runMoisturePercent', 'allocations', 'draws']
+      and jsonb_typeof(${table.inputSnapshot}->'version') = 'number'
+      and jsonb_typeof(${table.inputSnapshot}->'sourceRunVersion') = 'number'
+      and jsonb_typeof(${table.inputSnapshot}->'actorId') = 'string'
+      and jsonb_typeof(${table.inputSnapshot}->'consumedDryKg') = 'number'
+      and jsonb_typeof(${table.inputSnapshot}->'consumedWetKg') = 'number'
+      and jsonb_typeof(${table.inputSnapshot}->'runMoisturePercent') = 'number'
+      and jsonb_typeof(${table.inputSnapshot}->'allocations') = 'array'
+      and jsonb_typeof(${table.inputSnapshot}->'draws') = 'array'
+      and length(trim(${table.reason})) > 0
+      and ${table.countedMassKg} is null and ${table.countedWetMassKg} is null
+      and ${table.outputDryDeltaKg} is null
+      and abs(${table.feedstockDryDeltaKg}) <= abs(${table.massDeltaKg})
+      and ((${table.movementType}::text = 'failed_run_return' and ${table.massDeltaKg} > 0 and ${table.feedstockDryDeltaKg} > 0)
+        or (${table.movementType}::text = 'failed_run_return_reversal' and ${table.massDeltaKg} < 0
+          and ${table.feedstockDryDeltaKg} < 0 and ${table.correctsMovementId} is not null))
+    )`),
+    check('bin_movements_return_fields_only', sql`${table.movementType}::text in ('failed_run_return', 'failed_run_return_reversal') or (
+      ${table.sourceProductionRunId} is null and ${table.returnedFeedstockTypeId} is null and ${table.feedstockDryDeltaKg} is null
+    )`),
     check('bin_movements_feedstock_loss_time', sql`${table.lane} <> 'feedstock' or ${table.movementType} <> 'loss' or ${table.occurredAt} is not null`),
     check('bin_movements_output_contract', sql`${table.outputKind} is null or (
       ${table.lane} in ('biochar', 'product') and ${table.occurredAt} is not null
@@ -93,6 +133,9 @@ export const binMovementsRelations = relations(binMovements, ({ one }) => ({
     fields: [binMovements.storageLocationId],
     references: [storageLocations.id],
   }),
+  correctedMovement: one(binMovements, { relationName: 'returnCorrection', fields: [binMovements.correctsMovementId, binMovements.organizationId], references: [binMovements.id, binMovements.organizationId] }),
+  sourceProductionRun: one(productionRuns, { fields: [binMovements.sourceProductionRunId, binMovements.organizationId], references: [productionRuns.id, productionRuns.organizationId] }),
+  returnedFeedstockType: one(feedstockTypes, { fields: [binMovements.returnedFeedstockTypeId, binMovements.organizationId], references: [feedstockTypes.id, feedstockTypes.organizationId] }),
   createdByUser: one(users, {
     fields: [binMovements.createdBy],
     references: [users.id],

@@ -55,7 +55,7 @@ export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId
     reader.select({ movement: binMovements, actorName: users.name }).from(binMovements)
       .leftJoin(users, eq(users.id, binMovements.createdBy))
       .where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, storageLocationId),
-        eq(binMovements.lane, 'feedstock'), inArray(binMovements.movementType, ['loss', 'adjustment']))),
+        eq(binMovements.lane, 'feedstock'), inArray(binMovements.movementType, ['loss', 'adjustment', 'failed_run_return', 'failed_run_return_reversal']))),
     reader.select({ feedstockId: productionRunFeedstocks.feedstockId, wetKg: productionRunFeedstocks.wetMassUsedKg, productionRunId: productionRunFeedstocks.productionRunId })
       .from(productionRunFeedstocks)
       .innerJoin(feedstocks, and(eq(feedstocks.id, productionRunFeedstocks.feedstockId), eq(feedstocks.organizationId, ctx.organizationId)))
@@ -64,10 +64,16 @@ export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId
   ]);
 
   const deleted = new Set((await deletedProductIds(ctx, reader)).map(row => row.id));
-  const reversals = new Map(movements.filter(({ movement }) => movement.movementType === 'adjustment' && movement.correctsMovementId)
+  const reversals = new Map(movements.filter(({ movement }) => (movement.movementType === 'adjustment' || movement.movementType === 'failed_run_return_reversal') && movement.correctsMovementId)
     .map(row => [row.movement.correctsMovementId!, row]));
-  const replacements = new Map(movements.filter(({ movement }) => movement.movementType === 'loss' && movement.correctsMovementId)
+  // A replacement can live in another bin; retain its link on the original event.
+  const returnIds = movements.filter(({ movement }) => movement.movementType === 'failed_run_return').map(({ movement }) => movement.id);
+  const returnReplacements = returnIds.length ? await reader.select({ id: binMovements.id, correctsMovementId: binMovements.correctsMovementId })
+    .from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.movementType, 'failed_run_return'),
+      inArray(binMovements.correctsMovementId, returnIds))) : [];
+  const replacements = new Map(movements.filter(({ movement }) => (movement.movementType === 'loss' || movement.movementType === 'failed_run_return') && movement.correctsMovementId)
     .map(({ movement }) => [movement.correctsMovementId!, movement.id]));
+  for (const row of returnReplacements) replacements.set(row.correctsMovementId!, row.id);
   const ingredientDraws = products.map(product => {
     const composition = product.composition as { ingredients?: { storageLocationId?: string; massKg?: number }[] };
     const ingredients = Array.isArray(composition?.ingredients) ? composition.ingredients : [];
@@ -86,16 +92,18 @@ export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId
     ...ingredientDraws.filter(p => Number(p.ingredientWetKg ?? 0) > 0).map((p): Draft => ({ id: p.id, sourceId: p.id, kind: 'ingredient_draw', reversed: deleted.has(p.id), occurredAt: p.placedAt.toISOString(),
       recordedAt: p.createdAt.toISOString(), actorName: null, code: p.code, reason: '', wetDeltaKg: -Number(p.ingredientWetKg), countedWetKg: null,
       moisturePercent: null })),
-    ...movements.filter(({ movement }) => !(movement.movementType === 'adjustment' && movement.correctsMovementId))
+    ...movements.filter(({ movement }) => !((movement.movementType === 'adjustment' || movement.movementType === 'failed_run_return_reversal') && movement.correctsMovementId))
       .map(({ movement: m, actorName }): Draft => {
-        const reversal = m.movementType === 'loss' ? reversals.get(m.id) : undefined;
-        return { id: m.id, sourceId: null, kind: m.movementType === 'loss' ? 'loss' : 'count',
+        const isReturn = m.movementType === 'failed_run_return';
+        const reversal = m.movementType === 'loss' || isReturn ? reversals.get(m.id) : undefined;
+        return { id: m.id, sourceId: m.sourceProductionRunId, kind: isReturn ? 'failed_run_return' : m.movementType === 'loss' ? 'loss' : 'count',
+          returnedDryKg: m.feedstockDryDeltaKg, returnedFeedstockTypeId: m.returnedFeedstockTypeId, inputSnapshot: m.inputSnapshot,
           correctsMovementId: m.correctsMovementId,
           ...(reversal ? { reversed: true, reversedBy: {
             id: reversal.movement.id, reason: reversal.movement.reason, recordedAt: reversal.movement.createdAt.toISOString(),
             actorName: reversal.actorName, replacementId: replacements.get(m.id) ?? null,
           } } : {}),
-          occurredAt: (m.movementType === 'loss' ? m.occurredAt! : m.createdAt).toISOString(), recordedAt: m.createdAt.toISOString(), actorName, code: null, reason: m.reason,
+          occurredAt: (m.movementType === 'loss' || isReturn ? m.occurredAt! : m.createdAt).toISOString(), recordedAt: m.createdAt.toISOString(), actorName, code: null, reason: m.reason,
           wetDeltaKg: Number(m.massDeltaKg), countedWetKg: m.countedWetMassKg ?? m.countedMassKg,
           moisturePercent: m.moistureRatioUsed === null ? null : Number(m.moistureRatioUsed) * PERCENT };
       }),
@@ -104,6 +112,10 @@ export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId
     !(entry.kind === 'run_draw' && entry.sourceId === options.excludeRunId)).sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.recordedAt.localeCompare(b.recordedAt) || a.id.localeCompare(b.id));
 
   const intakeById = new Map(batches.map(batch => [batch.id, { id: batch.id, wetKg: Number(batch.wetKg), dryKg: batch.dryKg === null ? null : Number(batch.dryKg) }]));
+  const returnMovements = movements.map(row => row.movement).filter(m => m.movementType === 'failed_run_return');
+  for (const movement of returnMovements) {
+    intakeById.set(movement.id, { id: movement.id, wetKg: movement.massDeltaKg, dryKg: movement.feedstockDryDeltaKg });
+  }
   const drawsByRun = new Map<string, { feedstockId: string; wetKg: number }[]>();
   for (const draw of batchDraws) {
     const shares = drawsByRun.get(draw.productionRunId) ?? [];
@@ -142,12 +154,19 @@ export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId
     const blocker = findFeedstockLossBlocker(entries, entry.id);
     entry.editLockedReason = blocker ? formatFeedstockLossLockReason(blocker, timezone) : null;
   }
-  const pile = batches.filter(b => Number(b.wetKg) > 0)
+  const pile: FeedstockBinStock['batches'] = batches.filter(b => Number(b.wetKg) > 0)
     .sort((a, b) => a.deliveryDate.getTime() - b.deliveryDate.getTime()
       || a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))
     .map(b => ({ id: b.id, code: b.code, receivedAt: b.deliveryDate.toISOString(),
       wetKg: replay.remaining.get(b.id) ?? 0,
       intakeWetKg: Number(b.wetKg), dryKg: b.dryKg === null ? null : round((replay.remaining.get(b.id) ?? 0) * Number(b.dryKg) / Number(b.wetKg)), moisturePercent: b.moisturePercent === null ? null : Number(b.moisturePercent) }));
+  pile.push(...returnMovements.map(m => ({
+    id: m.id, kind: 'failed_run_return' as const, code: m.id, sourceProductionRunId: m.sourceProductionRunId,
+    inputSnapshot: m.inputSnapshot, receivedAt: m.occurredAt!.toISOString(), wetKg: replay.remaining.get(m.id) ?? 0,
+    intakeWetKg: m.massDeltaKg, dryKg: round((replay.remaining.get(m.id) ?? 0) * m.feedstockDryDeltaKg! / m.massDeltaKg),
+    moisturePercent: m.moistureRatioUsed! * PERCENT,
+  })));
+  pile.sort((a, b) => a.receivedAt.localeCompare(b.receivedAt) || a.id.localeCompare(b.id));
   const drawWetKg = options.drawWetKg ?? 0;
   const available = [...replay.remaining].map(([id, wet]) => ({ id, units: BigInt(Math.round(wet * MASS_DECIMALS)) }));
   const availableWet = [...replay.remaining.values()].reduce((sum, wet) => sum + wet, 0);

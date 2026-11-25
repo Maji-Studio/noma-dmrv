@@ -37,6 +37,7 @@ export const feedstockTypes = pgTable(
     check('feedstock_types_category_valid', sql`${table.category} in (${sql.join(
       FEEDSTOCK_CATEGORIES.map((category) => sql.raw(`'${category}'`)), sql`, `,
     )})`),
+    unique('feedstock_types_id_organization_id_unique').on(table.id, table.organizationId),
     unique('feedstock_types_organization_id_code_unique').on(table.organizationId, table.code),
     unique('feedstock_types_organization_id_isometric_id_unique').on(
       table.organizationId,

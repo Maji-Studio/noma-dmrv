@@ -20,11 +20,11 @@ import { StockSourceLink } from "./stock-source-link";
 const TIME_FORMAT = "HH:mm";
 
 export const FEEDSTOCK_ENTRY_LABELS: Record<FeedstockLedgerEntry["kind"], string> = {
-  intake: outputStockEventLabel("intake"), run_draw: "Production run", ingredient_draw: "Product ingredient", loss: LOST_MASS_LABEL, count: "Stock count",
+  failed_run_return: "Failed-run return", intake: outputStockEventLabel("intake"), run_draw: "Production run", ingredient_draw: "Product ingredient", loss: LOST_MASS_LABEL, count: "Stock count",
 };
 /** Icon per entry, from the shared stock-kind set. */
 const ENTRY_ICONS: Record<FeedstockLedgerEntry["kind"], string> = {
-  intake: "intake", run_draw: "production_draw", ingredient_draw: "production_draw", loss: "loss", count: "count",
+  failed_run_return: "intake", intake: "intake", run_draw: "production_draw", ingredient_draw: "production_draw", loss: "loss", count: "count",
 };
 
 /** Null is an intake recorded without a wet mass, an operator gap. */

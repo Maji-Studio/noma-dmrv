@@ -13,7 +13,11 @@ export interface FeedstockLedgerEntry {
   } | null;
   /** Present on live Lost mass entries; null means editable. */
   editLockedReason?: string | null;
-  kind: 'intake' | 'run_draw' | 'ingredient_draw' | 'loss' | 'count';
+  kind: 'intake' | 'run_draw' | 'ingredient_draw' | 'loss' | 'count' | 'failed_run_return';
+  /** Return measurement, distinct from the remaining dry estimate. */
+  returnedDryKg?: number | null;
+  returnedFeedstockTypeId?: string | null;
+  inputSnapshot?: Record<string, unknown> | null;
   /** ISO 8601 UTC instant the event physically happened. */
   occurredAt: string;
   recordedAt: string;
@@ -34,6 +38,10 @@ export interface FeedstockLedgerEntry {
 
 /** A batch's remaining stock after saved shares and estimated unassigned draws. */
 export interface FeedstockPileBatch {
+  /** Return holdings use the movement ID, never a fabricated intake ID. */
+  kind?: 'intake' | 'failed_run_return';
+  sourceProductionRunId?: string | null;
+  inputSnapshot?: Record<string, unknown> | null;
   id: string;
   code: string;
   receivedAt: string;

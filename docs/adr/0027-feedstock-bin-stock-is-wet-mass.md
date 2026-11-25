@@ -5,7 +5,7 @@
 Feedstock logistics use wet/as-received kilograms as their native stock
 currency. A feedstock bin's balance is complete wet intake minus non-cancelled
 production-run wet withdrawals minus wet formulation-ingredient withdrawals,
-plus signed wet reconciliation and loss movements. Availability guards and
+plus signed wet reconciliation, loss and failed-run return movements. Availability guards and
 transactional allocation use that same balance.
 
 A production run separately derives `feedstockMassDryKg` from its wet
@@ -22,7 +22,10 @@ not constrain a physical withdrawal.
   movement.
 - Storage selectors, summaries, and overdraw messages use authoritative wet
   stock. A dry estimate may be displayed only when clearly marked non-binding.
-- Nothing in the app tops up a feedstock bin.
+- Stock counts never top up a feedstock bin.
+  A named failed-run return is a separately measured addition under
+  [ADR 0036](./0036-failed-run-returns-to-uncarbonized-bins.md), with frozen
+  source provenance and a dry-solids cap.
   A stock take can only confirm or reduce stock
   (`src/data-access/bin-movements.ts:recordStockTakeMovement`).
   A Lost mass reversal restores exactly one recorded loss, at most once; it is not a top-up.

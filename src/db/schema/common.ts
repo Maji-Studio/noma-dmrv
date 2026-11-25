@@ -100,6 +100,8 @@ export const binMovementLane = pgEnum('bin_movement_lane', [
 // count didn't match), `loss` = a documented write-off (spoilage, spillage,
 // failed run). Extensible later for `transfer` (#34).
 export const binMovementType = pgEnum('bin_movement_type', [
+  'failed_run_return',
+  'failed_run_return_reversal',
   'adjustment',
   'loss',
 ]);

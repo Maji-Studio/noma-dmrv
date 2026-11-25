@@ -39,7 +39,7 @@ export interface LaneStockDerivation {
   feedstockConsumedWetKg: number;
   feedstockMovementDeltaKg: number;
   feedstockStockWetKg: number;
-  /** Intake-moisture estimate only. Never use as an availability limit. */
+  /** Intake or failed-run return measurement estimate only. Never use as an availability limit. */
   feedstockEstimatedDryKg: number | null;
   /** All-time wet biochar allocated to products from this source bin. */
   biocharAllocatedKg: number;

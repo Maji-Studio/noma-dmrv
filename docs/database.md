@@ -56,6 +56,27 @@ correction in ledger order (event time, recorded time, id); later intakes do not
 Every resulting balance must remain non-negative. History retains the reversed
 original and links its replacement without showing a separate reversal entry.
 
+## Failed-run return ledger
+
+`bin_movements` records `failed_run_return` and `failed_run_return_reversal`
+in the feedstock lane. `mass_delta_kg` remains signed wet kg;
+`feedstock_dry_delta_kg` is a separate signed `numeric(14,3)` measurement.
+Composite organization-scoped restrictive foreign keys retain the source
+production run and returned feedstock type. The contract requires physical time,
+moisture ratio, a nonblank reason and request key, and an object snapshot.
+Returns have positive wet/dry deltas; reversals have negative deltas and a
+correction reference. A partial unique index allows only one reversal per return.
+
+The immutable snapshot freezes run version, consumption measurements, original
+intake allocation IDs/masses and actor ID. The source run row lock protects the
+cumulative integer-gram cap across destinations; request locks precede facility,
+sorted bin, run and certification locks. Correction reverses saved quantities
+exactly and optionally posts a new measurement, in one transaction. Replay uses
+movement IDs for return holdings, retains their dry basis through losses/counts,
+and skips reversed originals and reversal legs. Signed totals agree with replay.
+Stock counts still cannot increase stock. See [ADR 0036](./adr/0036-failed-run-returns-to-uncarbonized-bins.md)
+for lifecycle requirements and implementation boundaries.
+
 ## OAuth grant lifecycle
 
 `oauth_grants` binds an organization, user, issuance membership, client and

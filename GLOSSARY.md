@@ -160,10 +160,19 @@ kind of bin.
 
 **Bin movement**:
 A single recorded change to a storage bin's stock — an intake, draw,
-transfer, write-off, or adjustment — carrying its mass, actor, time,
+transfer, failed-run return, write-off, or adjustment — carrying its mass, actor, time,
 and reason. Bin stock is the consequence of its movements; nothing
 changes stock except a movement.
 _Avoid_: stock change, log entry, audit record.
+
+**Failed-run return**:
+Measured material from a Failed production run placed back in an uncarbonized
+feedstock bin of the same type and facility. It adds wet stock without undoing
+original consumption or creating a fresh intake. Its measured dry solids count
+against the run's consumed dry mass; added water may increase wet mass. The
+movement freezes original-intake allocations and is corrected only by a linked
+exact reversal and optional replacement. Mixed-type runs cannot return material.
+_Avoid_: intake, stock count, undo draw, re-pyrolysis.
 
 **Draw**:
 Biochar or feedstock taken out of a storage bin by a **bin movement**
