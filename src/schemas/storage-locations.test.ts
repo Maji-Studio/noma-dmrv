@@ -91,3 +91,38 @@ describe("default draw order", () => {
     }
   });
 });
+
+
+describe("uncarbonized feedstock segregation", () => {
+  const create = { name: "Failed material", facilityId: FACILITY_ID, feedstockTypeId: RELATED_ID, uncarbonized: true };
+  const update = { storageLocationId: RELATED_ID, expectedVersion: 1, uncarbonized: true };
+  it("accepts the tag on a feedstock bin and on partial updates", () => {
+    expect(storageLocationFormSchema.parse({ ...create, type: "feedstock_bin" }).uncarbonized).toBe(true);
+    expect(storageLocationQuickAddSchema.parse({ ...create, type: "feedstock_bin" }).uncarbonized).toBe(true);
+    expect(updateStorageLocationSchema.parse(update).uncarbonized).toBe(true);
+  });
+  it.each(["biochar_bin", "product_bin"])("rejects the tag on %s with its field path", type => {
+    for (const result of [
+      storageLocationFormSchema.safeParse({ ...create, type }),
+      storageLocationQuickAddSchema.safeParse({ ...create, feedstockTypeId: undefined, type }),
+      updateStorageLocationSchema.safeParse({ ...update, type }),
+    ]) {
+      expect(result.success).toBe(false);
+      if (!result.success) expect(result.error.issues).toContainEqual(expect.objectContaining({ path: ["uncarbonized"] }));
+    }
+  });
+  it("requires a feedstock type even on a tagged bin", () => {
+    for (const schema of [storageLocationFormSchema, storageLocationQuickAddSchema]) {
+      const result = schema.safeParse({ ...create, type: "feedstock_bin", feedstockTypeId: null });
+      expect(result.success).toBe(false);
+      if (!result.success) expect(result.error.issues).toContainEqual(expect.objectContaining({ path: ["feedstockTypeId"] }));
+    }
+  });
+  it("keeps omission distinct from false and rejects non-boolean tags", () => {
+    expect(updateStorageLocationSchema.parse({ ...update, uncarbonized: false }).uncarbonized).toBe(false);
+    expect(updateStorageLocationSchema.parse({ ...update, uncarbonized: undefined }).uncarbonized).toBeUndefined();
+    for (const uncarbonized of ["true", "false", null, 1]) {
+      expect(updateStorageLocationSchema.safeParse({ ...update, uncarbonized }).success).toBe(false);
+    }
+  });
+});

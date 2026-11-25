@@ -14,6 +14,7 @@ function storageRow(
     code: "BIN-01",
     name: "North bin",
     type: "feedstock_bin",
+    uncarbonized: false,
     heldFeedstockTypeName: null,
     heldFeedstockTypeUsage: null,
     feedstockTypeName: null,
@@ -78,4 +79,8 @@ describe("toOutputBinEntityOption", () => {
     const option = toOutputBinEntityOption(storageRow({ type: "biochar_bin" }), stock);
     expect(option.subtitle).not.toContain(" · ");
   });
+});
+
+it("carries the segregation tag on a selected feedstock bin", () => {
+  expect(toFeedstockBinEntityOption(storageRow({ uncarbonized: true }))).toMatchObject({ uncarbonized: true });
 });

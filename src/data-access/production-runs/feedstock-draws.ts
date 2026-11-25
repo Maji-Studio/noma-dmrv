@@ -1,3 +1,4 @@
+import { UNCARBONIZED_PRODUCTION_DRAW_MESSAGE } from "@/lib/uncarbonized-bins";
 import { requireMultiBinRunsEnabled } from "@/lib/feature-switches";
 import { earliestFeedstockEventTie } from '@/lib/feedstock-event-boundary';
 import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze, type TransportOwnershipFreezeScope } from "../feedstock-transport-ownership-freeze";
@@ -154,6 +155,7 @@ export async function validateProductionRunFeedstockDrawSources(
       id: storageLocations.id,
       facilityId: storageLocations.facilityId,
       type: storageLocations.type,
+      uncarbonized: storageLocations.uncarbonized,
       feedstockTypeId: storageLocations.feedstockTypeId,
       feedstockTypeUsage: feedstockTypes.usage,
     })
@@ -185,6 +187,9 @@ export async function validateProductionRunFeedstockDrawSources(
     }
     if (location.type !== "feedstock_bin") {
       throw drawValidationError("Selected storage bin is not a feedstock bin", index, "storageLocationId");
+    }
+    if (location.uncarbonized) {
+      throw drawValidationError(UNCARBONIZED_PRODUCTION_DRAW_MESSAGE, index, "storageLocationId");
     }
     if (!location.feedstockTypeId || !location.feedstockTypeUsage) {
       throw drawValidationError(

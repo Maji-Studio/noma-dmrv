@@ -1,0 +1,2 @@
+ALTER TABLE "storage_locations" ADD COLUMN "uncarbonized" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "storage_locations" ADD CONSTRAINT "storage_locations_uncarbonized_feedstock_bin_only" CHECK ("storage_locations"."type" = 'feedstock_bin' or "storage_locations"."uncarbonized" = false);

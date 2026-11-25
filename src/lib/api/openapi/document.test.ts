@@ -598,3 +598,13 @@ it('publishes draw moisture bases with movement kind and date', () => {
   });
   expect(bases).toBe(2);
 });
+
+it("publishes the storage segregation tag and its strict boolean-string filter", () => {
+  const storage = document.components.schemas.storage_location;
+  expect(storage.required).toContain("uncarbonized");
+  expect(storage).toMatchObject({ properties: { uncarbonized: { type: "boolean" } } });
+  expect(document.paths["/storage-locations"].get.parameters).toContainEqual(expect.objectContaining({
+    name: "uncarbonized", in: "query", required: false,
+    schema: expect.objectContaining({ type: "string", enum: ["true", "false"] }),
+  }));
+});

@@ -9,6 +9,8 @@ export interface EntityOption {
   name: string;
   /** Optional subtitle for additional context (e.g., location, type) */
   subtitle?: string;
+  /** Storage bin segregation tag, available on list and detail options. */
+  uncarbonized?: boolean;
   /** The stored record is archived: shown for context, read-only until restored. */
   archived?: boolean;
   /** Visible for context, but cannot be selected. */
@@ -92,7 +94,7 @@ interface EntitySelectBaseProps {
    * comes back to this tab. `onCreateNew` wins when both are given.
    */
   createHref?: string;
-  /** Filter options (e.g., facilityId for filtering reactors by facility) */
+  /** Filter options, including uncarbonized: "true" | "false" for storage bins. */
   filterBy?: Record<string, string>;
   /** Upstream source value(s); changes re-enable automatic selection after a user clear. */
   dependsOn?: string | null | (string | null | undefined)[];

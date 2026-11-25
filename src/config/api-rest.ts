@@ -15,7 +15,8 @@ export const SUPPLIER_LOCATION_REPRESENTATION_REVISION = 1;
 export const FEEDSTOCK_TYPE_REPRESENTATION_REVISION = 1;
 // Revision 3 adds the product bin formulation claim (Phase 5b-1, round 9 Q64).
 // Revision 4 adds stockMode and feedstock draw methods.
-export const STORAGE_LOCATION_REPRESENTATION_REVISION = 4;
+// Revision 5 adds the uncarbonized feedstock segregation tag.
+export const STORAGE_LOCATION_REPRESENTATION_REVISION = 5;
 // Revision 2 adds the current split-bin draw order (Phase 5b-2, Q67).
 export const OUTPUT_BIN_STOCK_REPRESENTATION_REVISION = 2;
 export const VEHICLE_REPRESENTATION_REVISION = 1;

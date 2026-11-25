@@ -47,6 +47,7 @@ import {
 } from "./transport-legs";
 import { resolveDistanceSource, type DistanceSourceValue } from "@/schemas/distance-source";
 import { SafeError } from "@/lib/errors";
+import { UNCARBONIZED_INTAKE_MESSAGE } from "@/lib/uncarbonized-bins";
 import { DomainError } from "@/lib/domain-errors";
 import { IN_USE_DELETE_MARKER, inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
@@ -77,12 +78,14 @@ async function validateFeedstockStorageLocations(
   feedstockTypeId: string,
   referencePath: (index: number) => (string | number)[],
 ): Promise<void> {
+  requireOrgScope(ctx);
   if (storageLocationIds.length === 0) return;
 
   const bins = await tx
     .select({
       id: storageLocations.id,
       type: storageLocations.type,
+      uncarbonized: storageLocations.uncarbonized,
       feedstockTypeId: storageLocations.feedstockTypeId,
       facilityId: storageLocations.facilityId,
     })
@@ -112,6 +115,11 @@ async function validateFeedstockStorageLocations(
       throw new SafeError(
         `Feedstock materials must be allocated to a feedstock bin, not a ${bin.type.replace("_", " ")}.`,
       );
+    }
+    if (bin.uncarbonized) {
+      throw new DomainError("validation_failed", UNCARBONIZED_INTAKE_MESSAGE, {
+        issues: [{ path: referencePath(index), code: "custom", message: UNCARBONIZED_INTAKE_MESSAGE }],
+      });
     }
     if (bin.feedstockTypeId && bin.feedstockTypeId !== feedstockTypeId) {
       throw new SafeError(

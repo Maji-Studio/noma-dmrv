@@ -125,6 +125,7 @@ export async function updateStorageLocationFn(
         capacityKg: validated.capacityKg,
         feedstockTypeId: validated.feedstockTypeId,
         formulationId: validated.formulationId,
+        uncarbonized: validated.uncarbonized,
         stockMode: validated.stockMode,
         drawOrder: validated.drawOrder,
         mergedAt: validated.mergedAt ? new Date(validated.mergedAt) : undefined,

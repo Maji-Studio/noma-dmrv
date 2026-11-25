@@ -89,6 +89,9 @@ export async function getEntities(
       // an unknown `filterBy.type` would otherwise be cast straight into a SQL
       // equality and silently match nothing (or, with future schema changes,
       // the wrong rows). Mirrors the productionRun status guard below.
+      const rawUncarbonized = filterBy?.uncarbonized;
+      if (rawUncarbonized !== undefined && rawUncarbonized !== "true" && rawUncarbonized !== "false") return [];
+      const uncarbonized = rawUncarbonized === undefined ? undefined : rawUncarbonized === "true";
       const rawType = filterBy?.type?.trim();
       let type: StorageLocationType | StorageLocationType[] | undefined;
       if (rawType) {
@@ -123,6 +126,7 @@ export async function getEntities(
         facilityId: filterBy?.facilityId,
         type,
         feedstockTypeId: filterBy?.feedstockTypeId,
+        uncarbonized,
         feedstockTypeUsage,
         formulationId,
         pureProductOnly,

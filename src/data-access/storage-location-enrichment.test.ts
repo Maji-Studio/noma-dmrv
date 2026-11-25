@@ -21,6 +21,7 @@ const row: BaseStorageLocationRow = {
   code: "PB-DAY",
   name: "Product bin",
   type: "product_bin",
+  uncarbonized: false,
   facilityId: "calendar-day-facility",
   formulationId: null,
   feedstockTypeId: null,

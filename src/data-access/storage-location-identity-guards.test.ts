@@ -17,8 +17,8 @@ import { assertBinIdentityChangeAllowed } from "./storage-location-identity-guar
 
 const ctx = { organizationId: "org", userId: "user" } as OrgContext;
 const tx = {} as DbTransaction;
-type Identity = { type: StorageLocationType; feedstockTypeId: string; facilityId: string };
-const bin: Identity & { id: string } = { id: "bin", type: "feedstock_bin", feedstockTypeId: "ft-1", facilityId: "fac-1" };
+type Identity = { type: StorageLocationType; feedstockTypeId: string; facilityId: string; uncarbonized: boolean };
+const bin: Identity & { id: string } = { id: "bin", type: "feedstock_bin", feedstockTypeId: "ft-1", facilityId: "fac-1", uncarbonized: false };
 
 async function refusal(next: Partial<Identity>): Promise<DomainError> {
   try {
@@ -40,6 +40,7 @@ describe("assertBinIdentityChangeAllowed refusal issues", () => {
     ["type", { type: "biochar_bin" }, "Storage type"],
     ["feedstockTypeId", { feedstockTypeId: "ft-2" }, "Feedstock type"],
     ["facilityId", { facilityId: "fac-2" }, "Facility"],
+    ["uncarbonized", { uncarbonized: true }, "Uncarbonized"],
   ])("names the %s form field when stock blocks the change", async (key, next, label) => {
     mocks.availableKg.mockResolvedValue(12);
     const error = await refusal(next);

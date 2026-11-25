@@ -111,6 +111,7 @@ export const applicationListSchema = z.strictObject({
   appliedBefore: orderedDateSchema.optional().describe("Applications before this calendar date, YYYY-MM-DD, on the delivery facility's clock. Exclusive upper bound."),
 });
 export const storageLocationListSchema = facilityLookupListSchema.extend({
+  uncarbonized: z.enum(["true", "false"]).transform(value => value === "true").optional().describe("Filter by the uncarbonized segregation tag. False excludes tagged bins."),
   type: z.enum(storageLocationTypes).optional().describe("Material lane filter: feedstock_bin, biochar_bin or product_bin."),
   formulationId: uuidSchema().optional().describe("Claimed formulation filter, UUID. Matches product bins claimed by this formulation."),
 });

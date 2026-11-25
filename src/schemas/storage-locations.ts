@@ -4,6 +4,7 @@
  */
 
 import { z } from "zod";
+import { UNCARBONIZED_FEEDSTOCK_BIN_ONLY_MESSAGE } from "@/lib/uncarbonized-bins";
 import { OUTPUT_DRAW_ORDERS, OUTPUT_STOCK_MODES, type OutputDrawOrder, type OutputStockMode } from "@/lib/output-stock/stock-mode";
 import {
   emptyToNull,
@@ -204,6 +205,7 @@ export const storageLocationFormSchema = z.object({
     .optional()
     .nullable(),
   feedstockTypeId: emptyToNull.or(z.string().uuid("Choose a valid feedstock type.")).nullable().optional(),
+  uncarbonized: z.boolean().optional(),
   // Product bins only. Optional on purpose: a product bin with no formulation is
   // an unassigned bin, which accepts pure biochar and is claimed by the first
   // formulation put into it (`data-access/biochar-products.ts`).
@@ -222,6 +224,9 @@ export const storageLocationFormSchema = z.object({
     .optional()
     .or(z.literal("")),
 }).superRefine((data, ctx) => {
+  if (data.uncarbonized && data.type && data.type !== "feedstock_bin") {
+    ctx.addIssue({ code: "custom", path: ["uncarbonized"], message: UNCARBONIZED_FEEDSTOCK_BIN_ONLY_MESSAGE });
+  }
   if (data.formulationId && data.type !== "product_bin") {
     ctx.addIssue({
       code: "custom",
@@ -266,6 +271,7 @@ export const updateStorageLocationSchema = z.object({
   // No facilityId: a bin never changes facility through the update action.
   capacityKg: positiveMassKgSchema().optional().nullable(),
   feedstockTypeId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  uncarbonized: z.boolean().optional(),
   formulationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   stockMode: z.enum(outputStockModes).optional(),
   drawOrder: z.enum(OUTPUT_DRAW_ORDERS).optional(),
@@ -273,6 +279,9 @@ export const updateStorageLocationSchema = z.object({
   storageMethod: z.string().max(255).optional().nullable(),
   storageDescription: z.string().max(1000).optional().nullable(),
 }).superRefine((data, ctx) => {
+  if (data.uncarbonized && data.type && data.type !== "feedstock_bin") {
+    ctx.addIssue({ code: "custom", path: ["uncarbonized"], message: UNCARBONIZED_FEEDSTOCK_BIN_ONLY_MESSAGE });
+  }
   if (data.formulationId && data.type && data.type !== "product_bin") {
     ctx.addIssue({
       code: "custom",

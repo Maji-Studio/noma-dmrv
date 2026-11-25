@@ -1,3 +1,4 @@
+import { UNCARBONIZED_INGREDIENT_MESSAGE } from "@/lib/uncarbonized-bins";
 import { db, type DbTransaction } from '@/db';
 import { storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
@@ -40,6 +41,7 @@ export async function prepareProductStock(ctx: OrgContext, raw: ProductStockPrev
     for (const [id, wetDraw] of draws) {
       const [bin] = await tx.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.facilityId, input.facilityId), eq(storageLocations.id, id), eq(storageLocations.type, 'feedstock_bin'), isNull(storageLocations.archivedAt)));
       if (!bin) throw new SafeError('Ingredient bin not found or archived');
+      if (bin.uncarbonized) throw new SafeError(UNCARBONIZED_INGREDIENT_MESSAGE);
       const stock = await getIngredientStockBasis(ctx, id, input.placedAt, tx, undefined, wetDraw);
       if (!stock) throw new SafeError('Ingredient stock not found.');
       const beforeWet = stock.wetMassKg;

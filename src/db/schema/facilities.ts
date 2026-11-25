@@ -1,6 +1,6 @@
 import { realColumn } from './real-column';
 import { relations, sql } from 'drizzle-orm';
-import { integer, check, doublePrecision, foreignKey, pgTable, text, timestamp, unique, uniqueIndex, uuid, jsonb } from 'drizzle-orm/pg-core';
+import { boolean, integer, check, doublePrecision, foreignKey, pgTable, text, timestamp, unique, uniqueIndex, uuid, jsonb } from 'drizzle-orm/pg-core';
 import { REACTOR_TYPES, outputDrawOrder, outputStockMode, storageLocationType, durabilityOption } from './common';
 import { organizations } from './auth';
 
@@ -144,6 +144,7 @@ export const storageLocations = pgTable(
     // intake, validated on subsequent. No FK reference to avoid a circular import with
     // products.ts; enforced at the application layer (mirrors feedstockTypeId above).
     formulationId: uuid('formulation_id'),
+    uncarbonized: boolean('uncarbonized').default(false).notNull(),
     // Feedstock split draws deliveries in order; output split holds separate sub-bins.
     stockMode: outputStockMode('stock_mode').default('split').notNull(),
     // Split output bins draw in this order unless the operator supplies an order.
@@ -165,6 +166,10 @@ export const storageLocations = pgTable(
       columns: [table.facilityId, table.organizationId],
       foreignColumns: [facilities.id, facilities.organizationId],
     }),
+    check(
+      'storage_locations_uncarbonized_feedstock_bin_only',
+      sql`${table.type} = 'feedstock_bin' or ${table.uncarbonized} = false`
+    ),
     check(
       'storage_locations_formulation_product_bin_only',
       sql`${table.type} = 'product_bin' or ${table.formulationId} is null`

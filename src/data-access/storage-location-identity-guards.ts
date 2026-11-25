@@ -13,7 +13,7 @@ import { recordLocks, withRecordLockGuidance } from '@/lib/record-lock';
  * The guard runs inside the caller's transaction while it holds the bin's
  * stock lock, mirroring `archiveStorageLocation`. Rename, code, capacity and
  * every other metadata field stay editable on a stocked bin: only the identity
- * columns are fenced.
+ * columns and the uncarbonized segregation tag are fenced.
  *
  * The empty-bin-with-history case is deliberately refused as well. Whether an
  * emptied bin may be repurposed is an open product decision (#767 / #313), and
@@ -38,6 +38,7 @@ import { requireOrgScope } from "./utils";
  */
 const STORAGE_TYPE_FIELD = { label: "Storage type", key: "type" };
 const FEEDSTOCK_TYPE_FIELD = { label: "Feedstock type", key: "feedstockTypeId" };
+const UNCARBONIZED_FIELD = { label: "Uncarbonized", key: "uncarbonized" };
 const FACILITY_FIELD = { label: "Facility", key: "facilityId" };
 
 /** The control the operator changed: its label for the message, its form key for the issue path. */
@@ -54,6 +55,7 @@ interface BinIdentity {
   type: StorageLocationType;
   feedstockTypeId: string | null;
   facilityId: string;
+  uncarbonized: boolean;
 }
 
 /**
@@ -88,12 +90,13 @@ function changedIdentityField(
   if (current.feedstockTypeId !== next.feedstockTypeId) {
     return FEEDSTOCK_TYPE_FIELD;
   }
+  if (current.uncarbonized !== next.uncarbonized) return UNCARBONIZED_FIELD;
   if (current.facilityId !== next.facilityId) return FACILITY_FIELD;
   return null;
 }
 
 /**
- * Refuse a `type`, `feedstockTypeId` or `facilityId` change on a bin that still holds stock
+ * Refuse a `type`, `feedstockTypeId`, `facilityId` or `uncarbonized` change on a bin that still holds stock
  * or already carries stock history. Call it under the bin's stock lock, after
  * re-reading the effective row; it returns without a query when no
  * identity column moves.

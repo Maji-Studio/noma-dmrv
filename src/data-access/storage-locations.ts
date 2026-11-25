@@ -33,6 +33,8 @@ import {
 import { assertRowVersion, nextVersion } from "./row-version";
 import { storageLocationLastActivityAt } from "./storage-location-activity";
 import { requireOrgScope } from "./utils";
+import { DomainError } from "@/lib/domain-errors";
+import { UNCARBONIZED_FEEDSTOCK_BIN_ONLY_MESSAGE } from "@/lib/uncarbonized-bins";
 import { SafeError } from "@/lib/errors";
 import { guardStorageLocationName } from "./unique-name-guards";
 import { enrichStorageLocationRows } from "./storage-location-enrichment";
@@ -176,6 +178,7 @@ export async function getStorageLocations(
       code: storageLocations.code,
       name: storageLocations.name,
       type: storageLocations.type,
+      uncarbonized: storageLocations.uncarbonized,
       capacityKg: storageLocations.capacityKg,
       storageMethod: storageLocations.storageMethod,
       storageDescription: storageLocations.storageDescription,
@@ -274,6 +277,7 @@ export async function getStorageLocationWithFacility(
       code: storageLocations.code,
       name: storageLocations.name,
       type: storageLocations.type,
+      uncarbonized: storageLocations.uncarbonized,
       capacityKg: storageLocations.capacityKg,
       storageMethod: storageLocations.storageMethod,
       storageDescription: storageLocations.storageDescription,
@@ -339,6 +343,7 @@ export async function createStorageLocationInTransaction(
     capacityKg?: number | null;
     feedstockTypeId?: string | null;
     formulationId?: string | null;
+    uncarbonized?: boolean;
     stockMode?: OutputStockMode;
     drawOrder?: OutputDrawOrder;
     storageMethod?: string | null;
@@ -369,6 +374,12 @@ export async function createStorageLocationInTransaction(
     );
   }
 
+  if (data.uncarbonized && data.type !== "feedstock_bin") {
+    throw new DomainError("validation_failed", UNCARBONIZED_FEEDSTOCK_BIN_ONLY_MESSAGE, {
+      issues: [{ path: ["uncarbonized"], code: "custom", message: UNCARBONIZED_FEEDSTOCK_BIN_ONLY_MESSAGE }],
+    });
+  }
+
   // A formulation only makes sense on a product bin; ignore it for other types.
   const formulationId = data.type === "product_bin" ? data.formulationId ?? null : null;
   if (formulationId) {
@@ -390,6 +401,7 @@ export async function createStorageLocationInTransaction(
           ? data.feedstockTypeId ?? null
           : null,
         formulationId,
+        uncarbonized: data.uncarbonized ?? false,
         stockMode: initialStockMode(data.type, data.stockMode),
         drawOrder: data.drawOrder ?? "oldest_first",
         storageMethod: data.storageMethod ?? null,
@@ -452,6 +464,7 @@ export async function updateStorageLocation(
     capacityKg?: number | null;
     feedstockTypeId?: string | null;
     formulationId?: string | null;
+    uncarbonized?: boolean;
     /** Split to mix posts a merge at `mergedAt`; mix to split needs an empty bin. */
     stockMode?: OutputStockMode;
     drawOrder?: OutputDrawOrder;
@@ -531,6 +544,14 @@ export async function updateStorageLocation(
     }
 
     const effectiveType = data.type ?? existing.type;
+    if (data.uncarbonized && effectiveType !== "feedstock_bin") {
+      throw new DomainError("validation_failed", UNCARBONIZED_FEEDSTOCK_BIN_ONLY_MESSAGE, {
+        issues: [{ path: ["uncarbonized"], code: "custom", message: UNCARBONIZED_FEEDSTOCK_BIN_ONLY_MESSAGE }],
+      });
+    }
+    const uncarbonized = effectiveType === "feedstock_bin"
+      ? data.uncarbonized ?? existing.uncarbonized
+      : false;
 
     // The Zod update schema can only see the payload. When `type` is omitted it
     // cannot tell this is a feedstock bin, so an update could clear
@@ -569,11 +590,13 @@ export async function updateStorageLocation(
         type: existing.type as StorageLocationType,
         feedstockTypeId: existing.feedstockTypeId,
         facilityId: existing.facilityId,
+        uncarbonized: existing.uncarbonized,
       },
       {
         type: effectiveType as StorageLocationType,
         feedstockTypeId: normalizedFeedstockTypeId,
         facilityId: data.facilityId ?? existing.facilityId,
+        uncarbonized,
       },
     );
 
@@ -640,6 +663,7 @@ export async function updateStorageLocation(
             version: nextVersion(storageLocations.version),
             feedstockTypeId: normalizedFeedstockTypeId,
             formulationId: normalizedFormulationId,
+            uncarbonized,
             stockMode,
             updatedAt: new Date(),
           })

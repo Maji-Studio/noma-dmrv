@@ -22,6 +22,7 @@ export const createStorageLocation: Operation<typeof createStorageLocationSchema
       capacityKg: input.capacityKg ?? null,
       feedstockTypeId: input.feedstockTypeId ?? null,
       formulationId: input.formulationId ?? null,
+      uncarbonized: input.uncarbonized,
       stockMode: input.stockMode,
       drawOrder: input.drawOrder,
       storageMethod: input.storageMethod || null,

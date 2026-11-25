@@ -192,6 +192,7 @@ interface StorageLocationOptionRow {
   code: string;
   name: string;
   type: StorageLocationType;
+  uncarbonized: boolean;
   heldFeedstockTypeName: string | null;
   heldFeedstockTypeUsage: string | null;
   feedstockTypeName: string | null;
@@ -216,6 +217,7 @@ export function toFeedstockBinEntityOption(
     id: row.id,
     code: row.code,
     name: row.name,
+    uncarbonized: row.uncarbonized,
     remainingMass,
     subtitle: formatFeedstockBinSubtitle(
       row.heldFeedstockTypeName ?? row.feedstockTypeName,
@@ -233,13 +235,14 @@ function outputStockView(stock: OutputBinStock | undefined) {
 }
 
 export function toOutputBinEntityOption(
-  row: Pick<StorageLocationOptionRow, "id" | "code" | "name" | "type" | "formulationName">,
+  row: Pick<StorageLocationOptionRow, "id" | "code" | "name" | "type" | "formulationName" | "uncarbonized">,
   stock: { estimatedWetMassKg: number | null; dryMassKg: number | null },
 ): EntityOption {
   return {
     id: row.id,
     code: row.code,
     name: row.name,
+    uncarbonized: row.uncarbonized,
     remainingMass: { wetKg: stock.estimatedWetMassKg, dryKg: stock.dryMassKg },
     subtitle: outputBinStockSubtitle(row, stock),
   };
@@ -249,6 +252,7 @@ export async function getStorageLocations(ctx: OrgContext, params: {
   search?: string;
   facilityId?: string;
   type?: StorageLocationType | StorageLocationType[];
+  uncarbonized?: boolean;
   feedstockTypeId?: string;
   feedstockTypeUsage?: "pyrolysis" | "blend";
   /** Show product bins reserved for this formulation, plus unassigned (empty) bins. */
@@ -259,7 +263,7 @@ export async function getStorageLocations(ctx: OrgContext, params: {
   pureProductOnly?: boolean;
   limit: number;
 }): Promise<EntityOption[]> {
-  const { search, facilityId, type, feedstockTypeId, feedstockTypeUsage, formulationId, strictFormulation, pureProductOnly, limit } =
+  const { search, facilityId, type, uncarbonized, feedstockTypeId, feedstockTypeUsage, formulationId, strictFormulation, pureProductOnly, limit } =
     params;
   requireOrgScope(ctx);
 
@@ -273,6 +277,10 @@ export async function getStorageLocations(ctx: OrgContext, params: {
     eq(storageLocations.organizationId, ctx.organizationId),
     isNull(storageLocations.archivedAt),
   ];
+
+  if (uncarbonized !== undefined) {
+    conditions.push(eq(storageLocations.uncarbonized, uncarbonized));
+  }
 
   if (facilityId) {
     conditions.push(eq(storageLocations.facilityId, facilityId));
@@ -351,6 +359,7 @@ export async function getStorageLocations(ctx: OrgContext, params: {
       code: storageLocations.code,
       name: storageLocations.name,
       type: storageLocations.type,
+      uncarbonized: storageLocations.uncarbonized,
       heldFeedstockTypeName: heldFeedstockTypes.name,
       heldFeedstockTypeUsage: heldFeedstockTypes.usage,
       feedstockTypeName: feedstockInventoryAggregate.feedstockTypeName,
@@ -435,6 +444,7 @@ export async function getStorageLocationById(
       code: storageLocations.code,
       name: storageLocations.name,
       type: storageLocations.type,
+      uncarbonized: storageLocations.uncarbonized,
       heldFeedstockTypeName: heldFeedstockTypes.name,
       heldFeedstockTypeUsage: heldFeedstockTypes.usage,
       feedstockTypeName: feedstockInventoryAggregate.feedstockTypeName,

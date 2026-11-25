@@ -21,6 +21,7 @@ import {
   toPersistedMassGrams,
 } from "@/lib/biochar-composition/composition";
 import { formatCount } from "@/lib/copy-utils";
+import { UNCARBONIZED_INGREDIENT_MESSAGE } from "@/lib/uncarbonized-bins";
 import { SafeError } from "@/lib/errors";
 import { solidsAtMoistureKg } from "@/lib/output-stock/exact";
 import { DUPLICATE_FORMULATION_INGREDIENT_MESSAGE } from "@/schemas/biochar-products";
@@ -344,6 +345,7 @@ export async function validateCompositionIngredientBins(
   formulationId: string | null,
   facilityId: string,
 ) {
+  requireOrgScope(ctx);
   const ingredientRefs = getCompositionIngredientRefs(composition);
   const uniqueIngredientIds = new Set(
     ingredientRefs.map((ref) => ref.formulationIngredientId),
@@ -453,6 +455,7 @@ export async function validateCompositionIngredientBins(
       id: storageLocations.id,
       facilityId: storageLocations.facilityId,
       type: storageLocations.type,
+      uncarbonized: storageLocations.uncarbonized,
       feedstockTypeId: storageLocations.feedstockTypeId,
       feedstockTypeUsage: feedstockTypes.usage,
     })
@@ -478,6 +481,7 @@ export async function validateCompositionIngredientBins(
     if (bin.type !== "feedstock_bin") {
       throw new SafeError("Selected bin must be a feedstock bin");
     }
+    if (bin.uncarbonized) throw new SafeError(UNCARBONIZED_INGREDIENT_MESSAGE);
     if (!bin.feedstockTypeId || bin.feedstockTypeUsage !== "blend") {
       throw new SafeError("Feedstock bin must hold blend-usage feedstock");
     }

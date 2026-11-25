@@ -4,6 +4,7 @@
  * Minimal field requirements for rapid entity creation
  */
 
+import { storageLocationQuickAddSchema } from "@/schemas/quick-add";
 import { lockFormulationReference } from "./formulation-reference-guards";
 
 import { and, eq } from "drizzle-orm";
@@ -203,6 +204,7 @@ export interface CreateStorageLocationData {
   capacityKg?: number | null;
   feedstockTypeId?: string | null;
   formulationId?: string | null;
+  uncarbonized?: boolean;
   stockMode?: OutputStockMode;
   drawOrder?: OutputDrawOrder;
 }
@@ -224,6 +226,7 @@ export async function createQuickStorageLocationInTransaction(
 ): Promise<EntityOption> {
   requireOrgScope(ctx);
 
+  storageLocationQuickAddSchema.parse(data);
   await lockActiveFacilityReference(ctx, tx, data.facilityId);
   if (data.feedstockTypeId) {
     await assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId, tx);
@@ -244,6 +247,7 @@ export async function createQuickStorageLocationInTransaction(
         capacityKg: data.capacityKg ?? null,
         feedstockTypeId: data.feedstockTypeId ?? null,
         formulationId: data.formulationId ?? null,
+        uncarbonized: data.uncarbonized ?? false,
         stockMode: initialStockMode(data.type, data.stockMode),
         drawOrder: data.drawOrder ?? "oldest_first",
       })

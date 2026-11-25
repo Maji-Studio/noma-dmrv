@@ -110,3 +110,13 @@ it("rejects the retired credit batch status filter for REST and MCP", () => {
   expect(() => parseApiQuery(request("?status=pending"), creditBatchListSchema))
     .toThrow(expect.objectContaining({ status: 400, code: "invalid_query" }));
 });
+
+it("parses strict boolean-string storage segregation filters", () => {
+  const schema = resourceQueries["storage-locations"].list;
+  expect(parseApiQuery(request("?uncarbonized=false"), schema)).toMatchObject({ uncarbonized: false });
+  expect(parseApiQuery(request("?uncarbonized=true"), schema)).toMatchObject({ uncarbonized: true });
+  expect(parseApiQuery(request(""), schema)).not.toHaveProperty("uncarbonized");
+  for (const value of ["0", "1", "yes", "FALSE", ""]) {
+    expect(() => parseApiQuery(request(`?uncarbonized=${value}`), schema)).toThrow(expect.objectContaining({ code: "invalid_query" }));
+  }
+});
