@@ -708,3 +708,15 @@ before allowing confirmation to convert stored entry values to the new unit.
 ## Stale versions on delete dialogs - **deferred**
 
 - Stale versions: `application-list`, `order-list`, `transport-legs-editor` and the document panels keep the dialog open on a stale version, so Delete retries the same saved version and fails again; `sample-list` closes the dialog instead. Unify them.
+
+## Failed-only periods that never reach an Application (#1714)
+
+Where should emissions from a period that only had failed runs and never
+reaches an Application eventually be reported? For now, keep a visible to-do
+and do not move emissions to another period or feedstock automatically.
+`src/data-access/failed-run-emission-guidance.ts:loadFacilityFailedEmissionTodos`
+keeps unmatched runs visible; `loadRunEmissionContributors` in
+`src/data-access/credit-batch-emission-contributors.ts` resolves only an exact
+facility, type and end-day batch match. A matched batch still needs real applied
+biochar before a Removal can claim it; existing batch readiness remains in force.
+A later reporting destination needs a separate product decision.

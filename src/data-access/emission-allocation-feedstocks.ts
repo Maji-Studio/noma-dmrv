@@ -1,3 +1,4 @@
+import { loadRunEmissionContributors } from "./credit-batch-emission-contributors";
 import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { db } from "@/db";
 import { creditBatchProductionRuns, creditBatches, feedstocks, productionRunFeedstocks, productionRuns, storageLocations } from "@/db/schema";
@@ -39,6 +40,9 @@ export async function loadAllocationFeedstocks(ctx: OrgContext, facilityId: stri
       .leftJoin(creditBatches, and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, creditBatchProductionRuns.creditBatchId)))
       .where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId), inArray(productionRunFeedstocks.feedstockId, ids))),
   ]);
+  const contributors = await loadRunEmissionContributors(ctx, uses.map(use => use.runId), reader);
+  const batchByRun = new Map(contributors.map(run => [run.runId, run.creditBatchId]));
+  for (const use of uses) use.creditBatchId = batchByRun.get(use.runId) ?? use.creditBatchId;
   const usageById = new Map(usage.map(row => [row.id, row]));
   return rows.map(({ stock, binName }): AllocationFeedstockFact => {
     const draws = uses.filter(row => row.feedstockId === stock.id);

@@ -14,6 +14,7 @@ export const creditBatchKeys = {
   recordPreviewPrefix: () => [...creditBatchKeys.all, "recordPreview"] as const,
   recordPreview: (input: RecordCreditBatchPreviewInput | null) =>
     [...creditBatchKeys.recordPreviewPrefix(), input] as const,
+  facilityTodos: (facilityId: string) => [...creditBatchKeys.runPreviewPrefix(), "facility-todos", facilityId] as const,
   runPreviewPrefix: () => [...creditBatchKeys.all, "runPreview"] as const,
   runPreview: (input: ProductionRunCreditBatchPreviewInput | null) =>
     [...creditBatchKeys.runPreviewPrefix(), input] as const,

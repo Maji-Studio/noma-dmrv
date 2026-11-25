@@ -1,9 +1,10 @@
+import { loadFailedRunEmissionGuidance } from "./failed-run-emission-guidance";
 /**
  * Mirrors attachProductionRunToMatchingCreditBatch through shared helpers.
  * This read-only preview takes no row or advisory locks.
  */
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import { creditBatchProductionRuns, creditBatches, facilities, feedstockTypes, productionRuns, storageLocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { ProductionRunCreditBatchPreviewParsed } from "@/schemas/production-run-credit-batch-preview";
@@ -16,10 +17,22 @@ import { requireOrgScope } from "./utils";
 export async function getProductionRunCreditBatchPreview(
   ctx: OrgContext,
   input: ProductionRunCreditBatchPreviewParsed,
+  reader: DbTransaction | typeof db = db,
 ): Promise<ProductionRunCreditBatchPreview> {
   requireOrgScope(ctx);
+  const [savedEmissionAttachment] = input.productionRunId
+    ? await loadFailedRunEmissionGuidance(ctx, { runIds: [input.productionRunId] }, reader) : [];
+  if (input.savedOnly && savedEmissionAttachment) {
+    return { state: "not-applicable", status: "failed", contributionKind: "emissions", savedEmissionAttachment };
+  }
+  const preview = await readDraftPreview(ctx, input, reader);
+  return { ...preview, ...(savedEmissionAttachment ? { contributionKind: "emissions" as const, savedEmissionAttachment } : {}) };
+}
+
+async function readDraftPreview(ctx: OrgContext, input: ProductionRunCreditBatchPreviewParsed, reader: DbTransaction | typeof db): Promise<ProductionRunCreditBatchPreview> {
+  requireOrgScope(ctx);
   const member = input.productionRunId
-    ? await readMember(ctx, input.productionRunId)
+    ? await readMember(ctx, input.productionRunId, reader)
     : null;
   if (member && input.status !== "complete") {
     return { state: "member", batch: member.batch, basis: null, conflict: "reopen" };
@@ -28,7 +41,7 @@ export async function getProductionRunCreditBatchPreview(
     return { state: "not-applicable", status: input.status };
   }
 
-  const facts = await readPreviewFacts(ctx, input);
+  const facts = await readPreviewFacts(ctx, input, reader);
   if (facts.state === "incomplete") {
     return member
       ? { state: "member", batch: member.batch, basis: null, conflict: null }
@@ -55,20 +68,21 @@ export async function getProductionRunCreditBatchPreview(
   }
   if (!basis) return { state: "mixed-feedstock", feedstockTypeCount: facts.types.length };
 
-  const batches = await findCreditBatchesCoveringDay(ctx, db, {
+  const batches = await findCreditBatchesCoveringDay(ctx, reader, {
     facilityId: facts.facility.id, feedstockTypeId: feedstockType.id, day: facts.day,
   });
   const expected = input.status !== "complete";
   if (batches.length === 0) return { state: "no-match", basis, expected };
   if (batches.length > 1) return { state: "ambiguous", batches, basis, expected };
   const [batch] = batches;
-  const locked = await readCreditBatchMembershipSubmissionLock(ctx, db, batch.id);
+  const locked = await readCreditBatchMembershipSubmissionLock(ctx, reader, batch.id);
   return { state: locked ? "locked" : "match", batch, basis, expected };
 }
 
-async function readMember(ctx: OrgContext, productionRunId: string) {
+async function readMember(ctx: OrgContext, productionRunId: string, reader: DbTransaction | typeof db) {
+  requireOrgScope(ctx);
   // Joining the run proves the supplied edit ID exists in this organization.
-  const [member] = await db.select({
+  const [member] = await reader.select({
     batch: {
       id: creditBatches.id, code: creditBatches.code,
       startDate: creditBatches.startDate, endDate: creditBatches.endDate,
@@ -90,9 +104,10 @@ async function readMember(ctx: OrgContext, productionRunId: string) {
   return member ?? null;
 }
 
-async function readPreviewFacts(ctx: OrgContext, input: ProductionRunCreditBatchPreviewParsed) {
+async function readPreviewFacts(ctx: OrgContext, input: ProductionRunCreditBatchPreviewParsed, reader: DbTransaction | typeof db) {
+  requireOrgScope(ctx);
   if (!input.facilityId) return { state: "incomplete", missing: "facility" } as const;
-  const [facility] = await db.select({ id: facilities.id, name: facilities.name, timezone: facilities.timezone })
+  const [facility] = await reader.select({ id: facilities.id, name: facilities.name, timezone: facilities.timezone })
     .from(facilities).where(and(
       eq(facilities.id, input.facilityId), eq(facilities.organizationId, ctx.organizationId),
     ));
@@ -101,7 +116,7 @@ async function readPreviewFacts(ctx: OrgContext, input: ProductionRunCreditBatch
   const dayBasis = input.status === "complete" || input.endTime ? "end" : "start";
   const instant = dayBasis === "end" ? input.endTime : input.startTime;
   if (!instant) return { state: "incomplete", missing: dayBasis } as const;
-  const [date] = await db.select({ day: facilityInstantDateExpr(ctx.organizationId, facility.id, instant) })
+  const [date] = await reader.select({ day: facilityInstantDateExpr(ctx.organizationId, facility.id, instant) })
     .from(facilities).where(and(
       eq(facilities.id, facility.id), eq(facilities.organizationId, ctx.organizationId),
     ));
@@ -110,7 +125,7 @@ async function readPreviewFacts(ctx: OrgContext, input: ProductionRunCreditBatch
   if (input.feedstockStorageLocationIds.length === 0) return { state: "incomplete", missing: "feedstock" } as const;
   // Intake and stocked-bin identity guards enforce this restriction. This
   // describes the selected bins; save still validates and allocates real stock.
-  const types = await db.selectDistinct({ id: feedstockTypes.id, name: feedstockTypes.name })
+  const types = await reader.selectDistinct({ id: feedstockTypes.id, name: feedstockTypes.name })
     .from(storageLocations).innerJoin(feedstockTypes, and(
       eq(feedstockTypes.id, storageLocations.feedstockTypeId),
       eq(feedstockTypes.organizationId, ctx.organizationId),

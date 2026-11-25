@@ -1,3 +1,4 @@
+import { loadRunEmissionContributors } from "./credit-batch-emission-contributors";
 import { loadAllocationProductionClaims } from "./emission-allocation-production";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
@@ -48,9 +49,13 @@ export async function getEmissionAllocation(ctx: OrgContext, input: EmissionAllo
       .where(and(eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.facilityId, facilityId)))
       .orderBy(asc(certifierRemovals.code), asc(certifierRemovals.id)),
   ]);
-  // Include unbatched completed runs so their recorded activity has a not-yet column.
+  const contributors = await loadRunEmissionContributors(ctx, runRows.map(({ run }) => run.id), executor);
+  for (const contributor of contributors) {
+    if (contributor.creditBatchId) batchByRun.set(contributor.runId, contributor.creditBatchId);
+  }
+  // Include unbatched complete and failed runs so their recorded activity has a not-yet column.
   // Members follow the exact lineage selection, including incomplete member runs.
-  const runs = runRows.filter(({ run }) => batchByRun.has(run.id) || (run.status === COMPLETED_PRODUCTION_RUN_STATUS && !run.archivedAt));
+  const runs = runRows.filter(({ run }) => batchByRun.has(run.id) || ((run.status === COMPLETED_PRODUCTION_RUN_STATUS || run.status === "failed") && !run.archivedAt));
   const removalIds = removalRows.map(row => row.id);
   const [removalLoads, appliedDeliveryIds, production] = await Promise.all([
     loadAllocationRemovalLoads(ctx, batchIds, removalRows, executor), loadAppliedDeliveryIds(ctx, batchIds, executor),

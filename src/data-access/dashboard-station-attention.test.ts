@@ -68,3 +68,12 @@ describe("withCrossCuttingAttention", () => {
     expect(withCrossCuttingAttention(input, [], NO_BATCHES, FACILITY_ID)).toEqual(input);
   });
 });
+
+it("counts unresolved failed emissions at the production station", () => {
+  const result = withCrossCuttingAttention(stations(), [], {
+    interrupted: 0, notSubmitted: 0, returned: 0, failedEmissions: 1,
+  }, "facility");
+  expect(result.find(station => station.key === "production")).toMatchObject({
+    attention: 1, reasons: [{ state: "warning", text: "1 failed run with unresolved emissions" }],
+  });
+});

@@ -1,3 +1,4 @@
+import { loadFacilityFailedEmissionTodos } from "./failed-run-emission-guidance";
 /**
  * Dashboard overview data access — the Flow Hero dashboard's single aggregate
  * read. Period-scoped numbers (the 4-KPI band with deltas vs the previous
@@ -695,6 +696,12 @@ export async function getDashboardAttentionItems(
   requireOrgScope(ctx);
   const orgId = ctx.organizationId;
 
+  const failedEmissionTodos = await loadFacilityFailedEmissionTodos(ctx, facilityId);
+  const failedEmissionRows = failedEmissionTodos.map((todo): DashboardAttentionItem => ({
+    id: todo.id, stage: "production", recordKind: "productionRun", entityCode: todo.productionRun.code,
+    recordIds: [todo.productionRun.id], date: todo.emissionAttachment.endDay,
+    title: todo.detail, href: todo.target.href,
+  }));
   const rows: AttentionRow[] = await unionAll(
     db
       .select({
@@ -867,6 +874,13 @@ export async function getDashboardAttentionItems(
         groupedRow("removal-draft", "Removals", "Draft Removals", removalRows.drafts.length, removalsList, removalRows.drafts)),
       ...capOrGroup(removalRows.rejected, removalRows.rejected.length, () =>
         groupedRow("removal-rejected", "Removals", REMOVAL_REJECTED_ATTENTION_TITLE, removalRows.rejected.length, removalsList, removalRows.rejected)),
+      ...capOrGroup(failedEmissionRows, failedEmissionRows.length, (): DashboardAttentionItem => ({
+        id: "failed-run-emissions-group", stage: "production", recordKind: "productionRun",
+        entityCode: "Production runs", count: failedEmissionRows.length,
+        recordIds: failedEmissionRows.flatMap(row => row.recordIds), recordItems: failedEmissionRows,
+        date: null, title: "Failed runs with unresolved emissions",
+        href: `/production-runs?facility=${encodeURIComponent(facilityId)}`,
+      })),
       ...flags,
       ...capOrGroup(removalRows.returned.map((row) => row.item), removalRows.returned.length, () =>
         groupedRow("removal-returned", "Removals", RETURNED_BY_ISOMETRIC_LABEL, removalRows.returned.length, removalsList, removalRows.returned.map((row) => row.item))),
@@ -875,6 +889,6 @@ export async function getDashboardAttentionItems(
       ...capOrGroup(notSubmitted, notSubmitted.length, () =>
         groupedRow("batch-not-submitted", "Credit batches", PERIOD_ENDED_NOT_SUBMITTED_TITLE, notSubmitted.length, batchList, notSubmitted)),
     ],
-    batches: { interrupted: interrupted.size, notSubmitted: notSubmittedBatchCount, returned: returnedBatchCount },
+    batches: { ...(failedEmissionTodos.length ? { failedEmissions: failedEmissionTodos.length } : {}), interrupted: interrupted.size, notSubmitted: notSubmittedBatchCount, returned: returnedBatchCount },
   };
 }

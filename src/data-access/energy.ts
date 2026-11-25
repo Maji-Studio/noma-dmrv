@@ -1,3 +1,4 @@
+import { loadRunEmissionContributors } from "./credit-batch-emission-contributors";
 import { getFeedstockTransportOwners } from "./feedstock-transport-ownership";
 import { loadFacilityEmissionEntryFlows } from "./emission-entry-energy";
 import { effectiveDeliveryDistance } from "./delivery-distance-projections";
@@ -18,12 +19,11 @@ import { effectiveDeliveryDistance } from "./delivery-distance-projections";
  * UTC day is the day the operator chose.
  */
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import {
   applicationOutputAllocations,
   applications,
   creditBatches,
-  creditBatchProductionRuns,
   customerLocations,
   customers,
   deliveries,
@@ -73,14 +73,24 @@ function toShares(
     .map((row) => ({ ownerId: row.ownerId, runId: row.runId, dryMassKg: row.dryMassKg }));
 }
 
-export async function getEnergyInputs(
+export async function getEnergyInputs(ctx: OrgContext, facilityId: string): Promise<EnergyFacilityInputs> {
+  requireOrgScope(ctx);
+  const result = await getRecordedEnergyInputs(ctx, facilityId);
+  if (result.inputs === EMPTY_INPUTS) return result;
+  result.inputs.emissionEntryFlows = await loadFacilityEmissionEntryFlows(ctx, facilityId);
+  return result;
+}
+
+/** Recorded automatic activity, also readable within a consistent caller transaction. */
+export async function getRecordedEnergyInputs(
   ctx: OrgContext,
   facilityId: string,
+  reader: DbTransaction | typeof db = db,
 ): Promise<EnergyFacilityInputs> {
   requireOrgScope(ctx);
   const orgId = ctx.organizationId;
 
-  const [facility] = await db
+  const [facility] = await reader
     .select({ timezone: facilities.timezone })
     .from(facilities)
     .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, orgId)));
@@ -112,13 +122,13 @@ export async function getEnergyInputs(
     applicationRows,
     applicationShareRows,
   ] = await Promise.all([
-    db
+    reader
       .select({
         id: productionRuns.id,
         code: productionRuns.code,
         startTime: productionRuns.startTime,
         reactorName: reactors.identifier,
-        creditBatchId: creditBatchProductionRuns.creditBatchId,
+        status: productionRuns.status,
         dieselOperationLiters: productionRuns.dieselOperationLiters,
         dieselGensetLiters: productionRuns.dieselGensetLiters,
         preprocessingFuelLiters: productionRuns.preprocessingFuelLiters,
@@ -130,15 +140,8 @@ export async function getEnergyInputs(
         reactors,
         and(eq(reactors.id, productionRuns.reactorId), eq(reactors.organizationId, orgId)),
       )
-      .leftJoin(
-        creditBatchProductionRuns,
-        and(
-          eq(creditBatchProductionRuns.productionRunId, productionRuns.id),
-          eq(creditBatchProductionRuns.organizationId, orgId),
-        ),
-      )
       .where(facilityRuns),
-    db
+    reader
       .select({
         id: creditBatches.id,
         code: creditBatches.code,
@@ -153,7 +156,7 @@ export async function getEnergyInputs(
           isNull(creditBatches.archivedAt),
         ),
       ),
-    db
+    reader
       .select({
         id: feedstocks.id,
         code: feedstocks.code,
@@ -168,7 +171,7 @@ export async function getEnergyInputs(
           isNull(feedstocks.archivedAt),
         ),
       ),
-    db
+    reader
       .select({
         feedstockId: transportLegs.entityId,
         distanceKm: transportLegs.distanceKm,
@@ -190,7 +193,7 @@ export async function getEnergyInputs(
           eq(transportLegs.entityType, FEEDSTOCK_LEG_ENTITY_TYPE),
         ),
       ),
-    db
+    reader
       .select({
         id: deliveries.id,
         code: deliveries.code,
@@ -219,7 +222,7 @@ export async function getEnergyInputs(
       .where(facilityDeliveries),
     // Net dry mass per delivery and source run. Reversal rows are negative,
     // so the sum is what the truck actually carried from each run.
-    db
+    reader
       .select({
         ownerId: outputStockAllocations.deliveryId,
         runId: outputStockRunAllocations.productionRunId,
@@ -239,7 +242,7 @@ export async function getEnergyInputs(
       )
       .where(eq(outputStockRunAllocations.organizationId, orgId))
       .groupBy(outputStockAllocations.deliveryId, outputStockRunAllocations.productionRunId),
-    db
+    reader
       .select({
         id: applications.id,
         code: applications.code,
@@ -251,7 +254,7 @@ export async function getEnergyInputs(
       .from(applications)
       .innerJoin(deliveries, and(eq(deliveries.id, applications.deliveryId), facilityDeliveries))
       .where(eq(applications.organizationId, orgId)),
-    db
+    reader
       .select({
         ownerId: applicationOutputAllocations.applicationId,
         runId: applicationOutputAllocations.productionRunId,
@@ -266,7 +269,11 @@ export async function getEnergyInputs(
       .groupBy(applicationOutputAllocations.applicationId, applicationOutputAllocations.productionRunId),
   ]);
 
-  const transportOwners = await getFeedstockTransportOwners(ctx, feedstockRows.map((row) => row.id));
+  const [transportOwners, contributors] = await Promise.all([
+    getFeedstockTransportOwners(ctx, feedstockRows.map((row) => row.id), reader),
+    loadRunEmissionContributors(ctx, runRows.map(run => run.id), reader),
+  ]);
+  const batchByRun = new Map(contributors.map(run => [run.runId, run.creditBatchId]));
 
   const legsByFeedstock = new Map<string, EnergyFeedstockInput["legs"]>();
   for (const leg of legRows) {
@@ -278,18 +285,17 @@ export async function getEnergyInputs(
   return {
     timeZone,
     inputs: {
-      emissionEntryFlows: await loadFacilityEmissionEntryFlows(ctx, facilityId),
       runs: runRows.map((run) => ({
         id: run.id,
         code: run.code,
         day: dayOf(run.startTime),
         reactorName: run.reactorName,
-        creditBatchId: run.creditBatchId,
+        creditBatchId: batchByRun.get(run.id) ?? null,
         dieselOperationLiters: run.dieselOperationLiters,
         dieselGensetLiters: run.dieselGensetLiters,
         preprocessingFuelLiters: run.preprocessingFuelLiters,
         electricityKwh: run.electricityKwh,
-        biocharDryMassKg: run.biocharDryMassKg,
+        biocharDryMassKg: run.status === "failed" ? null : run.biocharDryMassKg,
       })),
       feedstocks: feedstockRows.map((feedstock) => ({
         id: feedstock.id,

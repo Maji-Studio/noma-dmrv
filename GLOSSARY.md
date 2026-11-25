@@ -33,10 +33,12 @@ as *Complete* with its end time, feedstock and biochar output recorded.
 Missing completion fields prevent saving. *Failed* and *Cancelled* are actions
 on a saved run; neither is available on create.
 *Complete* — the batch finished and its core quantities (feedstock
-consumed, biochar output) are recorded. *Failed* — the run physically
-happened and consumed feedstock but did not produce usable biochar;
-its material stays in the mass balance (conversion loss, dump-back)
-but never joins a credit batch. *Cancelled* — the record was created
+consumed, biochar output) are recorded. *Failed*: the run physically
+happened and consumed feedstock but produced no usable biochar. Its recorded
+operating emissions and feedstock inputs count in the matching credit batch
+for the day it ended on the facility's calendar. It adds no biochar or stored
+mass and does not change yield. If no batch matches, the run can be saved and
+a note shows what remains to be assigned. *Cancelled* — the record was created
 in error; the event never happened and counts nowhere. Failed marks a
 real event with a bad outcome; cancelled marks a record that should
 not exist.
@@ -427,6 +429,7 @@ noma's production-cohort unit of carbon accounting — the production
 runs of **one feedstock** at one facility within a production window. Under Isometric, both the window and the member-run
 span (earliest start to latest end) must cover less than one month. Other
 certifiers have no month cap.
+Complete runs are material members; failed runs attach only as emission contributors.
 This makes a credit batch the Isometric protocol's **production
 batch**: the lab-characterisation and sampling unit (one feedstock,
 consistent pyrolysis conditions). The one-calendar-month cap is noma’s

@@ -4,13 +4,36 @@ Status: accepted (2026-07-03) · Issue #349 · Partially supersedes
 [ADR 0003](./0003-removal-as-submission-unit.md) (narrows its
 "applied-biochar scoping" clause)
 
+> **Amended 2026-11-25: failed production runs contribute operating emissions.**
+> A Failed run contributes its recorded production inputs in full to the credit
+> batch whose inclusive window contains its facility-local end day, matching
+> organization, facility and single feedstock type. This emissions-only attachment
+> creates no material membership, biochar, application slice or stored mass and
+> does not change yield, sampling or the material-member production span.
+>
+> The first Removal claiming the batch's production emissions includes these
+> inputs. Later Removals do not repeat them. An unmatched failed run can be saved;
+> its live note and facility to-do resolve when a matching batch exists.
+>
+> Attached failed contributors may own feedstock transport alongside complete
+> material members, ordered by start time then run ID across the organization.
+> Running, Cancelled and unattached failed runs cannot own legs. Whole-record
+> ownership counts once and retains full-lineage frozen-owner protection,
+> including holders that counted transport as zero and archived-inclusive checks.
+>
+> Writes that add, remove or change a failed contributor to a Sent production
+> claim are refused with `certification_locked`. Reservations and source freshness
+> checks cover failed contributors and transport provenance. Submitted snapshots
+> remain immutable. Registry returns follow ADR 0035. Emission dependencies stay
+> separate from material lineage and material membership locks.
+
 > **Amended 2026-10-29: feedstock transport counts once.** A feedstock
 > record's transport legs belong to its earliest complete, non-archived linked
 > run in a non-archived credit batch (start time, then run ID, across the
 > organization). Only credit batches containing that run count those legs; a
 > production-claiming batch whose linked records are all owned elsewhere
 > reports 0 t·km. Pro-rata stock allocations still link the record to later
-> runs for traceability and dry mass. Running, failed and cancelled runs cannot
+> runs for traceability and dry mass. Running, cancelled and unattached failed runs cannot
 > own legs, and a record linked only to such runs has no owner.
 > Each Removal's submission snapshot lists the feedstock records whose
 > transport it counted. Its lock on a record's transport (legs, transport

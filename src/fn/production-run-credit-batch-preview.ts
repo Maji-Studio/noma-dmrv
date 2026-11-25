@@ -13,7 +13,7 @@ import type { ActionResult } from "@/types/actions";
 import type { ProductionRunCreditBatchPreview } from "@/types/production-run-credit-batch-preview";
 import { withAction } from "./with-action";
 
-/** Which credit batch the unsaved run joins; read-only. */
+/** Material membership preview plus live saved failed-emission attachment; read-only. */
 export async function previewProductionRunCreditBatchFn(
   input: ProductionRunCreditBatchPreviewInput,
 ): Promise<ActionResult<ProductionRunCreditBatchPreview>> {

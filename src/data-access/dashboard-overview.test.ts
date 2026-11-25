@@ -1,3 +1,4 @@
+import type { FacilityFailedEmissionTodo } from "./failed-run-emission-guidance";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTableName, sql } from "drizzle-orm";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
@@ -12,11 +13,13 @@ import { CHANGED_SINCE_REVIEW_LABEL } from "@/lib/certification/interrupted-remo
 
 const mocks = vi.hoisted(() => ({
   select: vi.fn(),
+  failedTodos: vi.fn(async (): Promise<FacilityFailedEmissionTodo[]> => []),
   previews: vi.fn(),
   union: vi.fn(async (): Promise<unknown[]> => []),
   returned: vi.fn(async (): Promise<Set<string>> => new Set()),
   changedAttempts: vi.fn(async (): Promise<Set<string>> => new Set()),
 }));
+vi.mock("./failed-run-emission-guidance", () => ({ loadFacilityFailedEmissionTodos: mocks.failedTodos }));
 vi.mock("./removal-latest-attempt", () => ({ getRemovalIdsWithChangedLatestAttempt: mocks.changedAttempts }));
 vi.mock("./dashboard-returned-removals", () => ({ loadReturnedRemovalIds: mocks.returned }));
 // Batch rows carry already-derived Removal displays in these tests.
@@ -86,6 +89,7 @@ beforeEach(() => {
   mocks.changedAttempts.mockResolvedValue(new Set());
   mocks.union.mockResolvedValue([]);
   mocks.returned.mockResolvedValue(new Set());
+  mocks.failedTodos.mockResolvedValue([]);
   rowsByTable = { facilities: [{ timezone: "UTC" }] };
   mocks.previews.mockResolvedValue({});
   // Project only selected columns, so omitting composition or the allocation
@@ -396,4 +400,20 @@ describe("needs attention rows", () => {
       expect(batches.returned).toBe(2);
     });
   });
+});
+
+
+it("includes facility failed-emission checks without a batch and removes them on the next resolved read", async () => {
+  mocks.failedTodos.mockResolvedValue([{
+    id: "failed-run-emissions:run-1", title: "Assign failed run emissions", detail: "Run PR-1 is saved. Its emissions have no matching credit batch.",
+    productionRun: { id: "run-1", code: "PR-1" }, target: { href: "/credit-batches?facility=test" },
+    emissionAttachment: { productionRunId: "run-1", runCode: "PR-1", facilityId: FACILITY_ID,
+      endDay: DAY, feedstockTypeId: "type-1", feedstockTypeName: "Wood", state: "no-match", batch: null,
+      message: "No matching credit batch", href: "/credit-batches?facility=test" },
+  }]);
+  const unresolved = await getDashboardAttentionItems(CTX, FACILITY_ID, DAY);
+  expect(unresolved.items).toMatchObject([{ id: "failed-run-emissions:run-1", stage: "production", recordKind: "productionRun", recordIds: ["run-1"], date: DAY }]);
+  expect(unresolved.batches.failedEmissions).toBe(1);
+  mocks.failedTodos.mockResolvedValue([]);
+  expect((await getDashboardAttentionItems(CTX, FACILITY_ID, DAY)).items).toEqual([]);
 });
