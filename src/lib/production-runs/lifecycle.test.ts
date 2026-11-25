@@ -341,3 +341,12 @@ describe("production-run lifecycle", () => {
     });
   });
 });
+
+describe("dry-mass balance and failed runs", () => {
+  const over = { feedstockWetMassKg: 50, feedstockMoisturePercent: 20, biocharOutputKg: 60, biocharMoisturePercent: 0 };
+  it("flags excess output for complete but ignores stored output on a failed run", () => {
+    const codes = (status: "complete" | "failed") => getProductionRunOutcomeViolations(makeOutcomeInput({ status, ...over })).map((v) => v.code);
+    expect(codes("complete")).toContain("dry-mass-balance-exceeded");
+    expect(codes("failed")).not.toContain("dry-mass-balance-exceeded");
+  });
+});

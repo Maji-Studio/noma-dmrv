@@ -3,13 +3,14 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { createCreditBatch } from "@/data-access/credit-batches";
-import { createProductionRun } from "@/data-access/production-runs/mutations";
+import { createProductionRun, updateProductionRun } from "@/data-access/production-runs/mutations";
 import { deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
 import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
 import { feedstocks, feedstockTypes } from "@/db/schema/feedstock";
 import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
 import { productionProcesses } from "@/db/schema/production-processes";
 import { productionRunFeedstockDraws, productionRunFeedstocks, productionRuns } from "@/db/schema/production";
+import { productionVersion } from "./helpers/production-version";
 import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 const AVAILABLE_WET_KG = 1_000;
@@ -152,5 +153,44 @@ describe("create a production run as Failed", () => {
       feedstockMoisturePercent: MOISTURE_PERCENT,
       feedstockDraws: [{ storageLocationId: binId, wetMassKg: 100 }],
     })).rejects.toThrow(/not found/i);
+  });
+
+  describe("stored output on a failed run is not compared", () => {
+    const STORED_OUTPUT_KG = 60;
+    const EDITED_DRAW_KG = 50; // 50 kg at 20% is 40 kg dry, below the stored 60 kg output
+
+    async function runWithStoredOutput(label: string, status: "running" | "failed") {
+      const run = await createProductionRun(ctx, {
+        code: `PR-FAIL-${label}-${tag}`, facilityId, reactorId: await newReactor(label), status,
+        startTime: new Date("2026-04-10T08:00:00Z"), endTime: status === "failed" ? new Date("2026-04-10T10:00:00Z") : null,
+        feedstockMoisturePercent: MOISTURE_PERCENT, feedstockDraws: [{ storageLocationId: binId, wetMassKg: 100 }],
+      });
+      runIds.push(run.id);
+      await db.update(productionRuns).set({ biocharOutputKg: STORED_OUTPUT_KG, biocharMoisturePercent: 0 }).where(eq(productionRuns.id, run.id));
+      return run;
+    }
+    const storedOutput = async (id: string) => (await db.select({ kg: productionRuns.biocharOutputKg, moisture: productionRuns.biocharMoisturePercent })
+      .from(productionRuns).where(eq(productionRuns.id, id)))[0];
+
+    it("saves a feedstock edit on a failed run whose stored output exceeds the new dry input", async () => {
+      const run = await runWithStoredOutput("EDIT", "failed");
+      const saved = await updateProductionRun(ctx, run.id, {
+        expectedVersion: await productionVersion(ctx, "productionRuns", run.id),
+        feedstockMoisturePercent: MOISTURE_PERCENT, feedstockDraws: [{ storageLocationId: binId, wetMassKg: EDITED_DRAW_KG }],
+      });
+      expect(saved.totalFeedstockWetMassKg).toBe(EDITED_DRAW_KG);
+      expect(await storedOutput(run.id)).toEqual({ kg: STORED_OUTPUT_KG, moisture: 0 });
+    });
+
+    it("moves a running run with such output to failed", async () => {
+      const run = await runWithStoredOutput("MOVE", "running");
+      const saved = await updateProductionRun(ctx, run.id, {
+        expectedVersion: await productionVersion(ctx, "productionRuns", run.id),
+        status: "failed", endTime: new Date("2026-04-10T10:00:00Z"),
+        feedstockMoisturePercent: MOISTURE_PERCENT, feedstockDraws: [{ storageLocationId: binId, wetMassKg: EDITED_DRAW_KG }],
+      });
+      expect(saved.status).toBe("failed");
+      expect(await storedOutput(run.id)).toEqual({ kg: STORED_OUTPUT_KG, moisture: 0 });
+    });
   });
 });

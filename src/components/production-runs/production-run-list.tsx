@@ -129,14 +129,14 @@ function createColumns(
       accessorKey: "biocharOutputKg",
       header: "Biochar wet mass",
       cell: ({ row }) => (
-        <span className="font-mono">{formatMassKg(row.original.biocharOutputKg)}</span>
+        <span className="font-mono">{formatMassKg(row.original.status === "failed" ? null : row.original.biocharOutputKg)}</span>
       ),
     },
     {
       accessorKey: "biocharDryMassKg",
       header: "Biochar dry mass",
       cell: ({ row }) => (
-        <span className="font-mono">{formatMassKg(row.original.biocharDryMassKg)}</span>
+        <span className="font-mono">{formatMassKg(row.original.status === "failed" ? null : row.original.biocharDryMassKg)}</span>
       ),
     },
     {
@@ -149,7 +149,7 @@ function createColumns(
       accessorKey: "biocharMoisturePercent",
       header: qualifyMassLabel(MASS_MOISTURE_LABELS.moisture, "Biochar"),
       cell: ({ row }) => (
-        <span className="font-mono">{formatMoisturePercent(row.original.biocharMoisturePercent)}</span>
+        <span className="font-mono">{formatMoisturePercent(row.original.status === "failed" ? null : row.original.biocharMoisturePercent)}</span>
       ),
     },
     {

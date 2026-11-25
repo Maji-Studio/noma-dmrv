@@ -263,7 +263,7 @@ describe("ProductionRunForm output section by status", () => {
     expect(screen.getByText("Output")).toBeTruthy();
   });
 
-  it("hides the Output section for Failed on create, keeps typed values, and omits them from the payload", async () => {
+  it("hides the Output section for Failed on create and keeps typed values for a switch back to Complete", async () => {
     const onSubmit = vi.fn();
     render(<ProductionRunForm onSubmit={onSubmit} />);
     fireEvent.click(screen.getByRole("radio", { name: "Complete" }));
@@ -272,6 +272,7 @@ describe("ProductionRunForm output section by status", () => {
     expect(outputInputs()).toHaveLength(0);
     fireEvent.click(screen.getByRole("radio", { name: "Complete" }));
     expect((document.querySelector('input[name="biocharOutputKg"]') as HTMLInputElement).value).toBe("50");
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it("omits output from the payload for a saved run edited to Failed, or already Failed, even above dry input", async () => {

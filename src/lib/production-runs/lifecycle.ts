@@ -193,7 +193,8 @@ export function getProductionRunOutcomeViolations(
     violations.push({ code: "running-end-forbidden" });
   }
 
-  if (dryOutputExceedsDryInput(input)) {
+  // A failed run records no output, so any output stored on it is not compared.
+  if (input.status !== "failed" && dryOutputExceedsDryInput(input)) {
     violations.push({ code: "dry-mass-balance-exceeded" });
   }
 

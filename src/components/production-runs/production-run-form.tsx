@@ -128,12 +128,12 @@ interface ProductionRunFormProps {
  * nor submitted. They stay in the form (switching back shows them) and in the
  * saved record (an update that omits them leaves them alone).
  */
+const OUTPUT_FIELDS = ["biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"] as const;
+
 function withoutHiddenOutput<T extends { status?: unknown }>(values: T): T {
   if (values.status !== "failed") return values;
   const rest: Record<string, unknown> = { ...values };
-  delete rest.biocharOutputKg;
-  delete rest.biocharMoisturePercent;
-  delete rest.biocharStorageLocationId;
+  for (const field of OUTPUT_FIELDS) delete rest[field];
   return rest as T;
 }
 
@@ -697,11 +697,7 @@ export function ProductionRunForm({
       {watchedStatus !== "failed" && <FormSection
         title="Output"
         icon={<PackageIcon size={14} weight="bold" />}
-        fields={[
-          "biocharStorageLocationId",
-          "biocharOutputKg",
-          "biocharMoisturePercent",
-        ]}
+        fields={[...OUTPUT_FIELDS]}
       >
 
         <FormField
