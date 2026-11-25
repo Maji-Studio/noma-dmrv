@@ -1,3 +1,4 @@
+import { toReturnMovement } from '@/lib/production-run-returns/movement';
 import { db, type DbTransaction } from '@/db';
 import { binMovements, type BinMovement } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
@@ -58,7 +59,7 @@ export async function recordProductionRunReturnInTransaction(ctx: OrgContext, tx
   const source = await lockReturnSource(ctx, tx, input.sourceProductionRunId, [input.storageLocationId]);
   const saved = await insertReturn(ctx, tx, source, input, { idempotencyKey, payload });
   await assertReturnBalances(ctx, tx, [input.storageLocationId]);
-  options.capture?.(source.run.id, null, saved);
+  options.capture?.(source.run.id, null, toReturnMovement(saved));
   return saved;
 }
 

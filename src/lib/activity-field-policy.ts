@@ -382,6 +382,9 @@ export const activityFieldPolicies: Record<string, ActivityEntityPolicy> = {
     balanceBeforeDryKg: "value",
     balanceAfterDryKg: "value",
     correctsMovementId: "ignore",
+    sourceProductionRunId: { link: "production_run" },
+    returnedFeedstockTypeId: { link: "feedstock_type" },
+    feedstockDryDeltaKg: "value",
     createdAt: "ignore",
   } },
   removal: { table: certifierRemovals, fields: {

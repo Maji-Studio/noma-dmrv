@@ -65,7 +65,12 @@ describe('app-only failed-run return operations', { timeout: TIMEOUT_MS }, () =>
   it('attributes one source-run activity to the authenticated actor and suppresses replay activity', async () => {
     const saved = await runOperationInProcess(recordProductionRunReturn, fixture.ctx, input);
     expect(saved.createdBy).toBe(actorId);
-    expect((await runOperationInProcess(recordProductionRunReturn, fixture.ctx, input)).id).toBe(saved.id);
+    expect(typeof saved.postingSequence).toBe('string');
+    expect(() => JSON.stringify(saved)).not.toThrow();
+    expect(saved).toMatchObject({ massDeltaKg: 50, feedstockDryDeltaKg: 40 });
+    const replay = await runOperationInProcess(recordProductionRunReturn, fixture.ctx, input);
+    expect(replay).toEqual(saved);
+    expect(() => JSON.stringify(replay)).not.toThrow();
     expect(await activities()).toMatchObject([{ entityType: 'production_run', entityId: input.sourceProductionRunId,
       productionRunId: input.sourceProductionRunId, facilityId: fixture.facilityId,
       actorUserId: actorId, operationId: 'record_production_run_return', source: 'form' }]);
@@ -77,8 +82,12 @@ describe('app-only failed-run return operations', { timeout: TIMEOUT_MS }, () =>
     const correction = { sourceProductionRunId: input.sourceProductionRunId, storageLocationId: input.storageLocationId,
       correctsMovementId: original.id, reason: 'Correct measurement', idempotencyKey: crypto.randomUUID(),
       replacement: { ...input, wetMassKg: 60 } };
-    await runOperationInProcess(correctProductionRunReturn, fixture.ctx, correction);
-    await runOperationInProcess(correctProductionRunReturn, fixture.ctx, correction);
+    const reversal = await runOperationInProcess(correctProductionRunReturn, fixture.ctx, correction);
+    const replay = await runOperationInProcess(correctProductionRunReturn, fixture.ctx, correction);
+    expect(typeof reversal.postingSequence).toBe('string');
+    expect(reversal).toMatchObject({ massDeltaKg: -50, feedstockDryDeltaKg: -40 });
+    expect(replay).toEqual(reversal);
+    expect(() => JSON.stringify({ reversal, replay })).not.toThrow();
     expect(await activities()).toHaveLength(2);
     expect(await getProductionRunReturnHistory(fixture.ctx, input.sourceProductionRunId)).toHaveLength(3);
     expect(await getProductionRunReturnEligibility(fixture.ctx, input.sourceProductionRunId)).toMatchObject({

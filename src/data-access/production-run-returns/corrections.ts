@@ -1,3 +1,4 @@
+import { toReturnMovement } from '@/lib/production-run-returns/movement';
 import { and, eq, sql } from 'drizzle-orm';
 import { db, type DbTransaction } from '@/db';
 import { binMovements } from '@/db/schema';
@@ -58,7 +59,7 @@ export async function correctProductionRunReturnInTransaction(ctx: OrgContext, t
     });
   }
   await assertReturnBalances(ctx, tx, affectedBins);
-  options.capture?.(source.run.id, original, { reversal, replacement: input.replacement });
+  options.capture?.(source.run.id, toReturnMovement(original), { reversal: toReturnMovement(reversal), replacement: input.replacement });
   return reversal;
 }
 

@@ -1,3 +1,4 @@
+import { toReturnMovement, type ReturnMovement } from '@/lib/production-run-returns/movement';
 import type { BinMovement } from '@/db/schema';
 import { recordProductionRunReturnInTransaction, correctProductionRunReturnInTransaction } from '@/data-access/production-run-returns';
 import { readReturnSource } from '@/data-access/production-run-returns/queries';
@@ -17,10 +18,10 @@ async function captureReturn(scope: OperationScope, write: (options: ReturnWrite
     const { run } = await readReturnSource(scope.ctx, scope.tx, result.sourceProductionRunId!);
     scope.activity.link({ facilityId: run.facilityId, productionRunId: run.id });
   }
-  return result;
+  return toReturnMovement(result);
 }
 
-export const recordProductionRunReturn: Operation<typeof recordProductionRunReturnSchema, BinMovement> = {
+export const recordProductionRunReturn: Operation<typeof recordProductionRunReturnSchema, ReturnMovement> = {
   id: 'record_production_run_return',
   input: recordProductionRunReturnSchema,
   supportsDryRun: false,
@@ -28,7 +29,7 @@ export const recordProductionRunReturn: Operation<typeof recordProductionRunRetu
   execute: (scope, input) => captureReturn(scope, options => recordProductionRunReturnInTransaction(scope.ctx, scope.tx, input, options)),
 };
 
-export const correctProductionRunReturn: Operation<typeof correctProductionRunReturnSchema, BinMovement> = {
+export const correctProductionRunReturn: Operation<typeof correctProductionRunReturnSchema, ReturnMovement> = {
   id: 'correct_production_run_return',
   input: correctProductionRunReturnSchema,
   supportsDryRun: false,

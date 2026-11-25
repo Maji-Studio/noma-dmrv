@@ -33,6 +33,17 @@ describe('production-run return action boundary', () => {
     expect(mocks.run).toHaveBeenLastCalledWith({ id: 'correct_production_run_return' }, ctx, correction);
   });
 
+  it('returns history with exact JSON-safe posting sequences and kg masses', async () => {
+    const postingSequence = BigInt('9007199254740993');
+    mocks.history.mockResolvedValue([{ id: 'movement', postingSequence, massDeltaKg: 50,
+      feedstockDryDeltaKg: 40, inputSnapshot: { consumedDryKg: 80 } }]);
+    const result = await getProductionRunReturnHistoryFn(RUN_ID);
+    expect(result).toEqual({ success: true, data: [{ id: 'movement', postingSequence: '9007199254740993',
+      massDeltaKg: 50, feedstockDryDeltaKg: 40, inputSnapshot: { consumedDryKg: 80 } }] });
+    expect(() => JSON.stringify(result)).not.toThrow();
+    expect(mocks.history).toHaveBeenCalledWith(ctx, RUN_ID);
+  });
+
   it('rejects invalid measurements and UUIDs before running writes or reads', async () => {
     expect(await recordProductionRunReturnFn({ ...input, wetMassKg: 0 })).toMatchObject({ success: false });
     expect(await getProductionRunReturnHistoryFn('invalid')).toMatchObject({ success: false });

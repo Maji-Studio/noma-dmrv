@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from 'zod';
-import type { BinMovement } from '@/db/schema';
+import { toReturnMovement, type ReturnMovement } from '@/lib/production-run-returns/movement';
 import type { ActionResult } from '@/types/actions';
 import { getProductionRunReturnHistory, getProductionRunReturnAllowance } from '@/data-access/production-run-returns';
 import { getProductionRunReturnEligibility, type ProductionRunReturnEligibility } from '@/data-access/production-run-returns/eligibility';
@@ -11,20 +11,20 @@ import { recordProductionRunReturnSchema, correctProductionRunReturnSchema, type
 import { getProductionRunMaterialBalance } from '@/data-access/production-run-material-balance';
 import { withAction } from './with-action';
 
-export async function recordProductionRunReturnFn(input: RecordProductionRunReturnInput): Promise<ActionResult<BinMovement>> {
+export async function recordProductionRunReturnFn(input: RecordProductionRunReturnInput): Promise<ActionResult<ReturnMovement>> {
   return withAction(ctx => runOperationInProcess(recordProductionRunReturn, ctx, recordProductionRunReturnSchema.parse(input)), {
     fallbackMessage: 'Failed to record return',
   });
 }
 
-export async function correctProductionRunReturnFn(input: CorrectProductionRunReturnInput): Promise<ActionResult<BinMovement>> {
+export async function correctProductionRunReturnFn(input: CorrectProductionRunReturnInput): Promise<ActionResult<ReturnMovement>> {
   return withAction(ctx => runOperationInProcess(correctProductionRunReturn, ctx, correctProductionRunReturnSchema.parse(input)), {
     fallbackMessage: 'Failed to correct return',
   });
 }
 
-export async function getProductionRunReturnHistoryFn(sourceProductionRunId: string): Promise<ActionResult<BinMovement[]>> {
-  return withAction(ctx => getProductionRunReturnHistory(ctx, z.uuid().parse(sourceProductionRunId)), {
+export async function getProductionRunReturnHistoryFn(sourceProductionRunId: string): Promise<ActionResult<ReturnMovement[]>> {
+  return withAction(async ctx => (await getProductionRunReturnHistory(ctx, z.uuid().parse(sourceProductionRunId))).map(toReturnMovement), {
     fallbackMessage: 'Failed to load return history',
   });
 }

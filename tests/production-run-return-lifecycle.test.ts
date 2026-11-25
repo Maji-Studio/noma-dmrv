@@ -97,8 +97,8 @@ describe('return source lifecycle', { timeout: TIMEOUT_MS }, () => {
     await recordProductionRunReturn(fixture.ctx, input());
     const [sourceFacility] = await db.select().from(facilities).where(eq(facilities.id, fixture.facilityId));
     const [sourceReactor] = await db.select().from(reactors).where(eq(reactors.id, fixture.reactorId));
-    const [otherFacility] = await db.insert(facilities).values({ ...sourceFacility, id: crypto.randomUUID(), code: 'RETURN-OTHER-FACILITY' }).returning();
-    const [sameFacilityReactor] = await db.insert(reactors).values({ ...sourceReactor, id: crypto.randomUUID(), code: 'RETURN-OTHER-REACTOR' }).returning();
+    const [otherFacility] = await db.insert(facilities).values({ ...sourceFacility, id: crypto.randomUUID(), code: 'RETURN-OTHER-FACILITY', name: `Return other facility ${crypto.randomUUID()}` }).returning();
+    const [sameFacilityReactor] = await db.insert(reactors).values({ ...sourceReactor, id: crypto.randomUUID(), code: 'RETURN-OTHER-REACTOR', identifier: `Return other reactor ${crypto.randomUUID()}` }).returning();
     const [otherFacilityReactor] = await db.insert(reactors).values({ ...sourceReactor, id: crypto.randomUUID(), code: 'RETURN-MOVED-REACTOR', facilityId: otherFacility.id }).returning();
     for (const patch of [{ reactorId: sameFacilityReactor.id }, { facilityId: otherFacility.id, reactorId: otherFacilityReactor.id }]) {
       await expect(updateProductionRun(fixture.ctx, runId, { expectedVersion: 1, ...patch })).rejects.toMatchObject({ code: 'certification_locked' });
