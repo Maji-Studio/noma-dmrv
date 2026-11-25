@@ -263,27 +263,29 @@ describe("ProductionRunForm output section by status", () => {
     expect(screen.getByText("Output")).toBeTruthy();
   });
 
-  it("hides the Output section for Failed on create and brings it back empty for Complete", () => {
-    render(<ProductionRunForm onSubmit={vi.fn()} />);
+  it("hides the Output section for Failed on create, keeps typed values, and omits them from the payload", async () => {
+    const onSubmit = vi.fn();
+    render(<ProductionRunForm onSubmit={onSubmit} />);
     fireEvent.click(screen.getByRole("radio", { name: "Complete" }));
     fireEvent.change(document.querySelector('input[name="biocharOutputKg"]')!, { target: { value: "50" } });
     fireEvent.click(screen.getByRole("radio", { name: "Failed" }));
     expect(outputInputs()).toHaveLength(0);
     fireEvent.click(screen.getByRole("radio", { name: "Complete" }));
-    expect((document.querySelector('input[name="biocharOutputKg"]') as HTMLInputElement).value).toBe("");
+    expect((document.querySelector('input[name="biocharOutputKg"]') as HTMLInputElement).value).toBe("50");
   });
 
-  it("submits null output for a saved run edited to Failed, and for one already Failed", async () => {
+  it("omits output from the payload for a saved run edited to Failed, or already Failed, even above dry input", async () => {
     for (const from of ["running", "failed"] as const) {
       const onSubmit = vi.fn();
-      render(<ProductionRunForm productionRun={{ ...savedRun, status: from }} onSubmit={onSubmit} lock={OPEN_LOCK} />);
+      // 100 kg wet at 20% is 80 kg dry; 500 kg of stored output would block a Complete save.
+      render(<ProductionRunForm productionRun={{ ...savedRun, status: from, biocharOutputKg: 500, biocharMoisturePercent: 0 }} onSubmit={onSubmit} lock={OPEN_LOCK} />);
       if (from === "running") fireEvent.click(screen.getByRole("radio", { name: "Failed" }));
       expect(outputInputs()).toHaveLength(0);
       fireEvent.click(screen.getByRole("button", { name: "Update production run" }));
       await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
-      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-        status: "failed", biocharOutputKg: null, biocharMoisturePercent: null, biocharStorageLocationId: null,
-      }), expect.any(Function));
+      const sent = onSubmit.mock.calls[0][0] as Record<string, unknown>;
+      expect(sent.status).toBe("failed");
+      for (const key of ["biocharOutputKg", "biocharMoisturePercent", "biocharStorageLocationId"]) expect(key in sent).toBe(false);
       cleanup();
     }
   });

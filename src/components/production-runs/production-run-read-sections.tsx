@@ -73,7 +73,7 @@ export function productionRunSheetSections(run: ProductionRunWithRelations, faci
         />
       ),
     },
-    {
+    ...(run.status === "failed" ? [] : [{
       title: "Output",
       fields: [
         {
@@ -92,7 +92,7 @@ export function productionRunSheetSections(run: ProductionRunWithRelations, faci
           barWidthPercent={flowBarWidthPercent(run.biocharOutputKg, scaleKg)}
         />
       ),
-    },
+    }]),
     {
       title: "Energy",
       fields: [

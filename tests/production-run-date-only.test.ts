@@ -145,7 +145,7 @@ describe("production run create status rule", () => {
   it("defaults to Running", () => {
     expect(createProductionRunSchema.parse(input).status).toBe("running");
   });
-  it.each(["failed", "cancelled"])("refuses %s on create", (status) => {
+  it.each(["cancelled"])("refuses %s on create", (status) => {
     const result = createProductionRunSchema.safeParse({ ...input, status, cancellationReason: "Recorded in error" });
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.issues).toContainEqual(expect.objectContaining({ path: ["status"] }));

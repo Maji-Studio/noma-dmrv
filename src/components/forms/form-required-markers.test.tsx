@@ -303,6 +303,24 @@ describe("required markers match what a form needs to submit", () => {
     const { starred } = await requiredMarkers(<NuqsTestingAdapter><ProductionRunForm onSubmit={noop} productionRun={run} /></NuqsTestingAdapter>, { submit: false });
     expect([...starred].sort()).toEqual([...expected].sort());
   });
+
+  it("production run create form with Failed picked stars the end time and feedstock, and shows no output fields", async () => {
+    const result = await conditionalRequired(
+      <NuqsTestingAdapter><ProductionRunForm onSubmit={noop} /></NuqsTestingAdapter>,
+      root => {
+        const fields = root.findAllByType(FormField);
+        const byId = (id: string) => fields.find(node => node.props.id === id);
+        const outputIds = ["biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"];
+        const starred = Boolean(byId("endTime")?.props.required) && Boolean(byId("feedstockMoisturePercent")?.props.required);
+        return { starred: starred && outputIds.every(id => !byId(id)), error: undefined };
+      },
+      async root => {
+        const failed = root.findAll(node => node.type === "input" && node.props.name === "status" && node.props.value === "failed")[0]!;
+        await change(() => failed.props.onChange({ target: { value: "failed", name: "status" }, type: "change" }));
+      },
+    );
+    expect(result.starred).toBe(true);
+  });
 });
 
 const NOW_ISO = "2026-09-01T10:00:00.000Z";

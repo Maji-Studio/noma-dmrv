@@ -123,6 +123,20 @@ interface ProductionRunFormProps {
   /** The saved run's lock: a product, stock entry or count fixes its output basis. */
   lock?: RecordLockView;
 }
+/**
+ * A failed run's Output section is hidden, so its values are neither checked
+ * nor submitted. They stay in the form (switching back shows them) and in the
+ * saved record (an update that omits them leaves them alone).
+ */
+function withoutHiddenOutput<T extends { status?: unknown }>(values: T): T {
+  if (values.status !== "failed") return values;
+  const rest: Record<string, unknown> = { ...values };
+  delete rest.biocharOutputKg;
+  delete rest.biocharMoisturePercent;
+  delete rest.biocharStorageLocationId;
+  return rest as T;
+}
+
 export function ProductionRunForm({
   productionRun,
   onSubmit,
@@ -195,7 +209,7 @@ export function ProductionRunForm({
         unknown,
         ProductionRunFormData
       >
-    )(values, context, options);
+    )(withoutHiddenOutput(values), context, options);
   const {
     register,
     handleSubmit,
@@ -336,14 +350,6 @@ export function ProductionRunForm({
 
   const refuseSave = useSaveRefusal({ control, setError, resetField, formId, splitFields: RUN_SPLIT_FIELDS });
 
-  /** A failed run records no output; the Output section is hidden for it. */
-  function clearOutputFields() {
-    setValue("biocharOutputKg", null);
-    setValue("biocharMoisturePercent", null);
-    setValue("biocharStorageLocationId", "");
-    clearErrors(["biocharOutputKg", "biocharMoisturePercent", "biocharStorageLocationId"]);
-  }
-
   const handleFormSubmit = latched(handleSubmit(async (data) => {
     // A touched value or newly entered physical outcome submits that Date;
     // otherwise undefined means "unchanged", so a no-op edit of an already
@@ -369,12 +375,8 @@ export function ProductionRunForm({
       setError(runWindow.field, { type: "validate", message: runWindow.message });
       return;
     }
-    const noOutput = data.status === "failed"
-      ? { biocharOutputKg: null, biocharMoisturePercent: null, biocharStorageLocationId: null }
-      : {};
     const combined: ProductionRunSubmitData = {
       ...data,
-      ...noOutput,
       expectedVersion: productionRun?.version,
       startTime: runWindow.startTime,
       endTime: runWindow.endTime,
@@ -425,12 +427,7 @@ export function ProductionRunForm({
             options={statusOptions}
             disabled={isSubmitting || outputLocked}
             error={!!errors.status}
-            {...register("status", {
-              // A failed run has no output: drop typed values so none are submitted.
-              onChange: (event) => {
-                if (event.target.value === "failed") clearOutputFields();
-              },
-            })}
+            {...register("status")}
           />
         </FormField>
 
