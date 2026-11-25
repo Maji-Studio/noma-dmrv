@@ -33,13 +33,13 @@ function makeOutcomeInput(
 }
 
 describe("production-run lifecycle", () => {
-  it.each(["running", "complete"] as const)("allows %s on create", (status) => {
+  it.each(["running", "complete", "failed"] as const)("allows %s on create", (status) => {
     expect(() => assertProductionRunCreateStatus(status)).not.toThrow();
   });
 
-  it.each(["failed", "cancelled"] as const)("refuses %s on create independently of saved-run transitions", (status) => {
+  it.each(["cancelled"] as const)("refuses %s on create independently of saved-run transitions", (status) => {
     expect(() => assertProductionRunTransition("running", status)).not.toThrow();
-    expect(() => assertProductionRunCreateStatus(status)).toThrow("A new production run can only start as Running or Complete.");
+    expect(() => assertProductionRunCreateStatus(status)).toThrow("A new production run can only start as Running, Complete or Failed.");
   });
 
   it.each([

@@ -20,9 +20,9 @@ export const PRODUCTION_RUN_STATUSES = [
 
 export type ProductionRunStatus = (typeof PRODUCTION_RUN_STATUSES)[number];
 
-export const PRODUCTION_RUN_CREATE_STATUSES = ["running", "complete"] as const;
+export const PRODUCTION_RUN_CREATE_STATUSES = ["running", "complete", "failed"] as const;
 export const PRODUCTION_RUN_CREATE_STATUS_MESSAGE =
-  "A new production run can only start as Running or Complete.";
+  "A new production run can only start as Running, Complete or Failed.";
 
 export function assertProductionRunCreateStatus(status: ProductionRunStatus): void {
   if (PRODUCTION_RUN_CREATE_STATUSES.some((allowed) => allowed === status)) return;

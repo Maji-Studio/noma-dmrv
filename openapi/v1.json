@@ -3592,7 +3592,7 @@
                     ],
                     "description": "An RFC 3339 instant with explicit offset, or a date/time in the effective facility zone."
                   },
-                  "status": {"default": "running", "description": "Initial run state: running or complete.", "enum": ["running", "complete"], "type": "string"}
+                  "status": {"default": "running", "description": "Initial run state: running, complete or failed.", "enum": ["running", "complete", "failed"], "type": "string"}
                 },
                 "required": ["facilityId", "reactorId", "startTime"],
                 "type": "object"

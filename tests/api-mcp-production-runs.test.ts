@@ -171,7 +171,7 @@ describe("production MCP tools", { timeout: TIMEOUT_MS }, () => {
     expect(await call("find_production_runs", { cursor }, b.key)).toMatchObject({ isError: true, structuredContent: { code: "invalid_cursor" } });
   });
 
-  it.each(["failed", "cancelled"])("refuses %s on MCP create with the status pointer", async (status) => {
+  it.each(["cancelled"])("refuses %s on MCP create with the status pointer", async (status) => {
     const result = await call("start_production_run", { ...productionRunInput(a), status, requestKey: randomUUID() });
     expect(result).toMatchObject({ isError: true, structuredContent: { code: "validation_failed",
       issues: [expect.objectContaining({ pointer: "/status" })] } });

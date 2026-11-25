@@ -279,11 +279,17 @@ describe("production run review regressions", { timeout: TIMEOUT_MS }, () => {
     expect(await binWetStock(a)).toBe(3600);
   });
 
-  it.each(["failed", "cancelled"])("refuses a %s create with the status pointer", async (status) => {
+  it.each(["cancelled"])("refuses a %s create with the status pointer", async (status) => {
     const refusal = await problem(await POST(request("POST", "", { ...productionRunInput(a), status },
       { "idempotency-key": randomUUID() })), 422, "validation_failed");
     expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/status" }));
     expect(await rows()).toHaveLength(0);
+  });
+
+  it("creates a failed run with an end time, draws and moisture and posts no output", async () => {
+    const saved = await create({ ...productionRunInput(a), status: "failed", endTime: "2026-10-06T11:00:00Z" });
+    expect(saved.row).toMatchObject({ status: "failed" });
+    expect(await rows()).toMatchObject([{ status: "failed", outputPostedAt: null }]);
   });
 
   it.each([{ biocharOutputKg: 300 }, { feedingRateKgHr: 100 }])("refuses edits to terminal runs without feedstock: %j", async (body) => {
