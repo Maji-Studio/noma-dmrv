@@ -1,3 +1,4 @@
+import { claimingFailedEmissionRuns } from "./production-source-manifest";
 import { generatedEvidenceFacts, type GeneratedEvidenceFacts } from "./generated-evidence-facts";
 import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
 export { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
@@ -177,6 +178,7 @@ export interface MaterializedRemovalSubmissionSnapshot {
     templateObservationId?: string;
     frozenEntrySet?: { entryId: string; contentRevision: number }[];
     semantic: Record<string, unknown>;
+    productionSourceManifest?: unknown;
     generatedEvidenceFacts?: GeneratedEvidenceFacts;
     transportFeedstockIds?: string[];
     memberCreditBatchIds: string[];
@@ -590,6 +592,7 @@ export function materializeRemovalSubmissionSnapshot(args: {
     payloadSnapshot: {
       __mappingRevision: MAPPING_REVISION,
       semantic: compiled.semanticPayload,
+      productionSourceManifest: compiled.semanticPayload.productionSourceManifest,
       generatedEvidenceFacts: compiled.generatedEvidenceFacts,
       ...(compiled.transportFeedstockIds ? { transportFeedstockIds: [...compiled.transportFeedstockIds].sort() } : {}),
       ...(compiled.templateObservationId ? { templateObservationId: compiled.templateObservationId,
@@ -701,8 +704,13 @@ export async function buildRemovalSubmissionBuild(args: {
     );
   }
 
+  const failedEmissionRuns = claimingFailedEmissionRuns(ctx, removalId);
+  const failedRunIds = new Set(failedEmissionRuns.map(run => run.id));
+  const productionSourceManifest = ctx.productionSourceManifest && { ...ctx.productionSourceManifest,
+    failedContributors: ctx.productionSourceManifest.failedContributors.filter(run => failedRunIds.has(run.runId)) };
   const baseAgg = {
     ...aggregateProductionRuns(ctx.runs, ctx.attributionByRunId, {
+      failedContributors: failedEmissionRuns,
       productionRunIds: new Set(
         ctx.memberBatchClaims
           .filter((batch) =>
@@ -840,6 +848,7 @@ export async function buildRemovalSubmissionBuild(args: {
       removalTemplate,
     ),
     sourceProductionRunIds: [...agg.sourceProductionRunIds].sort(),
+    productionSourceManifest,
     startedOn: reportingWindow.startedOn.toISOString(),
     completedOn: reportingWindow.completedOn.toISOString(),
     sourceIds,

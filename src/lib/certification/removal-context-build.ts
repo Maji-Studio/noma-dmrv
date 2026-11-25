@@ -1,3 +1,5 @@
+import { loadBatchEmissionContributors } from "@/data-access/credit-batch-emission-contributors";
+import { getFeedstockTransportOwners } from "@/data-access/feedstock-transport-ownership";
 import type { CoveredContenders } from "@/lib/certification/covered-contenders";
 import { env } from "@/config/env";
 import { DURABILITY_MEASUREMENT_SAMPLES_ENABLED } from "./durability-measurement-samples";
@@ -309,6 +311,15 @@ export async function buildRemovalContext(
       ? await getProductionRunsForCertification(orgCtx, runIds)
       : [];
 
+  const emissionContributors = await loadBatchEmissionContributors(orgCtx, scope.memberBatches
+    .filter(batch => includesProductionInputs(batch.productionEmissionsClaimedByRemovalId, scope.removalId))
+    .map(batch => batch.id));
+  const failedContributors = Object.values(emissionContributors).flatMap(batch => batch.failedContributors);
+  const failedEmissionRuns = await getProductionRunsForCertification(orgCtx, failedContributors.map(run => run.runId));
+  const failedFeedstockIds = [...new Set(failedContributors.flatMap(run => run.feedstockIds))];
+  const failedOwners = await getFeedstockTransportOwners(orgCtx, failedFeedstockIds);
+  const failedRunIds = new Set(failedEmissionRuns.map(run => run.id));
+
   // Batch-pooled Samples drive durability, transport, and readiness (ADR 0016).
   // The same durability blockers gate the submit pipeline below.
   const entityIds = collectProductionClaimAwareTransportEntityIds({
@@ -316,6 +327,10 @@ export async function buildRemovalContext(
     memberBatches: scope.memberBatches,
     lineages,
   });
+  entityIds.feedstockIds = [...new Set([...entityIds.feedstockIds,
+    ...failedFeedstockIds.filter(id => failedRunIds.has(failedOwners.get(id) ?? ""))])];
+  entityIds.feedstockTransportOwnedElsewhere = entityIds.feedstockIds.length === 0 &&
+    (entityIds.feedstockTransportOwnedElsewhere === true || failedFeedstockIds.length > 0);
   const requiredTransportCategories = collectProductionClaimAwareRequiredTransportCategories({
     removalId: scope.removalId,
     memberBatches: scope.memberBatches,
@@ -351,6 +366,14 @@ export async function buildRemovalContext(
     transportLegs,
     requiredTransportCategories,
   });
+  const failedReadiness = failedEmissionRuns.flatMap(run => {
+    const fields = ["feedstockWetMassKg", "feedstockMoisturePercent", "dieselOperationLiters", "dieselGensetLiters", "preprocessingFuelLiters", "electricityKwh"] as const;
+    const missing = fields.filter(field => run[field] == null);
+    const hasReadings = "hasReadingsFile" in run && run.hasReadingsFile === true;
+    return [...missing.map(field => `Production run ${run.code}: missing ${field}`),
+      ...(hasReadings ? [] : [`Production run ${run.code}: missing readings CSV file`])];
+  });
+  entityReadiness.gaps.push(...failedReadiness);
   // One mass-accounting walk: the per-run attribution the submit pipeline
   // scopes by AND the Review-flow summary, so the two can never diverge.
   const { attributionByRunId, runSummary } = buildMassAccounting(
@@ -422,6 +445,8 @@ export async function buildRemovalContext(
     durabilityMeasurementSamplesEnabled: DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
     lineages,
     runs,
+    failedEmissionRuns,
+    productionSourceManifest: { version: 1, failedContributors: failedContributors.sort((a, b) => a.runId.localeCompare(b.runId)) },
     batchesWithSamples,
     attributionByRunId,
     memberBatchClaims,

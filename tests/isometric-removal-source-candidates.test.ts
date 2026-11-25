@@ -1,3 +1,6 @@
+import { buildTransportCoverage } from "@/lib/certification/certify-transport-coverage";
+import { buildRemovalSourceBindingPlan } from "@/lib/certification/removal-source-bindings";
+import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "./helpers/test-org";
 
@@ -125,6 +128,32 @@ describe("Removal source candidate discovery", () => {
     const candidates = await collectCandidateSourceDocumentsForRemoval(orgCtx, { lineages, transportFeedstockIds: [] });
     expect(candidates.map(candidate => candidate.documentId)).not.toContain("feedstock-bol");
     expect(candidates.map(candidate => candidate.documentId)).toContain("delivery-bol");
+  });
+
+  it("carries a failed-only owned intake through coverage, candidate discovery and the transport binding", async () => {
+    const coverage = buildTransportCoverage({ feedstock: [], biochar: [], sample: [] }, {
+      feedstockIds: ["failed-intake"], biocharProductIds: [], sampleIds: [],
+    });
+    expect(coverage.feedstock.missingEntityIds).toEqual(["failed-intake"]);
+    const candidates = await collectCandidateSourceDocumentsForRemoval(orgCtx, {
+      lineages: [], transportFeedstockIds: coverage.feedstock.entityIds,
+    });
+    expect(documentsDA.listDocumentsForEntity).toHaveBeenCalledWith(orgCtx, "feedstock", "failed-intake");
+    const template = { groups: [{ key: "feedstock-transport", components: [{
+      id: "failed-transport", blueprint_key: "mass_distance_based_ci_emissions", inputs: [{ type: "monitored", input_key: "mass_distance" }],
+    }] }] } as unknown as IsometricGhgEntryTemplate;
+    const binding = candidates[0].binding!;
+    // Use the catalog's actual role target rather than invent a second transport mapping.
+    if (binding.intendedTarget.kind !== "ordinary") throw new Error("Expected ordinary feedstock transport target");
+    template.groups[0].key = binding.intendedTarget.groupKey;
+    template.groups[0].components[0].blueprint_key = binding.intendedTarget.componentBlueprintKey;
+    template.groups[0].components[0].inputs[0].input_key = binding.intendedTarget.inputKey;
+    const plan = buildRemovalSourceBindingPlan({ template, applicationIdsByCreditBatchId: new Map(),
+      candidates: [{ documentId: candidates[0].documentId, sourceId: "failed-source", binding }] });
+    expect(plan).toEqual([expect.objectContaining({ sourceId: "failed-source", nomaRole: "feedstock_bill_of_lading",
+      lineage: expect.objectContaining({ entityId: "failed-intake" }), intendedTarget: expect.objectContaining({ componentId: "failed-transport" }) })]);
+    const followup = await collectCandidateSourceDocumentsForRemoval(orgCtx, { lineages: [], transportFeedstockIds: [] });
+    expect(followup).toEqual([]);
   });
 
   it("includes an owned feedstock from an unapplied run once", async () => {

@@ -756,3 +756,19 @@ it("refuses a batch move that keeps the owning run", async () => {
     expect(memberships.map(row => row.creditBatchId)).toEqual([a.batchId]);
   });
 });
+
+it("freezes a failed owner when a different Removal counted its shared transport as zero", async () => {
+  await withPair("sent-moves", async a => {
+    await removeMembership(a);
+    await db.update(productionRuns).set({ status: "failed", outputPostedAt: null }).where(eq(productionRuns.id, a.productionRunId));
+    expect(await owner(a)).toBe(a.productionRunId);
+    await expectFreeze("sent-moves", db.transaction(async tx => {
+      const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx, [a.feedstockId], { subject: "production run", mutation: "update" });
+      await freeze(async () => {
+        await tx.update(productionRuns).set({ startTime: LATE, endTime: LATE_END }).where(eq(productionRuns.id, a.productionRunId));
+      });
+    }), a, a.productionRunId);
+    const [run] = await db.select().from(productionRuns).where(eq(productionRuns.id, a.productionRunId));
+    expect(run.startTime).toEqual(EARLY);
+  });
+});

@@ -5,13 +5,15 @@ export interface FeedstockTransportDraw {
   runId: string;
   startTime: Date;
   status: string | null;
+  /** Set only after the organization-scoped attachment resolver found a batch. */
+  failedEmissionAttached?: boolean;
 }
 
-/** Pick the earliest complete linked run from the caller's eligible candidates. */
+/** Pick the earliest complete or attached failed run from the caller's eligible candidates. */
 export function feedstockTransportOwners(draws: readonly FeedstockTransportDraw[]): Map<string, string> {
   const firstDraws = new Map<string, FeedstockTransportDraw>();
   for (const draw of draws) {
-    if (draw.status !== COMPLETED_PRODUCTION_RUN_STATUS) continue;
+    if (draw.status !== COMPLETED_PRODUCTION_RUN_STATUS && !(draw.status === "failed" && draw.failedEmissionAttached)) continue;
     const previous = firstDraws.get(draw.feedstockId);
     if (!previous || draw.startTime.getTime() < previous.startTime.getTime() ||
       (draw.startTime.getTime() === previous.startTime.getTime() && draw.runId < previous.runId)) {

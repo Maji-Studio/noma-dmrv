@@ -456,7 +456,7 @@ export async function createCreditBatchInTransaction(
   if (!eligibility.eligible) throw new SafeError(eligibility.message);
 
   const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
-    await getTransportFreezeFeedstockIds(ctx, tx, { runIds }),
+    await getTransportFreezeFeedstockIds(ctx, tx, { runIds, facilityId: batchData.facilityId }),
     { mutation: "create", subject: "credit batch" });
   return freeze(async () => {
     // Insert the credit batch
@@ -748,6 +748,7 @@ export async function updateCreditBatch(
     const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
       await getTransportFreezeFeedstockIds(ctx, tx, {
         runIds: [...currentProductionRunIds, ...(resolvedProductionRunIds ?? [])],
+        batchIds: [id], facilityId: targetFacilityId,
       }), { mutation: "update", subject: "credit batch" });
     return freeze(async () => {
       const [updatedBatch] = await tx
@@ -859,7 +860,7 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
       );
     }
     const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
-      await getTransportFreezeFeedstockIds(ctx, tx, { runIds: prepared.currentProductionRunIds }),
+      await getTransportFreezeFeedstockIds(ctx, tx, { runIds: prepared.currentProductionRunIds, batchIds: [id] }),
       { mutation: "delete", subject: "credit batch" });
     await freeze(async () => {
       for (const entry of entries.filter((row) => row.kind === "zero" && !row.deletedAt)) {

@@ -6,6 +6,7 @@ import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { getLineageUnderLockedArtifacts, getFeedstockLineageBatchTargets, tryLockCertifiedLineageArtifacts } from "./certification-lineage-guards";
 import { getFeedstockTransportOwnerBatches } from "./feedstock-transport-ownership";
+import { loadBatchEmissionContributors } from "./credit-batch-emission-contributors";
 import { requireOrgScope } from "./utils";
 
 const TRANSPORT_OWNER_LOCK_SCOPE = "feedstock-transport-owner";
@@ -34,7 +35,10 @@ export async function getTransportFreezeFeedstockIds(
   candidates: { runIds?: readonly string[]; batchIds?: readonly string[]; binIds?: readonly string[]; facilityId?: string },
 ): Promise<string[]> {
   requireOrgScope(ctx);
+  const attached = await loadBatchEmissionContributors(ctx, candidates.batchIds ?? [], tx, { includeArchived: true });
+  const failedRunIds = Object.values(attached).flatMap(batch => batch.failedContributors.map(run => run.runId));
   const conditions = [
+    failedRunIds.length ? inArray(productionRuns.id, failedRunIds) : undefined,
     candidates.runIds?.length ? inArray(productionRuns.id, [...candidates.runIds]) : undefined,
     candidates.batchIds?.length ? inArray(creditBatchProductionRuns.creditBatchId, [...candidates.batchIds]) : undefined,
     candidates.facilityId ? eq(productionRuns.facilityId, candidates.facilityId) : undefined,

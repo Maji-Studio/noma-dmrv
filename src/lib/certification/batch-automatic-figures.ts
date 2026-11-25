@@ -27,11 +27,12 @@ export interface ExactEmissionMasses {
 /** Same presence and transport guards as submission. Sum decimal text, never floats.
  * Energy and distances originate in real columns; stringify those once at the boundary.
  */
-export function batchAutomaticFigures(runs: ProductionRunForCertification[], legs: TransportLegsByCategory, exact?: ExactEmissionMasses): BatchEmissionLineFacts["automaticFigures"] {
+export function batchAutomaticFigures(runs: ProductionRunForCertification[], legs: TransportLegsByCategory, exact?: ExactEmissionMasses, failedContributors: ProductionRunForCertification[] = []): BatchEmissionLineFacts["automaticFigures"] {
   const figures: BatchEmissionLineFacts["automaticFigures"] = { sequestration: null, "sample-transport": null };
   for (const [source, fields] of Object.entries(RUN_SOURCE_FIELDS)) {
     const unit = SOURCE_UNITS[source as keyof typeof RUN_SOURCE_FIELDS];
-    const values = runs.flatMap((run) => fields.flatMap((field) => {
+    const sourceRuns = source === "biochar-dry-mass" || source === "safety-margin" ? runs : [...runs, ...failedContributors];
+    const values = sourceRuns.flatMap((run) => fields.flatMap((field) => {
       const mass = field === "feedstockMassDryKg" || field === "biocharDryMassKg";
       const value = mass && exact ? exact.runs[run.id]?.[field] : run[field];
       return value == null ? [] : [{ magnitude: String(value), unit }];

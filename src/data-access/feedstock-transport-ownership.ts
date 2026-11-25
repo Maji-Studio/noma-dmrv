@@ -1,9 +1,9 @@
 import { db, type DbTransaction } from "@/db";
-import { creditBatchProductionRuns, creditBatches, productionRunFeedstocks, productionRuns } from "@/db/schema";
+import { productionRunFeedstocks, productionRuns } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { CountedOnBatch } from "@/lib/certification/emission-lines";
 import { feedstockTransportOwners } from "@/lib/certification/feedstock-transport-ownership";
-import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { loadRunEmissionContributors } from "./credit-batch-emission-contributors";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { requireOrgScope } from "./utils";
 
@@ -14,33 +14,29 @@ async function loadEligibleDraws(
   options: { includeArchived?: boolean } = {},
 ) {
   requireOrgScope(ctx);
-  return executor.select({
+  const draws = await executor.select({
     feedstockId: productionRunFeedstocks.feedstockId,
     runId: productionRuns.id,
-    creditBatchId: creditBatches.id,
-    creditBatchCode: creditBatches.code,
     startTime: productionRuns.startTime,
     status: productionRuns.status,
   }).from(productionRunFeedstocks)
     .innerJoin(productionRuns, and(
       eq(productionRuns.id, productionRunFeedstocks.productionRunId),
       eq(productionRuns.organizationId, ctx.organizationId),
-      eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS),
+      inArray(productionRuns.status, ["complete", "failed"]),
       options.includeArchived ? undefined : isNull(productionRuns.archivedAt),
     ))
-    .innerJoin(creditBatchProductionRuns, and(
-      eq(creditBatchProductionRuns.productionRunId, productionRuns.id),
-      eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
-    ))
-    .innerJoin(creditBatches, and(
-      eq(creditBatches.id, creditBatchProductionRuns.creditBatchId),
-      eq(creditBatches.organizationId, ctx.organizationId),
-      options.includeArchived ? undefined : isNull(creditBatches.archivedAt),
-    ))
-    .where(and(
-      eq(productionRunFeedstocks.organizationId, ctx.organizationId),
-      inArray(productionRunFeedstocks.feedstockId, ids),
-    ));
+    .where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId),
+      inArray(productionRunFeedstocks.feedstockId, ids)));
+  const contributors = await loadRunEmissionContributors(ctx, draws.map(draw => draw.runId), executor, options);
+  const byRun = new Map(contributors.map(run => [run.runId, run]));
+  return draws.flatMap(draw => {
+    const contributor = byRun.get(draw.runId);
+    return contributor?.creditBatchId ? [{ ...draw,
+      failedEmissionAttached: contributor.kind === "failed",
+      creditBatchId: contributor.creditBatchId, creditBatchCode: contributor.creditBatchCode!,
+    }] : [];
+  });
 }
 
 /** Resolve across eligible batched organization runs, never only the requested batch. */

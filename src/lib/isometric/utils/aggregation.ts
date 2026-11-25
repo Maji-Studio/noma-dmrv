@@ -257,14 +257,16 @@ export function clampFactor(value: number | null | undefined): number {
 export function aggregateProductionRuns(
   runs: ProductionRunForCertification[],
   attributionByRunId?: Map<string, number>,
-  options?: { productionRunIds?: ReadonlySet<string> },
+  options?: { productionRunIds?: ReadonlySet<string>; failedContributors?: ProductionRunForCertification[] },
 ): AggregatedProductionRunData {
   if (runs.length === 0) {
     throw new Error("aggregateProductionRuns: no production runs supplied");
   }
 
   const warnings: string[] = [];
-  const sourceProductionRunIds = runs.map((r) => r.id);
+  const failed = (options?.failedContributors ?? []).filter(run => run.status === "failed");
+  const uniqueRuns = [...new Map([...runs, ...failed].map(run => [run.id, run])).values()];
+  const sourceProductionRunIds = uniqueRuns.map(run => run.id);
 
   let totalBiocharDryMassKg = 0;
   let totalFeedstockDryMassKg = 0;
@@ -275,7 +277,8 @@ export function aggregateProductionRuns(
   // Narrowed to a concrete Date by the open-run guard in the loop below.
   let latestEndTime: Date | null = null;
 
-  for (const run of runs) {
+  for (const run of uniqueRuns) {
+    const emissionsOnly = run.status === "failed";
     // A run reaching aggregation must be closed — its window feeds emission
     // accounting. An open run (NULL end) is a data error
     // here; fail loudly naming the run rather than substitute a time (#259).
@@ -287,9 +290,9 @@ export function aggregateProductionRuns(
     const runEndTime = run.endTime;
     const factor = clampFactor(attributionByRunId?.get(run.id));
     const includeProduction =
-      options?.productionRunIds == null || options.productionRunIds.has(run.id);
+      emissionsOnly || options?.productionRunIds == null || options.productionRunIds.has(run.id);
     // STORED bucket: only the applied share is credited (ex-post, unchanged).
-    totalBiocharDryMassKg += nz(run.biocharDryMassKg) * factor;
+    if (!emissionsOnly) totalBiocharDryMassKg += nz(run.biocharDryMassKg) * factor;
     // PRODUCTION bucket (§8.6.2, ADR 0020): full run totals — front-loaded on
     // the batch's claiming entry, no applied-mass weighting. See SOURCE_BUCKETS.
     if (includeProduction) {
@@ -303,6 +306,7 @@ export function aggregateProductionRuns(
         nz(run.dieselGensetLiters) + nz(run.preprocessingFuelLiters);
       totalElectricityKwh += nz(run.electricityKwh);
     }
+    if (emissionsOnly) continue;
     if (run.startTime < earliestStartTime) earliestStartTime = run.startTime;
     if (latestEndTime == null || runEndTime > latestEndTime) latestEndTime = runEndTime;
 
