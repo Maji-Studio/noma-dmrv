@@ -13,6 +13,8 @@ export const TOUCH_TARGET_ALLOWLIST: ReadonlyArray<{
     reason: "Sanctioned ExplanationInfo 24px glyph; docs/design-system.md preserves label alignment." },
   { file: "src/components/ui/tooltip/index.tsx", tag: "button", utility: "min-h-24",
     reason: "Sanctioned InfoHint 24px glyph; docs/design-system.md preserves label alignment." },
+  { file: "src/components/storage-locations/storage-location-form.tsx", tag: "input", utility: "h-[18px]",
+    reason: "The wrapping label is the checkbox target and has min-h-44." },
   { file: "src/components/api-keys/api-key-permission-grid.tsx", tag: "input", utility: "size-16",
     reason: "The wrapping label is the checkbox target and already has min-h-44 min-w-44." },
   { file: "src/components/certification/new-removal-dialog/batch-box.tsx", tag: "input", utility: "size-16",

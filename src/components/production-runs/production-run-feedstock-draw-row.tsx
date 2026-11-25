@@ -117,6 +117,7 @@ export function ProductionRunFeedstockDrawRow({
                     facilityId,
                     type: "feedstock_bin",
                     feedstockTypeUsage: "pyrolysis",
+                    uncarbonized: "false",
                   }
                 : undefined
             }

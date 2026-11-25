@@ -59,6 +59,8 @@ export function BinAllocationRow({
           autoSelectSingle={false}
           filterBy={{
             type: binTypeFilter,
+            // Tagged bins take no fresh deliveries.
+            uncarbonized: "false",
             ...(facilityId ? { facilityId } : {}),
             ...(feedstockTypeId ? { feedstockTypeId } : {}),
           }}

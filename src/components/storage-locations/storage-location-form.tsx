@@ -134,6 +134,7 @@ export function StorageLocationForm({
       capacityKg: storageLocation?.capacityKg ?? null,
       feedstockTypeId: storageLocation?.feedstockTypeId ?? defaultFeedstockTypeId ?? "",
       formulationId: storageLocation?.formulationId ?? defaultFormulationId ?? "",
+      uncarbonized: storageLocation?.uncarbonized ?? false,
       stockMode: storageLocation?.stockMode ?? "split",
       drawOrder: storageLocation?.drawOrder ?? "oldest_first",
       mergedAt: "",
@@ -177,6 +178,7 @@ export function StorageLocationForm({
     if (normalized.type !== "product_bin") {
       normalized.formulationId = null;
     }
+    if (!isFeedstockBinType(normalized.type)) normalized.uncarbonized = false;
     if (!isFeedstockBinType(normalized.type) && !isOutputBinType(normalized.type)) normalized.stockMode = "split";
     if (!merging) normalized.mergedAt = null;
     else if (!normalized.mergedAt) {
@@ -328,6 +330,28 @@ export function StorageLocationForm({
             createLabel="Add new feedstock type"
             filterBy={feedstockTypeFilter}
           />
+          </div>
+          <div className="md:col-span-2">
+            <FormField
+              id="uncarbonized"
+              label="Uncarbonized"
+              hint="Material from a failed run. Keeps it apart from fresh feedstock."
+              error={errors.uncarbonized?.message}
+              helperText={identityLocked ? "Fixed once this bin has stock or history." : undefined}
+            >
+              <label className="flex min-h-44 cursor-pointer items-center gap-8">
+                <input
+                  type="checkbox"
+                  id="uncarbonized"
+                  className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
+                  disabled={isSubmitting || identityLocked}
+                  {...register("uncarbonized")}
+                />
+                <span className="body-medium text-[var(--color-text-primary)]">
+                  This bin holds uncarbonized material
+                </span>
+              </label>
+            </FormField>
           </div>
         </div>
       )}

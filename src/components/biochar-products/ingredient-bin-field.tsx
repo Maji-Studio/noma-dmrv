@@ -199,6 +199,7 @@ export function IngredientBinField({
                       type: COMPOSITION_BIN_TYPE,
                       feedstockTypeId: row.feedstockTypeId,
                       feedstockTypeUsage: "blend",
+                      uncarbonized: "false",
                     }}
                     formatSelectedLabel={(entity) => (
                       <StockChangeLabel

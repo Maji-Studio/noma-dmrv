@@ -135,6 +135,11 @@ What a bin may feed follows from that type's declared usage:
 pyrolysis-usage stock may enter a production run and blend-usage stock may
 enter a formulation. An input bin has no kind of its own. Distinct from
 output bins, which hold biochar lots and products.
+A feedstock bin can carry the **uncarbonized** tag: it holds material from a
+failed run, still of one feedstock type, kept apart from fresh feedstock. A
+tagged bin takes no fresh feedstock deliveries and feeds neither a production
+run nor a formulation; the tag is fixed once the bin has stock or history. It
+is a tag on the bin, not a feedstock type or a bin kind.
 _Avoid_: ingredient bin as a bin *kind*.
 
 **Feedstock wet stock**:

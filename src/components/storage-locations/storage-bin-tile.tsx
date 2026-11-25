@@ -173,6 +173,9 @@ export function StorageBinTile({
           {isArchived && (
             <StatusBadge status="archived" size="small" className="shrink-0" />
           )}
+          {bin.uncarbonized && (
+            <StatusBadge status="pending" label="Uncarbonized" size="small" className="shrink-0" />
+          )}
         </p>
 
         <div className="flex flex-col gap-2">

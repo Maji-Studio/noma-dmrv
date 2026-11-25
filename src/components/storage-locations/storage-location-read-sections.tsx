@@ -132,7 +132,8 @@ export function storageLocationSheetSections(
           value: bin.storageMethod,
         },
         ...(bin.type === "feedstock_bin"
-          ? [{ label: "Feedstock type", value: bin.feedstockTypeName }]
+          ? [{ label: "Feedstock type", value: bin.feedstockTypeName },
+            ...(bin.uncarbonized ? [{ label: "Uncarbonized", value: "Yes" }] : [])]
           : []),
         ...(bin.type === "product_bin"
           ? [{ label: "Formulation", value: bin.formulationName }]
