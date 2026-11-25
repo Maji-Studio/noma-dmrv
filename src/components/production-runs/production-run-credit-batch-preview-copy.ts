@@ -12,6 +12,11 @@ import {
   pendingLineCopy,
   type CreditBatchLineCopy,
 } from "@/components/credit-batches/credit-batch-line-copy";
+import {
+  describeFailedRunEmissions,
+  UNSAVED_FAILED_RUN_EMISSIONS,
+  type FailedRunEmissionCopy,
+} from "./failed-run-emission-copy";
 import type {
   CreditBatchPreviewBatch,
   ProductionRunCreditBatchPreview,
@@ -114,6 +119,18 @@ function memberCopy(
   }
 }
 
+/** The footer's shape of a failed run's emissions line. */
+function emissionLineCopy(copy: FailedRunEmissionCopy): CreditBatchLineCopy {
+  return {
+    ...CREDIT_BATCH_LINE_BASE,
+    tone: copy.tone,
+    lead: copy.lead,
+    batches: copy.batch ? [copy.batch] : [],
+    info: copy.info,
+    infoLabel: "Where the emissions count",
+  };
+}
+
 export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreviewView): CreditBatchLineCopy {
   switch (view.state) {
     case "pending":
@@ -121,10 +138,14 @@ export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreview
     case "error":
       return errorLineCopy();
     case "not-applicable":
+      // A failed run adds no biochar but its emissions count in a batch, so it never reads "Not applicable".
+      if (view.status === "failed") {
+        return emissionLineCopy(view.savedEmissionAttachment ? describeFailedRunEmissions(view.savedEmissionAttachment) : UNSAVED_FAILED_RUN_EMISSIONS);
+      }
       return {
         ...CREDIT_BATCH_LINE_BASE,
         lead: `Credit batch: ${MISSING_VALUE.notApplicable}`,
-        info: "Failed and cancelled runs do not join a credit batch.",
+        info: "A cancelled run does not join a credit batch.",
       };
     case "incomplete":
       return {

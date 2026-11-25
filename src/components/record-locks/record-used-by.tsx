@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { SectionLabel } from "@/components/forms/section-label";
 import { DetailSection } from "@/components/ui/detail-panel";
@@ -31,10 +32,11 @@ const PENDING_HEIGHT = "h-96";
  * "Used by": the records that used this one directly, with the credit batch
  * and Removal it reached, each opening its own sheet. Shown on every read
  * sheet after the record's own sections; nothing renders until the lock read
- * answers. Without a `record` (a storage bin, whose users are bin references)
+ * answers. `closing` adds a caption line after the records (a Failed run's
+ * emissions batch, #1714). Without a `record` (a storage bin, whose users are bin references)
  * or when the chain read fails, the lock's plain link list stands in.
  */
-export function RecordUsedBy({ lock, record }: { lock: RecordLockView | undefined; record?: UsedByRecord }) {
+export function RecordUsedBy({ lock, record, closing }: { lock: RecordLockView | undefined; record?: UsedByRecord; closing?: ReactNode }) {
   const wantsChain = !!lock && lock.usedBy.length > 0 && !!record?.id;
   const chain = useRecordUsedByChain(record?.kind, record?.id, wantsChain);
   const { timeZone } = useFacilityClock(chain.data?.self.facilityId);
@@ -57,6 +59,7 @@ export function RecordUsedBy({ lock, record }: { lock: RecordLockView | undefine
         {href && <TraceabilityLink href={href} />}
       </div>
       {body}
+      {closing}
     </DetailSection>
   );
 }

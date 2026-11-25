@@ -181,6 +181,28 @@ function BatchLine({ batches, removals }: { batches: RecordUsedByBatch[]; remova
 }
 
 /**
+ * A Failed run's emissions line (#1714), in the credit batch caption's frame:
+ * "Emissions count in credit batch CB-26-003", or what is missing and one link
+ * to fix it. The run is not a batch member, so it never reads "Credit batch:".
+ */
+export function EmissionsLine({ lead, batch, facilityId, action }: {
+  lead: string;
+  batch: { id: string; code: string } | null;
+  facilityId: string;
+  action: { label: string; href: string } | null;
+}) {
+  return (
+    <p className="flex flex-wrap items-center gap-x-6 gap-y-4 body-caption text-[var(--color-text-secondary)]">
+      <CertificateIcon size={LINE_ICON} aria-hidden className="shrink-0" />
+      <span>{lead}{batch && <Link href={recordHref("creditBatch", batch.id, { facilityId })} className={cn(RECORD_CODE_LINK, INLINE_HIT_AREA)}>{batch.code}</Link>}</span>
+      {action && (
+        <Link href={action.href} className={cn("underline underline-offset-4", INLINE_HIT_AREA)}>{action.label}</Link>
+      )}
+    </p>
+  );
+}
+
+/**
  * "Open in Traceability", the section's one action, quiet at the right of its
  * title row: sentence case with a trailing arrow like the dashboard's section
  * links, so it never competes with the records or their Show all.

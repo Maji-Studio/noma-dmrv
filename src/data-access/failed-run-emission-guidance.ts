@@ -51,8 +51,8 @@ export async function loadFacilityFailedEmissionTodos(
   const guidance = await loadFailedRunEmissionGuidance(ctx, { facilityId }, reader);
   return guidance.filter(item => item.state !== "attached").map(item => ({
     id: `failed-run-emissions:${item.productionRunId}`,
-    title: item.state === "mixed-feedstock" ? "Review mixed feedstock types"
-      : item.state === "empty-feedstock" ? "Review feedstock sources" : "Assign failed run emissions",
+    title: item.state === "mixed-feedstock" ? "Feedstock types are mixed"
+      : item.state === "empty-feedstock" ? "Feedstock type is missing" : "No credit batch for failed run emissions",
     detail: item.message,
     productionRun: { id: item.productionRunId, code: item.runCode },
     target: { href: item.href },

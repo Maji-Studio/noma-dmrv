@@ -406,14 +406,14 @@ describe("needs attention rows", () => {
 it("includes facility failed-emission checks without a batch and removes them on the next resolved read", async () => {
   mocks.union.mockResolvedValue([{ kind: "failed-emissions" }]);
   mocks.failedTodos.mockResolvedValue([{
-    id: "failed-run-emissions:run-1", title: "Assign failed run emissions", detail: "Run PR-1 is saved. Its emissions have no matching credit batch.",
+    id: "failed-run-emissions:run-1", title: "No credit batch for failed run emissions", detail: "Run PR-1 is saved. Its emissions have no matching credit batch.",
     productionRun: { id: "run-1", code: "PR-1" }, target: { href: "/credit-batches?facility=test" },
     emissionAttachment: { productionRunId: "run-1", runCode: "PR-1", facilityId: FACILITY_ID,
       endDay: DAY, feedstockTypeId: "type-1", feedstockTypeName: "Wood", state: "no-match", batch: null,
       message: "No matching credit batch", href: "/credit-batches?facility=test" },
   }]);
   const unresolved = await getDashboardAttentionItems(CTX, FACILITY_ID, DAY);
-  expect(unresolved.items).toMatchObject([{ id: "failed-run-emissions:run-1", stage: "production", recordKind: "productionRun", recordIds: ["run-1"], date: DAY }]);
+  expect(unresolved.items).toMatchObject([{ id: "failed-run-emissions:run-1", stage: "production", recordKind: "productionRun", recordIds: ["run-1"], date: DAY, title: "No credit batch for failed run emissions", entityCode: "PR-1" }]);
   expect(unresolved.batches.failedEmissions).toBe(1);
   mocks.failedTodos.mockResolvedValue([]);
   expect((await getDashboardAttentionItems(CTX, FACILITY_ID, DAY)).items).toEqual([]);

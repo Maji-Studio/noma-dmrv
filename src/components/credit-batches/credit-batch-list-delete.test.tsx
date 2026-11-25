@@ -29,6 +29,7 @@ vi.mock("@/hooks/use-credit-batches", () => ({
 }));
 vi.mock("@/hooks/use-linked-credit-batch-members", () => ({ useLinkedCreditBatchMembers: () => ({ data: undefined, isLoading: false, error: null, isFetching: false, refetch: vi.fn() }) }));
 vi.mock("@/hooks/use-certification", () => ({ useCreditBatchHealthSummaries: () => ({ data: {} }), useCreditBatchTodos: () => ({ data: undefined, isError: false }) }));
+vi.mock("@/hooks/use-facility-credit-batch-todos", () => ({ useFacilityCreditBatchTodos: () => ({ data: undefined, isError: false }) }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: harness.error, success: harness.success }) }));
 vi.mock("@/components/ui", () => ({ Button: () => null, EmptyState: () => null, ListPagination: () => null, PageHeader: () => null }));
 vi.mock("@/components/forms", () => ({ ServerError: ({ message, action }: { message?: string; action?: ReactNode }) =>

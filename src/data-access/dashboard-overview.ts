@@ -799,7 +799,7 @@ export async function getDashboardAttentionItems(
   const failedEmissionRows = failedEmissionTodos.map((todo): DashboardAttentionItem => ({
     id: todo.id, stage: "production", recordKind: "productionRun", entityCode: todo.productionRun.code,
     recordIds: [todo.productionRun.id], date: todo.emissionAttachment.endDay,
-    title: todo.detail, href: todo.target.href,
+    title: todo.title, href: todo.target.href,
   }));
   const batchRows = rows.filter((row) => row.kind === "batch-pending")
     .map((row) => ({ row, removals: row.removals.map(removalDisplayFromFacts) }));
