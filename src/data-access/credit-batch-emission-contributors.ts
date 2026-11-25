@@ -45,8 +45,8 @@ export async function loadRunEmissionContributors(
     reader.select({ runId: productionRunFeedstocks.productionRunId, feedstockId: feedstocks.id, typeId: feedstocks.feedstockTypeId })
       .from(productionRunFeedstocks).innerJoin(feedstocks, and(eq(feedstocks.id, productionRunFeedstocks.feedstockId), eq(feedstocks.organizationId, ctx.organizationId)))
       .where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId), inArray(productionRunFeedstocks.productionRunId, ids))),
-    reader.select({ runId: creditBatchProductionRuns.productionRunId, batchId: creditBatchProductionRuns.creditBatchId })
-      .from(creditBatchProductionRuns).where(and(eq(creditBatchProductionRuns.organizationId, ctx.organizationId), inArray(creditBatchProductionRuns.productionRunId, ids))),
+    runs.some(run => run.status === "complete") ? reader.select({ runId: creditBatchProductionRuns.productionRunId, batchId: creditBatchProductionRuns.creditBatchId })
+      .from(creditBatchProductionRuns).where(and(eq(creditBatchProductionRuns.organizationId, ctx.organizationId), inArray(creditBatchProductionRuns.productionRunId, ids))) : Promise.resolve([]),
     reader.select({ id: creditBatches.id, code: creditBatches.code, facilityId: creditBatches.facilityId,
       typeId: creditBatches.feedstockTypeId, startDate: creditBatches.startDate, endDate: creditBatches.endDate })
       .from(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId),
@@ -74,7 +74,7 @@ export async function loadRunEmissionContributors(
 
 /** Material membership remains separate; failed attachments never create membership rows. */
 export async function loadBatchEmissionContributors(
-  ctx: OrgContext, batchIds: readonly string[], reader: Reader = db, options: Options = {},
+  ctx: OrgContext, batchIds: readonly string[], reader: Reader = db, options: Options & { failedOnly?: boolean } = {},
 ): Promise<Record<string, BatchEmissionContributors>> {
   requireOrgScope(ctx);
   const ids = [...new Set(batchIds)];
@@ -88,7 +88,7 @@ export async function loadBatchEmissionContributors(
     .where(and(eq(productionRuns.organizationId, ctx.organizationId),
       options.includeArchived ? undefined : isNull(productionRuns.archivedAt),
       or(
-        and(eq(productionRuns.status, "complete"), exists(reader.select({ id: creditBatchProductionRuns.productionRunId })
+        options.failedOnly ? undefined : and(eq(productionRuns.status, "complete"), exists(reader.select({ id: creditBatchProductionRuns.productionRunId })
           .from(creditBatchProductionRuns).where(and(
             eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
             eq(creditBatchProductionRuns.productionRunId, productionRuns.id),

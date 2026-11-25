@@ -313,9 +313,10 @@ export async function buildRemovalContext(
 
   const emissionContributors = await loadBatchEmissionContributors(orgCtx, scope.memberBatches
     .filter(batch => includesProductionInputs(batch.productionEmissionsClaimedByRemovalId, scope.removalId))
-    .map(batch => batch.id));
+    .map(batch => batch.id), undefined, { failedOnly: true });
   const failedContributors = Object.values(emissionContributors).flatMap(batch => batch.failedContributors);
-  const failedEmissionRuns = await getProductionRunsForCertification(orgCtx, failedContributors.map(run => run.runId));
+  const failedEmissionRuns = failedContributors.length
+    ? await getProductionRunsForCertification(orgCtx, failedContributors.map(run => run.runId)) : [];
   const failedFeedstockIds = [...new Set(failedContributors.flatMap(run => run.feedstockIds))];
   const failedOwners = await getFeedstockTransportOwners(orgCtx, failedFeedstockIds);
   const failedRunIds = new Set(failedEmissionRuns.map(run => run.id));

@@ -155,6 +155,7 @@ export async function reallocateRunsForBins(
 
   const finishFailedEmissionWrites = [];
   if (!options.allowSentRewrite) for (const { run } of rewrites) {
+    if (run.status !== "failed") continue;
     finishFailedEmissionWrites.push(await prepareFailedRunEmissionWrite(ctx, tx, run.id, {
       feedstockDraws: draws.filter(draw => draw.productionRunId === run.id),
     }));

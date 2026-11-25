@@ -7,20 +7,23 @@ vi.mock("@/data-access/production-runs", () => ({ getProductionRunsForCertificat
 vi.mock("@/data-access/credit-batch-samples", () => ({ getSamplesByCreditBatchIds: vi.fn() }));
 vi.mock("@/data-access/transport-legs", () => ({ getTransportLegsForEntities: vi.fn() }));
 vi.mock("@/data-access/biochar-delivery-transport", () => ({ loadBiocharDeliveryTransportLegs: vi.fn() }));
-vi.mock("@/data-access/feedstock-transport-ownership", () => ({ getFeedstockTransportOwnerBatches: vi.fn() }));
+vi.mock("@/data-access/feedstock-transport-ownership", () => ({ getFeedstockTransportOwnerBatches: vi.fn(), getFeedstockTransportOwners: vi.fn() }));
 vi.mock("@/data-access/emission-automatic-masses", () => ({ getEmissionAutomaticMasses: vi.fn() }));
+vi.mock("./credit-batch-emission-contributors", () => ({ loadBatchEmissionContributors: vi.fn() }));
+import { loadBatchEmissionContributors } from "./credit-batch-emission-contributors";
 import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
 import { getProductionRunsForCertification } from "@/data-access/production-runs";
 import { getSamplesByCreditBatchIds } from "@/data-access/credit-batch-samples";
 import { getTransportLegsForEntities } from "@/data-access/transport-legs";
 import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
 import { getEmissionAutomaticMasses } from "@/data-access/emission-automatic-masses";
-import { getFeedstockTransportOwnerBatches } from "@/data-access/feedstock-transport-ownership";
+import { getFeedstockTransportOwnerBatches, getFeedstockTransportOwners } from "@/data-access/feedstock-transport-ownership";
 import { loadBatchesEmissionAutomaticFacts } from "./batch-emission-automatic-figures";
 
 const ctx = makeTestOrgContext();
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(loadBatchEmissionContributors).mockResolvedValue({});
   vi.mocked(loadCreditBatchRollups).mockResolvedValue(Object.fromEntries(["a", "b"].map((id) => [id, {
     lineageFacts: {
       runs: [{ id, feedstocks: [{ id: "feedstock", ownsTransport: true }, { id: "feedstock", ownsTransport: true }] }],
@@ -54,6 +57,7 @@ it("counts unique records and retains batch delivery shares with a constant numb
   expect(getSamplesByCreditBatchIds).not.toHaveBeenCalled();
   expect(facts.a.automaticRecordCounts?.["sample-transport"]).toBe(0);
   expect(facts.a.automaticFigures["sample-transport"]).toBeNull();
+  expect(getFeedstockTransportOwners).not.toHaveBeenCalled();
   expect(loadBiocharDeliveryTransportLegs).toHaveBeenCalledTimes(1);
   expect(getEmissionAutomaticMasses).toHaveBeenCalledTimes(1);
 });
@@ -72,6 +76,7 @@ it("keeps delivery counts when their figure is unknown and leaves other figures 
 it("threads the supplied transaction to every automatic-facts reader", async () => {
   const tx = {} as Parameters<typeof loadBatchesEmissionAutomaticFacts>[3];
   await loadBatchesEmissionAutomaticFacts(ctx, ["a", "b"], {}, tx);
+  expect(loadBatchEmissionContributors).toHaveBeenCalledExactlyOnceWith(ctx, ["a", "b"], tx, { failedOnly: true });
   for (const reader of [loadCreditBatchRollups, getProductionRunsForCertification, getSamplesByCreditBatchIds,
     getTransportLegsForEntities, loadBiocharDeliveryTransportLegs, getEmissionAutomaticMasses]) {
     for (const call of vi.mocked(reader).mock.calls) expect(call.at(-1)).toBe(tx);
@@ -103,4 +108,25 @@ it("names the other batches that count an owned-elsewhere batch's transport", as
     { creditBatchId: "y", code: "CB-26-001" }, { creditBatchId: "x", code: "CB-26-002" },
   ]);
   expect(facts.b.automaticFigures["feedstock-transport"]).toEqual({ magnitude: "0", unit: "km * tonne" });
+});
+
+
+it("adds failed production inputs without adding failed output to material figures", async () => {
+  vi.mocked(loadBatchEmissionContributors).mockResolvedValue({ a: {
+    materialMembers: [], failedContributors: [{ runId: "failed", feedstockIds: ["failed-feedstock"] }],
+  } } as never);
+  vi.mocked(getFeedstockTransportOwners).mockResolvedValue(new Map([["failed-feedstock", "failed"]]));
+  vi.mocked(getProductionRunsForCertification).mockResolvedValue([
+    { id: "a", electricityKwh: 12 }, { id: "failed", electricityKwh: 5 },
+  ] as never);
+  vi.mocked(getEmissionAutomaticMasses).mockResolvedValue({ runs: {
+    a: { id: "a", feedstockMassDryKg: "10", biocharDryMassKg: "3" },
+    failed: { id: "failed", feedstockMassDryKg: "20", biocharDryMassKg: "99" },
+  }, legs: {} });
+  const facts = await loadBatchesEmissionAutomaticFacts(ctx, ["a"]);
+  expect(facts.a.automaticFigures["run-electricity"]?.magnitude).toBe("17");
+  expect(facts.a.automaticFigures["feedstock-dry-mass"]?.magnitude).toBe("30");
+  expect(facts.a.automaticFigures["biochar-dry-mass"]?.magnitude).toBe("3");
+  expect(facts.a.automaticRecordCounts?.["run-electricity"]).toBe(2);
+  expect(getTransportLegsForEntities).toHaveBeenCalledExactlyOnceWith(ctx, "feedstock", ["feedstock", "failed-feedstock"], expect.anything());
 });

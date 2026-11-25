@@ -1,3 +1,4 @@
+vi.mock("@/data-access/credit-batch-emission-contributors", () => ({ loadBatchEmissionContributors: vi.fn(async () => ({})) }));
 vi.mock("@/lib/certification/removal-correction-core", () => ({ loadRemovalEntryCorrection: vi.fn(async () => ({ windowOpen: false, correctionNeeded: false, changedComponentIds: [], message: null })) }));
 import { beforeEach, expect, it, vi } from "vitest";
 import { collectFutureDatedMeasurements } from "@/lib/certification/future-dated-measurements";

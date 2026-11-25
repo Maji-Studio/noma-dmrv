@@ -27,9 +27,11 @@ export async function loadBatchesEmissionAutomaticFacts(
   const ids = unique(creditBatchIds);
   if (!ids.length) return {};
   const rollups = await loadCreditBatchRollups(ctx, ids, { includeRunForwards: true }, executor);
-  const contributors = await loadBatchEmissionContributors(ctx, ids, executor);
-  const allContributors = Object.values(contributors).flatMap(batch => [...batch.materialMembers, ...batch.failedContributors]);
-  const owners = await getFeedstockTransportOwners(ctx, unique(allContributors.flatMap(run => run.feedstockIds)), executor);
+  const contributors = await loadBatchEmissionContributors(ctx, ids, executor, { failedOnly: true });
+  const failedContributors = Object.values(contributors).flatMap(batch => batch.failedContributors);
+  const owners = failedContributors.length
+    ? await getFeedstockTransportOwners(ctx, unique(failedContributors.flatMap(run => run.feedstockIds)), executor)
+    : new Map<string, string>();
   const batches = ids.map((id) => {
     const lineage = rollups[id]?.lineageFacts;
     if (!lineage) throw new SafeError("Credit batch accounting could not be loaded");
@@ -37,8 +39,8 @@ export async function loadBatchesEmissionAutomaticFacts(
     const missing = deliveries.find((delivery) => delivery.exactWetMassKg == null);
     if (missing && options.requireDeliveryMass)
       throw new SafeError(`Delivery ${missing.code} has no load mass. Add it before submitting.`);
-    const emissionRuns = [...(contributors[id]?.materialMembers ?? []), ...(contributors[id]?.failedContributors ?? [])]
-      .map(run => ({ id: run.runId, feedstocks: run.feedstockIds.map(feedstockId => ({ id: feedstockId, ownsTransport: owners.get(feedstockId) === run.runId })) }));
+    const emissionRuns = [...lineage.runs, ...(contributors[id]?.failedContributors ?? [])
+      .map(run => ({ id: run.runId, feedstocks: run.feedstockIds.map(feedstockId => ({ id: feedstockId, ownsTransport: owners.get(feedstockId) === run.runId })) }))];
     return { id, lineage, deliveries, missing, emissionRuns };
   });
   const runIds = unique(batches.flatMap(({ emissionRuns }) => emissionRuns.map((run) => run.id)));

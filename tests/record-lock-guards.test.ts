@@ -189,9 +189,10 @@ it('reads Open for each operational kind with no dependent records', async () =>
 it('stock history advisory sees the Sent lineage used by correction posting', async () => {
   await withLineageFixture(async fixture => {
     const [product] = await db.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, TEST_ORG_ID), eq(biocharProducts.id, fixture.productId)));
+    const [removal] = await db.select({ code: certifierRemovals.code }).from(certifierRemovals).where(and(eq(certifierRemovals.organizationId, TEST_ORG_ID), eq(certifierRemovals.id, fixture.removalId)));
     const rows = await getOutputStockAllocationProjection(makeTestOrgContext(), { deliveryId: fixture.deliveryId });
     expect(rows.length).toBeGreaterThan(0);
-    expect(await outputMovementLockReason(makeTestOrgContext(), product.storageLocationId!, rows[0].movement.id, db, { original: rows[0].movement, facilityId: fixture.facilityId, all: rows, layers: [] })).toContain("Held by a Removal.");
+    expect(await outputMovementLockReason(makeTestOrgContext(), product.storageLocationId!, rows[0].movement.id, db, { original: rows[0].movement, facilityId: fixture.facilityId, all: rows, layers: [] })).toContain(`Held by Removal ${removal.code}.`);
   });
 });
 
@@ -274,6 +275,7 @@ it('reads the registry once for N stock entries sharing a statement', async () =
 
 it('membership refusal names an interrupted Removal and tells the operator to resume it', async () => {
   await withLineageFixture(async fixture => {
+    const [removal] = await db.select({ code: certifierRemovals.code }).from(certifierRemovals).where(and(eq(certifierRemovals.organizationId, TEST_ORG_ID), eq(certifierRemovals.id, fixture.removalId)));
     await db.update(certificationSubmissions).set({ status: 'draft' }).where(and(
       eq(certificationSubmissions.organizationId, TEST_ORG_ID), eq(certificationSubmissions.localEntityId, fixture.removalId),
     ));
@@ -281,7 +283,7 @@ it('membership refusal names an interrupted Removal and tells the operator to re
       const ctx = makeTestOrgContext();
       const locked = await lockCreditBatchArtifacts(ctx, tx, fixture.batchId);
       await expect(assertRemovalAllowsCreditBatchMutation(ctx, tx, fixture.batchId, 'update', locked)).rejects.toMatchObject({
-        code: 'certification_locked', message: expect.stringContaining("Held by a Removal."),
+        code: 'certification_locked', message: expect.stringContaining(`Held by Removal ${removal.code}.`),
       });
       await expect(assertRemovalAllowsCreditBatchMutation(ctx, tx, fixture.batchId, 'update', locked)).rejects.toThrow('delete or resume that Removal');
     });

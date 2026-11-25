@@ -1,7 +1,7 @@
 import { synchronizeFailedEmissionBatches } from "./failed-run-emission-write-guard";
 import { loadRunEmissionContributors } from "./credit-batch-emission-contributors";
 import type { DbTransaction } from "@/db";
-import { certifierRemovals, creditBatchProductionRuns, feedstocks, feedstockTypes, productionRunFeedstocks } from "@/db/schema";
+import { certifierRemovals, creditBatchProductionRuns, feedstocks, feedstockTypes, productionRunFeedstocks, productionRuns } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
@@ -115,6 +115,9 @@ export async function getLockedFeedstockTypeLinkLock(
   const failedRuns = await tx.selectDistinct({ id: productionRunFeedstocks.productionRunId })
     .from(productionRunFeedstocks).innerJoin(feedstocks, and(
       eq(feedstocks.id, productionRunFeedstocks.feedstockId), eq(feedstocks.organizationId, ctx.organizationId),
+    )).innerJoin(productionRuns, and(
+      eq(productionRuns.id, productionRunFeedstocks.productionRunId),
+      eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.status, "failed"),
     )).where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId), eq(feedstocks.feedstockTypeId, feedstockTypeId)));
   const contributors = await loadRunEmissionContributors(ctx, failedRuns.map(run => run.id), tx, { includeArchived: true });
   const batchIds = [...new Set([...batches.map(batch => batch.id), ...contributors.flatMap(run => run.creditBatchId ? [run.creditBatchId] : [])])];
