@@ -1,3 +1,4 @@
+import { readActiveProductionRunReturns } from "./production-run-return-dependencies";
 import { activeOutputMovement, deletedProductIds, liveOutputMovementPredicate } from "./output-stock-active-movements";
 import { and, eq, inArray, isNotNull, notInArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
@@ -38,7 +39,7 @@ export async function readRecordDependentsBatch(
       return result;
     }
     case "productionRun": {
-      const [products, batches, effects, runs] = await Promise.all([
+      const [products, batches, effects, runs, returns] = await Promise.all([
         tx.select({ runId: biocharProductSourceAllocations.productionRunId, id: biocharProductSourceAllocations.biocharProductId }).from(biocharProductSourceAllocations)
           .where(and(eq(biocharProductSourceAllocations.organizationId, org), inArray(biocharProductSourceAllocations.productionRunId, wanted),
             notInArray(biocharProductSourceAllocations.biocharProductId, deletedProductIds(ctx, tx)))),
@@ -49,10 +50,12 @@ export async function readRecordDependentsBatch(
           .innerJoin(binMovements, and(eq(binMovements.organizationId, org), eq(binMovements.id, outputStockAllocations.movementId)))
           .where(and(eq(outputStockRunAllocations.organizationId, org), inArray(outputStockRunAllocations.productionRunId, wanted), activeOutputMovement(ctx, tx))),
         tx.select().from(productionRuns).where(and(eq(productionRuns.organizationId, org), inArray(productionRuns.id, wanted))),
+        readActiveProductionRunReturns(ctx, tx, wanted),
       ]);
       const binIds = [...new Set(runs.flatMap(run => run.biocharStorageLocationId ? [run.biocharStorageLocationId] : []))];
       const movements = binIds.length === 0 ? [] : await tx.select().from(binMovements)
         .where(and(eq(binMovements.organizationId, org), inArray(binMovements.storageLocationId, binIds)));
+      for (const row of returns) push(row.sourceProductionRunId!, { kind: "stockEntry", id: row.id, label: "returned to storage", failedRunReturn: true });
       for (const row of products) push(row.runId, { kind: "biocharProduct", id: row.id });
       for (const row of batches) push(row.runId, { kind: "creditBatch", id: row.id });
       for (const row of effects) push(row.runId, { kind: "stockEntry", id: row.id });

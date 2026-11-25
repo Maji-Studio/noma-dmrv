@@ -310,6 +310,8 @@ Clients must preserve it as a day instead of parsing it as an instant. `placedAt
 remains the actual mixing and placement instant. Earlier representation ETags
 must be refreshed before PATCH.
 
+Failed-run return and correction operations are app-only; they use persistent movement request keys and are not in the REST/MCP allowlists.
+
 Production-run operation inputs accept offset date-time strings or facility-local
 `{ date, time }` objects. Local times resolve through the transaction's effective
 facility, including a new facility on update. Native Dates are an in-process

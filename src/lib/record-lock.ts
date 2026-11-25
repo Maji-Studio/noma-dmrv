@@ -92,6 +92,7 @@ export interface RecordLockHolder {
   kind: string;
   id: string;
   label?: string;
+  failedRunReturn?: boolean;
 }
 
 export interface RecordLockSubmission {
@@ -253,7 +254,7 @@ function recordLock<Kind extends keyof RecordUpdateInputs>(facts: RecordLockFact
 
 export const recordLocks = {
   feedstock: (facts: RecordLockFacts) => recordLock<"feedstock">(facts, ["notes", "massWetKg", "moistureContentPercent", "facilityId", "deliveryDate", "supplierId", "vehicleId", "feedstockTypeId", "storageLocationId", "overrideJustification", "transportDistanceKm", "transportDistanceSource"]),
-  productionRun: (facts: RecordLockFacts) => recordLock<"productionRun">(facts, ["code", "operatorId", "cancellationReason", "feedstockDraws", "feedstockMoisturePercent", "feedingRateKgHr", "residenceTimeMinutes", "dieselOperationLiters", "dieselGensetLiters", "preprocessingFuelLiters", "electricityKwh", ...(facts.dependents.every(holder => holder.kind === "creditBatch") ? ["status", "startTime", "endTime", "facilityId", "reactorId", "biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"] as const : [])]),
+  productionRun: (facts: RecordLockFacts) => recordLock<"productionRun">(facts, ["code", "operatorId", "cancellationReason", ...(facts.dependents.some(holder => holder.failedRunReturn) ? [] : ["feedstockDraws", "feedstockMoisturePercent"] as const), "feedingRateKgHr", "residenceTimeMinutes", "dieselOperationLiters", "dieselGensetLiters", "preprocessingFuelLiters", "electricityKwh", ...(facts.dependents.every(holder => holder.kind === "creditBatch") ? ["status", "startTime", "endTime", "facilityId", "reactorId", "biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"] as const : [])]),
   sample: (facts: RecordLockFacts) => recordLock<"sample">(facts, ["sampleCode", "creditBatchId", "samplingTime", "totalCarbonPercent", "organicCarbonPercent",
     "labName", "labAccreditation", "analysisDate", "weightGrams", "volumeMl", "inorganicCarbonPercent", "totalHydrogenPercent", "totalNitrogenPercent",
     "totalOxygenPercent", "totalSulfurPercent", "ashContentPercent", "moistureContentPercent", "bulkDensityKgPerM3", "ph", "saltContentGPerKg",

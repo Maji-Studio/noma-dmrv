@@ -1,3 +1,6 @@
+import { sameReturnAllocationBasis } from "@/lib/production-run-returns/source-basis";
+import { readReturnSource } from "./production-run-returns/queries";
+import { readActiveProductionRunReturns } from "./production-run-return-dependencies";
 import { earliestFeedstockEventTie } from '@/lib/feedstock-event-boundary';
 import { prepareFeedstockTransportOwnershipFreeze, type TransportOwnershipChange, type TransportOwnershipFreezeScope } from "./feedstock-transport-ownership-freeze";
 import { and, eq, gt, gte, inArray, ne, or, sql } from "drizzle-orm";
@@ -137,7 +140,7 @@ export async function reallocateRunsForBins(
       plans.set(entry.sourceId, [...(plans.get(entry.sourceId) ?? []), ...shares]);
     }
   }
-  const rewrites: { run: typeof runs[number]; saved: { feedstockId: string }[]; proposed: FeedstockWetAllocation[] }[] = [];
+  const rewrites: { run: typeof runs[number]; saved: { feedstockId: string }[]; proposed: FeedstockWetAllocation[]; hasActiveReturns: boolean }[] = [];
   for (const run of runs) {
     if (run.status === CANCELLED_PRODUCTION_RUN_STATUS && run.id !== onlyRunId) continue;
     const proposed = plans.get(run.id) ?? [];
@@ -147,8 +150,14 @@ export async function reallocateRunsForBins(
         eq(productionRunFeedstocks.productionRunId, run.id),
       ));
     const previous = new Map(saved.map(row => [row.feedstockId, row.wetMassUsedKg]));
-    if (saved.length === proposed.length && proposed.every(row => previous.get(row.feedstockId) === row.wetMassUsedKg)) continue;
-    rewrites.push({ run, saved, proposed });
+    const activeReturns = await readActiveProductionRunReturns(ctx, tx, [run.id]);
+    const currentSource = activeReturns.length ? await readReturnSource(ctx, tx, run.id) : null;
+    const changedReturnIdentity = activeReturns.some(row => {
+      const snapshot = row.inputSnapshot as { allocations?: unknown } | null;
+      return !sameReturnAllocationBasis(snapshot?.allocations, currentSource?.allocations);
+    });
+    if (!changedReturnIdentity && saved.length === proposed.length && proposed.every(row => previous.get(row.feedstockId) === row.wetMassUsedKg)) continue;
+    rewrites.push({ run, saved, proposed, hasActiveReturns: activeReturns.length > 0 });
   }
   if (!rewrites.length) return [];
 
@@ -158,7 +167,7 @@ export async function reallocateRunsForBins(
     rewrites.flatMap(({ saved, proposed }) => [...saved, ...proposed].map(row => row.feedstockId)),
     options.change ?? { mutation: "update", subject: "production run" }, options.transportOwnershipFreeze, { allowSentRewrite: options.allowSentRewrite });
   await freeze(async () => {
-    for (const { run, proposed } of rewrites) {
+    for (const { run, proposed, hasActiveReturns } of rewrites) {
       const target = { entityType: "productionRun" as const, entityId: run.id };
       // We already hold bin/row locks. Never wait for an artifact held by a
       // submission that could be waiting for those same rows.
@@ -171,6 +180,9 @@ export async function reallocateRunsForBins(
           if (!(error instanceof DomainError) || error.code !== 'certification_locked') throw error;
           throw new SentRunRewriteRefusedError(run.id, run.code, error);
         }
+      }
+      if (hasActiveReturns) {
+        throw new DomainError('certification_locked', `Run ${run.code} has active returns to storage. Reverse those returns before changing its intake allocations.`);
       }
       await tx.delete(productionRunFeedstocks).where(and(
         eq(productionRunFeedstocks.organizationId, ctx.organizationId),

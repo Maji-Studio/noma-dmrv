@@ -33,6 +33,7 @@ import {
   type LineageFacts,
   type MassBalanceLineage as SankeyLineage,
 } from "./lineage-facts";
+import { calculateRunMaterialBalance, type RunMaterialBalanceInput } from "@/lib/production-run-returns/material-balance";
 import { displayedDifferenceKg } from "@/lib/mass-precision";
 
 export type SankeyColumnKey =
@@ -52,6 +53,7 @@ export interface SankeyColumn {
 
 export type SankeyExitKey =
   | "conversion_loss"
+  | "dumped_back"
   | "unallocated_output"
   | "in_storage";
 
@@ -120,9 +122,10 @@ export function buildBatchSankey(
   const facts = extractLineageFacts(lineages);
   const { feedstockInKg, runOutputKg, lotMassKg, appliedKg } = facts;
 
+  const balance = calculateRunMaterialBalance({ runId: "", consumedDryKg: feedstockInKg, usableOutputDryKg: runOutputKg, activeReturnedDryKg: 0 });
   const conversionLoss = residual(
-    feedstockInKg,
-    runOutputKg,
+    balance.consumedDryKg,
+    balance.usableOutputDryKg + balance.activeReturnedDryKg,
     "Production-run biochar output exceeds the feedstock mass entering the runs.",
   );
   if (conversionLoss.warning) warnings.push(conversionLoss.warning);
@@ -206,5 +209,30 @@ export function buildBatchSankey(
     exits,
     omittedResidualKg,
     warnings,
+  };
+}
+
+/** Standalone run accounting never adds a failed run to a credit-batch cohort. */
+export function buildRunSankey(input: RunMaterialBalanceInput) {
+  const balance = calculateRunMaterialBalance(input);
+  const conversion = residual(balance.consumedDryKg, balance.usableOutputDryKg + balance.activeReturnedDryKg,
+    "Output and returned material exceed the run's consumed dry mass. Check its measurements.");
+  // Difference of displayed levels closes the visible chart at the usable output.
+  const returned = residual(balance.usableOutputDryKg + balance.activeReturnedDryKg, balance.usableOutputDryKg,
+    "Returned dry mass is negative. Check the return history.");
+  const exits: SankeyExit[] = [];
+  if (conversion.shown) exits.push({ key: "conversion_loss", label: "Conversion loss", fromColumn: "productionRuns",
+    massKg: conversion.value, rawKg: conversion.raw, tone: "loss" });
+  if (returned.shown) exits.push({ key: "dumped_back", label: "Returned to storage", fromColumn: "productionRuns",
+    massKg: returned.value, rawKg: returned.raw, tone: "loss" });
+  return {
+    balance,
+    columns: [
+      { key: "feedstock", label: "Consumed feedstock", massKg: balance.consumedDryKg, count: 1 },
+      { key: "productionRuns", label: "Usable output", massKg: balance.usableOutputDryKg, count: 1 },
+    ] satisfies SankeyColumn[],
+    exits,
+    omittedResidualKg: [conversion, returned].reduce((sum, row) => sum + (!row.shown && !row.warning ? row.raw : 0), 0),
+    warnings: [conversion.warning, returned.warning].filter((warning): warning is string => warning !== null),
   };
 }

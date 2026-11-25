@@ -140,6 +140,7 @@ const ROW_WORDS: Record<"water_driven_off" | "conversion_loss" | "unallocated_ou
 const NOTES: Record<WaterfallItemKey, string> = {
   feedstock: "Feedstock drawn into the production runs behind these applications.",
   water_driven_off: "Water in the feedstock, driven off in the reactor.",
+  dumped_back: "Dry material returned at the run boundary. Later storage losses do not change this amount.",
   conversion_loss: "Pyrolysis gas and heat, which are the expected conversion loss.",
   unallocated_output: "Run output not allocated to any biochar lot in this batch.",
   in_storage: "Biochar produced for this batch but not yet applied.",
@@ -230,6 +231,8 @@ export function buildWaterfall(sankey: CreditBatchSankeyData): WaterfallModel {
       pushStep(exit.key, exit.label, exit.massKg, stage, "productionRun",
         runRecords((run) => [run.dryInKg, run.dryOutKg],
         ROW_WORDS.conversion_loss));
+    } else if (exit.key === "dumped_back") {
+      pushStep(exit.key, exit.label, exit.massKg, stage, "productionRun", []);
     } else if (exit.key === "unallocated_output") {
       pushStep(exit.key, exit.label, exit.massKg, stage, "productionRun",
         runRecords((run) => [run.dryOutKg, run.allocatedKg],

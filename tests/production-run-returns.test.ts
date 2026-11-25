@@ -10,6 +10,8 @@ import { createBinMovement, recordStockTakeMovement } from '@/data-access/bin-mo
 import { createProductionRunFixture, createTestPool, removeIntakeFixture } from './helpers/operation-fixture';
 import { openOperationBarrier, waitForBlockedOperations } from './helpers/operation-barrier';
 import type { RecordProductionRunReturnInput } from '@/schemas/production-run-returns';
+import { ActionConflictError } from '@/lib/errors';
+import { STOCK_CONFLICT_ENTITY } from '@/lib/stock-conflict-entities';
 
 const TIMEOUT_MS = 30_000;
 const CONSUMED_WET_KG = 100;
@@ -114,7 +116,12 @@ describe('failed-run return writer and ledger', { timeout: TIMEOUT_MS }, () => {
     const replay = await db.transaction(tx => recordProductionRunReturnInTransaction(fixture.ctx, tx, draft, { capture }));
     expect(replay.id).toBe(saved.id);
     expect(capture).toHaveBeenCalledTimes(1);
-    await expect(recordProductionRunReturn(fixture.ctx, { ...draft, reason: 'Different' })).rejects.toMatchObject({ code: 'conflict' });
+    const conflict = recordProductionRunReturn(fixture.ctx, { ...draft, reason: 'Different' });
+    await expect(conflict).rejects.toBeInstanceOf(ActionConflictError);
+    const [bin] = await db.select().from(storageLocations).where(eq(storageLocations.id, binId));
+    await expect(conflict).rejects.toMatchObject({ conflict: {
+      entity: STOCK_CONFLICT_ENTITY.storageLocation, id: binId, code: bin.code,
+    } });
   });
 
   it.each(['running', 'complete', 'cancelled'] as const)('refuses %s runs', async status => {
@@ -233,7 +240,7 @@ describe('failed-run return writer and ledger', { timeout: TIMEOUT_MS }, () => {
       .rejects.toMatchObject({ cause: { code: '23505', constraint: 'bin_movements_one_return_reversal' } });
     await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, runId));
     await db.delete(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, runId));
-    await expect(db.delete(productionRuns).where(eq(productionRuns.id, runId))).rejects.toMatchObject({ cause: { code: '23503' } });
+    await expect(db.delete(productionRuns).where(eq(productionRuns.id, runId))).rejects.toMatchObject({ cause: { code: '23001' } });
   });
 
   it('serializes two returns to different bins racing for the same remaining dry allowance', async () => {

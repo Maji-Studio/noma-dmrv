@@ -1,3 +1,4 @@
+import { getProductionRunReturnHistory } from "../production-run-returns/queries";
 import { earliestFeedstockEventTie } from '@/lib/feedstock-event-boundary';
 import { reallocateRunsForBins } from '../feedstock-run-allocations';
 import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze } from "../feedstock-transport-ownership-freeze";
@@ -128,6 +129,10 @@ export async function deleteProductionRunInTransaction(
       { entityType: "productionRun", entityId: productionRunId },
       "delete",
     ), "certification_locked");
+
+    if ((await getProductionRunReturnHistory(ctx, productionRunId, tx)).length) {
+      throw new DomainError("certification_locked", "This production run has return history and cannot be deleted. Keep it for the return audit trail.");
+    }
 
     const dependentProduct = await getProductionRunDependentProduct(
       ctx,

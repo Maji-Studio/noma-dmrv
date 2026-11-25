@@ -526,7 +526,7 @@ export async function updateProductionRunInTransaction(
   }
 
   if (data.biocharStorageLocationId !== undefined) updateData.biocharStorageLocationId = data.biocharStorageLocationId;
-  const feedstockDrawsChanged = normalizedFeedstockDraws !== undefined;
+  let feedstockDrawsChanged = normalizedFeedstockDraws !== undefined;
   try {
     await withUniqueCodeGuard(
       ctx,
@@ -597,13 +597,22 @@ export async function updateProductionRunInTransaction(
     ]);
 
     const recordLock = recordLocks.productionRun({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "productionRun", entityId: productionRunId }) });
+    const savedDraws = await readRunDrawSnapshot(ctx, tx, productionRunId);
+    const proposedDraws = normalizedFeedstockDraws?.map(draw => ({ storageLocationId: draw.storageLocationId, wetMassKg: draw.wetMassKg }))
+      .sort((a, b) => a.storageLocationId.localeCompare(b.storageLocationId));
+    feedstockDrawsChanged = proposedDraws !== undefined && JSON.stringify(savedDraws) !== JSON.stringify(proposedDraws);
+    const hasActiveReturns = recordLock.heldBy.some(holder => holder.failedRunReturn);
+    // Sent takes precedence over an active return's In use refusal.
+    if (hasActiveReturns) await assertProductionRunLineage(ctx, tx, productionRunId, locked, data);
+    const lockSnapshot = { ...locked, feedstockDraws: savedDraws };
+    const lockChanges = { ...data, feedstockDraws: proposedDraws };
     try {
       await assertProductionRunOutputBasisChange(ctx, tx, productionRunId, locked, data);
     } catch (error) {
-      if (error instanceof SafeError) assertRecordLockFields(recordLock, locked, data, error.message);
+      if (error instanceof SafeError) assertRecordLockFields(recordLock, lockSnapshot, lockChanges, error.message);
       throw error;
     }
-    assertRecordLockFields(recordLock, locked, data);
+    assertRecordLockFields(recordLock, lockSnapshot, lockChanges);
 
     const lockedTargetStatus = data.status ?? locked.status;
     const lockedTargetStartTime = data.startTime ?? locked.startTime;
@@ -695,7 +704,7 @@ export async function updateProductionRunInTransaction(
         binIds: [...lockedFeedstockStorageLocationIds, ...(normalizedFeedstockDraws ?? []).map(draw => draw.storageLocationId)],
       }), { mutation: "update", subject: "production run" });
     await freeze(async transportOwnershipFreeze => {
-      await assertProductionRunLineage(ctx, tx, productionRunId, locked, data);
+      if (!hasActiveReturns) await assertProductionRunLineage(ctx, tx, productionRunId, locked, data);
 
       // A cancelled run frees its slot, so only an occupying run needs this guard.
       if (statusOccupiesReactor(lockedTargetStatus)) {
@@ -794,7 +803,7 @@ export async function updateProductionRunInTransaction(
         await replaceProductionRunFeedstockDraws(ctx, tx, {
           productionRunId,
           facilityId: lockedTargetFacilityId,
-          draws: normalizedFeedstockDraws,
+          draws: normalizedFeedstockDraws!,
           earliestEventAt: new Date(Math.min(locked.startTime.getTime(), lockedTargetStartTime.getTime())),
           transportOwnershipFreeze,
         });

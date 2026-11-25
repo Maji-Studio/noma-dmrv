@@ -16,7 +16,7 @@ it('clears stale shares on an explicitly edited cancelled run, excluding other c
   const at = new Date('2026-01-01T00:00:00Z');
   const draw = { id: 'draw', productionRunId: 'cancelled-run', storageLocationId: 'new-bin', createdAt: at };
   const results: unknown[] = [[{ startTime: at, status: 'cancelled' }], [{ recordedAt: at, id: 'draw' }], [],
-    [draw], [{ id: 'cancelled-run', status: 'cancelled' }], [draw], [{ feedstockId: 'old-intake', wetMassUsedKg: 5 }]];
+    [draw], [{ id: 'cancelled-run', status: 'cancelled' }], [draw], [{ feedstockId: 'old-intake', wetMassUsedKg: 5 }], []];
   const conditions: SQL[] = [];
   const select = () => {
     const rows = results.shift();
@@ -44,7 +44,7 @@ it('replaces a cancelled run’s moved-bin shares with replayed history', async 
   const at = new Date('2026-01-01T00:00:00Z');
   const draw = { id: 'draw', productionRunId: 'cancelled-run', storageLocationId: 'new-bin', createdAt: at };
   const results: unknown[] = [[{ startTime: at, status: 'cancelled' }], [{ recordedAt: at, id: 'draw' }], [],
-    [draw], [{ id: 'cancelled-run', status: 'cancelled' }], [draw], [{ feedstockId: 'old-intake', wetMassUsedKg: 5 }]];
+    [draw], [{ id: 'cancelled-run', status: 'cancelled' }], [draw], [{ feedstockId: 'old-intake', wetMassUsedKg: 5 }], []];
   const select = () => {
     const rows = results.shift();
     const query = { from: () => query, innerJoin: () => query, orderBy: () => query, for: () => query, where: () => query,
@@ -92,7 +92,7 @@ it.each([false, true].flatMap(allowSentRewrite => [false, true].map(withIssues =
   const at = new Date('2026-01-01T00:00:00Z');
   const draw = { id: 'draw', productionRunId: 'run', storageLocationId: 'bin', createdAt: at };
   const results: unknown[] = [[{ runId: 'run' }], [draw], [{ id: 'run', code: 'PR1', status: 'complete' }], [draw],
-    [{ feedstockId: 'previous', wetMassUsedKg: 5 }]];
+    [{ feedstockId: 'previous', wetMassUsedKg: 5 }], []];
   const select = () => {
     const rows = results.shift();
     const query = { from: () => query, innerJoin: () => query, orderBy: () => query, for: () => query, where: () => query,
