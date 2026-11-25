@@ -7,6 +7,7 @@ import { createProductionRun, updateProductionRun } from "@/data-access/producti
 import { deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
 import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
 import { feedstocks, feedstockTypes } from "@/db/schema/feedstock";
+import { binMovements } from "@/db/schema/bin-movements";
 import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
 import { productionProcesses } from "@/db/schema/production-processes";
 import { productionRunFeedstockDraws, productionRunFeedstocks, productionRuns } from "@/db/schema/production";
@@ -15,7 +16,7 @@ import { createProductionRunOutputBin } from "./helpers/production-run-output-bi
 import { deleteStorageLocation } from "@/data-access/storage-locations";
 import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
-const AVAILABLE_WET_KG = 1_000;
+const AVAILABLE_WET_KG = 5_000;
 const DRAW_KG = 400;
 const MOISTURE_PERCENT = 20;
 const OUTPUT_KG = 50;
@@ -30,6 +31,7 @@ describe("create a production run as Failed", () => {
   let feedstockId = "";
   const runIds: string[] = [];
   const binIdsToDelete: string[] = [];
+  const movementIds: string[] = [];
   const binVersion = async (id: string) => (await db.select({ v: storageLocations.version }).from(storageLocations).where(eq(storageLocations.id, id)))[0].v;
   const batchIds: string[] = [];
 
@@ -61,7 +63,7 @@ describe("create a production run as Failed", () => {
     binId = bin.id;
     const [feedstock] = await db.insert(feedstocks).values(await feedstockFixtureValues(db, {
       organizationId: TEST_ORG_ID, code: `FS-FAIL-${tag}`, facilityId, status: "complete", feedstockTypeId,
-      massWetKg: AVAILABLE_WET_KG, massDryKg: 800, storageLocationId: binId,
+      massWetKg: AVAILABLE_WET_KG, massDryKg: 4_000, storageLocationId: binId,
     })).returning({ id: feedstocks.id });
     feedstockId = feedstock.id;
   });
@@ -75,6 +77,7 @@ describe("create a production run as Failed", () => {
     }
     if (batchIds.length) await db.delete(creditBatches).where(inArray(creditBatches.id, batchIds));
     await db.delete(productionProcesses).where(eq(productionProcesses.feedstockTypeId, feedstockTypeId));
+    if (movementIds.length) await db.delete(binMovements).where(inArray(binMovements.id, movementIds));
     if (binIdsToDelete.length) await db.delete(storageLocations).where(inArray(storageLocations.id, binIdsToDelete));
     await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
     await cleanupFeedstockFixtureParents(db);
@@ -212,6 +215,59 @@ describe("create a production run as Failed", () => {
       await db.update(productionRuns).set({ biocharStorageLocationId: outBin }).where(eq(productionRuns.id, run.id));
       await updateProductionRun(ctx, run.id, { expectedVersion: await productionVersion(ctx, "productionRuns", run.id), electricityKwh: 2 });
       expect(await storedBin(run.id)).toBeNull();
+    });
+  });
+
+  describe("a later stock count in the run's output bin", () => {
+    const addCount = async (storageLocationId: string, occurredAt: Date) => {
+      const [movement] = await db.insert(binMovements).values({
+        organizationId: TEST_ORG_ID, storageLocationId, lane: "biochar", movementType: "adjustment", massDeltaKg: 0,
+        reason: "Fixture count", outputKind: "count", occurredAt, idempotencyKey: crypto.randomUUID(),
+        basisFingerprint: "fixture-count", inputSnapshot: {}, outputDryDeltaKg: "0", balanceBeforeDryKg: "0", balanceAfterDryKg: "0",
+      }).returning({ id: binMovements.id });
+      movementIds.push(movement.id);
+      return movement.id;
+    };
+    const newBin = async () => {
+      const id = await createProductionRunOutputBin(TEST_ORG_ID, facilityId);
+      binIdsToDelete.push(id);
+      return id;
+    };
+
+    it("lets an older failed run save an edit and release its bin, leaving the count alone", async () => {
+      const outBin = await newBin();
+      const run = await createProductionRun(ctx, {
+        code: `PR-FAIL-CNT-${tag}`, facilityId, reactorId: await newReactor("CNT"), status: "failed",
+        startTime: new Date("2026-06-10T08:00:00Z"), endTime: new Date("2026-06-10T10:00:00Z"),
+        feedstockMoisturePercent: MOISTURE_PERCENT, feedstockDraws: [{ storageLocationId: binId, wetMassKg: 100 }],
+      });
+      runIds.push(run.id);
+      await db.update(productionRuns).set({ biocharStorageLocationId: outBin }).where(eq(productionRuns.id, run.id));
+      const countId = await addCount(outBin, new Date("2026-06-11T08:00:00Z"));
+
+      await updateProductionRun(ctx, run.id, { expectedVersion: await productionVersion(ctx, "productionRuns", run.id), electricityKwh: 3 });
+
+      const [saved] = await db.select({ bin: productionRuns.biocharStorageLocationId, kwh: productionRuns.electricityKwh }).from(productionRuns).where(eq(productionRuns.id, run.id));
+      expect(saved).toEqual({ bin: null, kwh: 3 });
+      const [count] = await db.select({ id: binMovements.id }).from(binMovements).where(eq(binMovements.id, countId));
+      expect(count.id).toBe(countId);
+    });
+
+    it("still refuses an output change on a complete run covered by the count", async () => {
+      const outBin = await newBin();
+      const run = await createProductionRun(ctx, {
+        code: `PR-CMP-CNT-${tag}`, facilityId, reactorId: await newReactor("CCNT"), status: "complete",
+        startTime: new Date("2026-06-12T08:00:00Z"), endTime: new Date("2026-06-12T10:00:00Z"),
+        feedstockMoisturePercent: MOISTURE_PERCENT, feedstockDraws: [{ storageLocationId: binId, wetMassKg: 100 }],
+        biocharOutputKg: 20, biocharMoisturePercent: 0, biocharStorageLocationId: outBin,
+      });
+      runIds.push(run.id);
+      await addCount(outBin, new Date("2026-06-13T08:00:00Z"));
+      await expect(updateProductionRun(ctx, run.id, {
+        expectedVersion: await productionVersion(ctx, "productionRuns", run.id), biocharOutputKg: 30,
+      })).rejects.toThrow();
+      const [kept] = await db.select({ kg: productionRuns.biocharOutputKg, bin: productionRuns.biocharStorageLocationId }).from(productionRuns).where(eq(productionRuns.id, run.id));
+      expect(kept).toEqual({ kg: 20, bin: outBin });
     });
   });
 
