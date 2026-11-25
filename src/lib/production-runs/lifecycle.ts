@@ -42,6 +42,11 @@ export function isTerminalProductionRunStatus(
   return status === "complete" || status === "failed";
 }
 
+/** A failed run produced no biochar, so it records no output. */
+export function productionRunRecordsOutput(status: ProductionRunStatus): boolean {
+  return status !== "failed";
+}
+
 export type ProductionRunOutcomeInput = {
   status: ProductionRunStatus;
   startTime: Date | null;
@@ -194,7 +199,7 @@ export function getProductionRunOutcomeViolations(
   }
 
   // A failed run records no output, so any output stored on it is not compared.
-  if (input.status !== "failed" && dryOutputExceedsDryInput(input)) {
+  if (productionRunRecordsOutput(input.status) && dryOutputExceedsDryInput(input)) {
     violations.push({ code: "dry-mass-balance-exceeded" });
   }
 

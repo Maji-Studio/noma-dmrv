@@ -31,6 +31,7 @@ import {
   assertProductionRunOutcome,
   assertProductionRunTransition,
   assertProductionRunCreateStatus,
+  productionRunRecordsOutput,
   statusOccupiesReactor,
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
@@ -199,6 +200,8 @@ export async function createProductionRunInTransaction(
   }
 
   const status = data.status ?? "running";
+  // A failed run records no output, so it holds no output bin.
+  if (!productionRunRecordsOutput(status)) data = { ...data, biocharStorageLocationId: null };
   const feedstockDraws = normalizeProductionRunFeedstockDraws(
     data.feedstockDraws ?? [],
   );
@@ -393,6 +396,8 @@ export async function updateProductionRunInTransaction(
   if (!existing) {
     throw runReferenceNotFound("Production run not found");
   }
+  // Saving a failed run releases its output bin; mass and moisture stay as stored.
+  if (!productionRunRecordsOutput(data.status ?? existing.status)) data = { ...data, biocharStorageLocationId: null };
   const existingFeedstockStorageLocationIds =
     await getProductionRunFeedstockDrawStorageIds(ctx, tx, productionRunId);
   const inputFeedstockDraws = data.feedstockDraws;

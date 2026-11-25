@@ -286,7 +286,8 @@ describe("ProductionRunForm output section by status", () => {
       await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
       const sent = onSubmit.mock.calls[0][0] as Record<string, unknown>;
       expect(sent.status).toBe("failed");
-      for (const key of ["biocharOutputKg", "biocharMoisturePercent", "biocharStorageLocationId"]) expect(key in sent).toBe(false);
+      for (const key of ["biocharOutputKg", "biocharMoisturePercent"]) expect(key in sent).toBe(false);
+      expect(sent.biocharStorageLocationId).toBeNull();
       cleanup();
     }
   });

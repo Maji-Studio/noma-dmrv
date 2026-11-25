@@ -55,6 +55,7 @@ import {
   allowedProductionRunStatusesFrom,
   isTerminalProductionRunStatus,
   PRODUCTION_RUN_CREATE_STATUSES,
+  productionRunRecordsOutput,
   shouldClearProductionRunEndTime,
   shouldIncludeProductionRunEndTime,
 } from "@/lib/production-runs/lifecycle";
@@ -124,16 +125,17 @@ interface ProductionRunFormProps {
   lock?: RecordLockView;
 }
 /**
- * A failed run's Output section is hidden, so its values are neither checked
- * nor submitted. They stay in the form (switching back shows them) and in the
- * saved record (an update that omits them leaves them alone).
+ * A failed run's Output section is hidden, so its mass and moisture are neither
+ * checked nor submitted. They stay in the form (switching back shows them) and
+ * in the saved record (an update that omits them leaves them alone). The output
+ * bin is submitted as null, which releases it.
  */
 const OUTPUT_FIELDS = ["biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"] as const;
 
 function withoutHiddenOutput<T extends { status?: unknown }>(values: T): T {
-  if (values.status !== "failed") return values;
-  const rest: Record<string, unknown> = { ...values };
-  for (const field of OUTPUT_FIELDS) delete rest[field];
+  if (productionRunRecordsOutput(values.status as ProductionRunStatus)) return values;
+  const rest: Record<string, unknown> = { ...values, biocharStorageLocationId: null };
+  for (const field of OUTPUT_FIELDS) if (field !== "biocharStorageLocationId") delete rest[field];
   return rest as T;
 }
 
@@ -694,7 +696,7 @@ export function ProductionRunForm({
       </FormSection>
 
       {/* ── Output (a failed run has none) ── */}
-      {watchedStatus !== "failed" && <FormSection
+      {productionRunRecordsOutput(watchedStatus) && <FormSection
         title="Output"
         icon={<PackageIcon size={14} weight="bold" />}
         fields={[...OUTPUT_FIELDS]}

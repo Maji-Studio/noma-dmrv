@@ -11,6 +11,8 @@ import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
 import { productionProcesses } from "@/db/schema/production-processes";
 import { productionRunFeedstockDraws, productionRunFeedstocks, productionRuns } from "@/db/schema/production";
 import { productionVersion } from "./helpers/production-version";
+import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
+import { deleteStorageLocation } from "@/data-access/storage-locations";
 import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 const AVAILABLE_WET_KG = 1_000;
@@ -27,6 +29,8 @@ describe("create a production run as Failed", () => {
   let binId = "";
   let feedstockId = "";
   const runIds: string[] = [];
+  const binIdsToDelete: string[] = [];
+  const binVersion = async (id: string) => (await db.select({ v: storageLocations.version }).from(storageLocations).where(eq(storageLocations.id, id)))[0].v;
   const batchIds: string[] = [];
 
   async function newReactor(label: string) {
@@ -71,6 +75,7 @@ describe("create a production run as Failed", () => {
     }
     if (batchIds.length) await db.delete(creditBatches).where(inArray(creditBatches.id, batchIds));
     await db.delete(productionProcesses).where(eq(productionProcesses.feedstockTypeId, feedstockTypeId));
+    if (binIdsToDelete.length) await db.delete(storageLocations).where(inArray(storageLocations.id, binIdsToDelete));
     await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
     await cleanupFeedstockFixtureParents(db);
     await db.delete(storageLocations).where(eq(storageLocations.id, binId));
@@ -153,6 +158,61 @@ describe("create a production run as Failed", () => {
       feedstockMoisturePercent: MOISTURE_PERCENT,
       feedstockDraws: [{ storageLocationId: binId, wetMassKg: 100 }],
     })).rejects.toThrow(/not found/i);
+  });
+
+  describe("a failed run holds no output bin", () => {
+    const newOutputBin = async () => {
+      const id = await createProductionRunOutputBin(TEST_ORG_ID, facilityId);
+      binIdsToDelete.push(id);
+      return id;
+    };
+    const storedBin = async (id: string) => (await db.select({ bin: productionRuns.biocharStorageLocationId })
+      .from(productionRuns).where(eq(productionRuns.id, id)))[0].bin;
+
+    it("stores no bin when a failed run is created with one", async () => {
+      const outBin = await newOutputBin();
+      const run = await createProductionRun(ctx, {
+        code: `PR-FAIL-BIN-${tag}`, facilityId, reactorId: await newReactor("BIN"), status: "failed",
+        startTime: new Date("2026-05-10T08:00:00Z"), endTime: new Date("2026-05-10T10:00:00Z"),
+        feedstockMoisturePercent: MOISTURE_PERCENT, feedstockDraws: [{ storageLocationId: binId, wetMassKg: 100 }],
+        biocharStorageLocationId: outBin,
+      });
+      runIds.push(run.id);
+      expect(await storedBin(run.id)).toBeNull();
+    });
+
+    it("releases the bin of an older failed run on save, so the bin can be deleted", async () => {
+      const outBin = await newOutputBin();
+      const run = await createProductionRun(ctx, {
+        code: `PR-FAIL-REL-${tag}`, facilityId, reactorId: await newReactor("REL"), status: "failed",
+        startTime: new Date("2026-05-11T08:00:00Z"), endTime: new Date("2026-05-11T10:00:00Z"),
+        feedstockMoisturePercent: MOISTURE_PERCENT, feedstockDraws: [{ storageLocationId: binId, wetMassKg: 100 }],
+      });
+      runIds.push(run.id);
+      await db.update(productionRuns).set({ biocharStorageLocationId: outBin, biocharOutputKg: 5, biocharMoisturePercent: 0 }).where(eq(productionRuns.id, run.id));
+      await expect(deleteStorageLocation(ctx, outBin, await binVersion(outBin))).rejects.toThrow();
+
+      await updateProductionRun(ctx, run.id, {
+        expectedVersion: await productionVersion(ctx, "productionRuns", run.id), electricityKwh: 1, biocharStorageLocationId: null,
+      });
+      expect(await storedBin(run.id)).toBeNull();
+      const [kept] = await db.select({ kg: productionRuns.biocharOutputKg }).from(productionRuns).where(eq(productionRuns.id, run.id));
+      expect(kept.kg).toBe(5);
+      await deleteStorageLocation(ctx, outBin, await binVersion(outBin));
+    });
+
+    it("releases the bin even when the update omits it", async () => {
+      const outBin = await newOutputBin();
+      const run = await createProductionRun(ctx, {
+        code: `PR-FAIL-OMIT-${tag}`, facilityId, reactorId: await newReactor("OMIT"), status: "failed",
+        startTime: new Date("2026-05-12T08:00:00Z"), endTime: new Date("2026-05-12T10:00:00Z"),
+        feedstockMoisturePercent: MOISTURE_PERCENT, feedstockDraws: [{ storageLocationId: binId, wetMassKg: 100 }],
+      });
+      runIds.push(run.id);
+      await db.update(productionRuns).set({ biocharStorageLocationId: outBin }).where(eq(productionRuns.id, run.id));
+      await updateProductionRun(ctx, run.id, { expectedVersion: await productionVersion(ctx, "productionRuns", run.id), electricityKwh: 2 });
+      expect(await storedBin(run.id)).toBeNull();
+    });
   });
 
   describe("stored output on a failed run is not compared", () => {
