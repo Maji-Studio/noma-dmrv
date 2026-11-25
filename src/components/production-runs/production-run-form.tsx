@@ -336,6 +336,14 @@ export function ProductionRunForm({
 
   const refuseSave = useSaveRefusal({ control, setError, resetField, formId, splitFields: RUN_SPLIT_FIELDS });
 
+  /** A failed run records no output; the Output section is hidden for it. */
+  function clearOutputFields() {
+    setValue("biocharOutputKg", null);
+    setValue("biocharMoisturePercent", null);
+    setValue("biocharStorageLocationId", "");
+    clearErrors(["biocharOutputKg", "biocharMoisturePercent", "biocharStorageLocationId"]);
+  }
+
   const handleFormSubmit = latched(handleSubmit(async (data) => {
     // A touched value or newly entered physical outcome submits that Date;
     // otherwise undefined means "unchanged", so a no-op edit of an already
@@ -361,8 +369,12 @@ export function ProductionRunForm({
       setError(runWindow.field, { type: "validate", message: runWindow.message });
       return;
     }
+    const noOutput = data.status === "failed"
+      ? { biocharOutputKg: null, biocharMoisturePercent: null, biocharStorageLocationId: null }
+      : {};
     const combined: ProductionRunSubmitData = {
       ...data,
+      ...noOutput,
       expectedVersion: productionRun?.version,
       startTime: runWindow.startTime,
       endTime: runWindow.endTime,
@@ -413,7 +425,12 @@ export function ProductionRunForm({
             options={statusOptions}
             disabled={isSubmitting || outputLocked}
             error={!!errors.status}
-            {...register("status")}
+            {...register("status", {
+              // A failed run has no output: drop typed values so none are submitted.
+              onChange: (event) => {
+                if (event.target.value === "failed") clearOutputFields();
+              },
+            })}
           />
         </FormField>
 
@@ -679,8 +696,8 @@ export function ProductionRunForm({
         </div>
       </FormSection>
 
-      {/* ── Output ── */}
-      <FormSection
+      {/* ── Output (a failed run has none) ── */}
+      {watchedStatus !== "failed" && <FormSection
         title="Output"
         icon={<PackageIcon size={14} weight="bold" />}
         fields={[
@@ -760,7 +777,7 @@ export function ProductionRunForm({
             destinationBinName={selectedDestBin?.name ?? null}
           />
         )}
-      </FormSection>
+      </FormSection>}
 
       {/* ── Energy ── */}
       <FormSection

@@ -252,3 +252,39 @@ describe("ProductionRunForm Add source with several source bins switched off", (
     expect(screen.getAllByRole("button", { name: "Remove source" })).toHaveLength(1);
   });
 });
+
+describe("ProductionRunForm output section by status", () => {
+  const outputInputs = () => document.querySelectorAll('input[name="biocharOutputKg"], input[name="biocharMoisturePercent"]');
+
+  it("shows the Output section and requires it for Complete", () => {
+    render(<ProductionRunForm onSubmit={vi.fn()} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Complete" }));
+    expect(outputInputs()).toHaveLength(2);
+    expect(screen.getByText("Output")).toBeTruthy();
+  });
+
+  it("hides the Output section for Failed on create and brings it back empty for Complete", () => {
+    render(<ProductionRunForm onSubmit={vi.fn()} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Complete" }));
+    fireEvent.change(document.querySelector('input[name="biocharOutputKg"]')!, { target: { value: "50" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Failed" }));
+    expect(outputInputs()).toHaveLength(0);
+    fireEvent.click(screen.getByRole("radio", { name: "Complete" }));
+    expect((document.querySelector('input[name="biocharOutputKg"]') as HTMLInputElement).value).toBe("");
+  });
+
+  it("submits null output for a saved run edited to Failed, and for one already Failed", async () => {
+    for (const from of ["running", "failed"] as const) {
+      const onSubmit = vi.fn();
+      render(<ProductionRunForm productionRun={{ ...savedRun, status: from }} onSubmit={onSubmit} lock={OPEN_LOCK} />);
+      if (from === "running") fireEvent.click(screen.getByRole("radio", { name: "Failed" }));
+      expect(outputInputs()).toHaveLength(0);
+      fireEvent.click(screen.getByRole("button", { name: "Update production run" }));
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+        status: "failed", biocharOutputKg: null, biocharMoisturePercent: null, biocharStorageLocationId: null,
+      }), expect.any(Function));
+      cleanup();
+    }
+  });
+});
