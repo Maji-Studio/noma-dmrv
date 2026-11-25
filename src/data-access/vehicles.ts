@@ -1,3 +1,4 @@
+import { synchronizeFailedEmissionBatches } from "./failed-run-emission-write-guard";
 /**
  * Vehicles Data Access Layer: list, read, edit and delete.
  *
@@ -6,6 +7,7 @@
  * legs in the same transaction; submitted legs retain their evidence snapshot.
  */
 
+import { loadBatchEmissionContributors, loadRunEmissionContributors } from "./credit-batch-emission-contributors";
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { isPgForeignKeyViolation, isPgUniqueViolation } from "@/db/errors";
@@ -23,6 +25,8 @@ import { DomainError } from "@/lib/domain-errors";
 import { formatFleetDeleteBlocker } from "@/lib/fleet/messages";
 import {
   getLockedCertifiedLineageForTargetSet,
+  getLineageUnderLockedArtifacts,
+  tryLockCertifiedLineageArtifacts,
   isSubmittedLineageRow,
   type LockedCertifiedLineageRow,
 } from "./certification-lineage-guards";
@@ -158,6 +162,7 @@ async function unsubmittedFeedstocks(
   feedstockIds: readonly string[],
   submittedBatchIds: readonly string[],
 ): Promise<string[]> {
+  requireOrgScope(ctx);
   const held = await tx
     .selectDistinct({ feedstockId: productionRunFeedstocks.feedstockId })
     .from(productionRunFeedstocks)
@@ -174,6 +179,10 @@ async function unsubmittedFeedstocks(
       eq(productionRunFeedstocks.organizationId, ctx.organizationId),
     ));
   const submitted = new Set(held.map((row) => row.feedstockId));
+  const contributors = await loadBatchEmissionContributors(ctx, submittedBatchIds, tx, { includeArchived: true });
+  for (const batch of Object.values(contributors)) {
+    for (const run of batch.failedContributors) for (const id of run.feedstockIds) submitted.add(id);
+  }
   return feedstockIds.filter((id) => !submitted.has(id));
 }
 
@@ -206,6 +215,16 @@ async function updateVehicleOnce(
   if (snapshotChanged) {
     references = await vehicleReferences(ctx, tx, vehicleId, true);
     const lineage = await getLockedCertifiedLineageForTargetSet(ctx, tx, { ...references, deliveryIds: [] });
+    const linkedRuns = references.feedstockIds.length ? await tx.selectDistinct({ id: productionRunFeedstocks.productionRunId })
+      .from(productionRunFeedstocks).where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId),
+        inArray(productionRunFeedstocks.feedstockId, references.feedstockIds))) : [];
+    const emissionSources = await loadRunEmissionContributors(ctx, linkedRuns.map(run => run.id), tx, { includeArchived: true });
+    const failedBatchIds = emissionSources.filter(run => run.kind === "failed" && run.creditBatchId).map(run => run.creditBatchId!);
+    const targets = [...new Set(failedBatchIds)].map(entityId => ({ entityType: "creditBatch" as const, entityId }));
+    const keys = await tryLockCertifiedLineageArtifacts(ctx, tx, targets);
+    if (!keys) throw new DomainError("conflict", VEHICLE_REFERENCES_CHANGED, { retryable: true });
+    await synchronizeFailedEmissionBatches(ctx, tx, failedBatchIds);
+    for (const target of targets) lineage.push(...await getLineageUnderLockedArtifacts(ctx, tx, keys, target));
     submitted = lineage.filter(isSubmittedLineageRow);
   }
 

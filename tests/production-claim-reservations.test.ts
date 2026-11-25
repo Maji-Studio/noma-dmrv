@@ -1,3 +1,5 @@
+import { loadProductionSourceManifest } from "@/data-access/production-source-manifest";
+import { productionRunFeedstocks } from "@/db/schema";
 import { setComponentFilePolicy } from "@/data-access/component-file-policy";
 import { and } from "drizzle-orm";
 import { productionRuns } from "@/db/schema";
@@ -572,4 +574,58 @@ it("refuses required proof introduced after review even with no uploaded files",
   } finally {
     await cleanupEmissionLineFileFixture(fixture);
   }
+});
+
+
+describe("failed production source reservations", () => {
+  it.each(["unchanged", "added", "version", "replacement", "deleted", "transport-owner"] as const)(
+    "rechecks %s failed sources under the batch lock", async kind => {
+      const fixture = await createEmissionLineFileFixture();
+      const { ctx, batch, removal, run, feedstock } = fixture;
+      try {
+        const beforeFailure = await loadProductionSourceManifest(ctx, [batch.id]);
+        const [failed] = await db.insert(productionRuns).values({
+          organizationId: ctx.organizationId, facilityId: run.facilityId, reactorId: run.reactorId,
+          code: `FAILED-${crypto.randomUUID()}`, status: "failed",
+          startTime: new Date("2026-01-01T00:00:00Z"), endTime: run.endTime,
+        }).returning();
+        await db.insert(productionRunFeedstocks).values({ organizationId: ctx.organizationId,
+          productionRunId: failed.id, feedstockId: feedstock.id, wetMassUsedKg: 1,
+        });
+        const afterFailure = await loadProductionSourceManifest(ctx, [batch.id]);
+        expect(afterFailure.failedContributors.map(source => source.runId)).toEqual([failed.id]);
+        expect(afterFailure.countedTransportFeedstockIds).toEqual([feedstock.id]);
+        const reviewed = kind === "added" ? beforeFailure : afterFailure;
+        if (kind === "version") await db.update(productionRuns).set({ version: failed.version + 1 })
+          .where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, failed.id)));
+        if (kind === "transport-owner") await db.update(productionRuns).set({ startTime: new Date("2025-12-31T00:00:00Z") })
+          .where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, run.id)));
+        if (kind === "replacement" || kind === "deleted") {
+          await db.delete(productionRunFeedstocks).where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId), eq(productionRunFeedstocks.productionRunId, failed.id)));
+          await db.delete(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, failed.id)));
+          if (kind === "replacement") {
+            const [replacement] = await db.insert(productionRuns).values({ ...failed, id: undefined, code: `FAILED-${crypto.randomUUID()}` }).returning();
+            await db.insert(productionRunFeedstocks).values({ organizationId: ctx.organizationId,
+              productionRunId: replacement.id, feedstockId: feedstock.id, wetMassUsedKg: 1,
+            });
+          }
+        }
+        const [submission] = await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId,
+          provider: "isometric", submissionType: "removal", localEntityType: "removal", localEntityId: removal.id,
+          version: 1, status: "draft", lockedAt: new Date(), payloadHash: crypto.randomUUID(),
+          payloadSnapshot: { productionSourceManifest: reviewed },
+        }).returning();
+        const reserve = () => reserveProductionEmissionsClaims(ctx, { removalId: removal.id,
+          submissionId: submission.id, creditBatchIds: [batch.id], frozenProductionSourceManifest: reviewed,
+        });
+        if (kind === "unchanged") await expect(reserve()).resolves.toBeUndefined();
+        else {
+          await expect(reserve()).rejects.toMatchObject({ code: "conflict", retryable: true });
+          const [saved] = await db.select().from(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, batch.id)));
+          expect(saved.productionEmissionsClaimReservedBySubmissionId).toBeNull();
+          expect(await db.select().from(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.creditBatchId, batch.id)))).toEqual([]);
+        }
+      } finally { await cleanupEmissionLineFileFixture(fixture); }
+    },
+  );
 });

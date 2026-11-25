@@ -1,3 +1,4 @@
+import { prepareFailedRunEmissionWrite } from "./failed-run-emission-write-guard";
 import { earliestFeedstockEventTie } from '@/lib/feedstock-event-boundary';
 import { prepareFeedstockTransportOwnershipFreeze, type TransportOwnershipChange, type TransportOwnershipFreezeScope } from "./feedstock-transport-ownership-freeze";
 import { and, eq, gt, gte, inArray, ne, or, sql } from "drizzle-orm";
@@ -152,6 +153,13 @@ export async function reallocateRunsForBins(
   }
   if (!rewrites.length) return [];
 
+  const finishFailedEmissionWrites = [];
+  if (!options.allowSentRewrite) for (const { run } of rewrites) {
+    finishFailedEmissionWrites.push(await prepareFailedRunEmissionWrite(ctx, tx, run.id, {
+      feedstockDraws: draws.filter(draw => draw.productionRunId === run.id),
+    }));
+  }
+
   // One snapshot over every rewritten run, so a handoff between them compares
   // the final owner rather than each intermediate one.
   const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
@@ -181,6 +189,7 @@ export async function reallocateRunsForBins(
       })));
     }
   });
+  for (const finish of finishFailedEmissionWrites) await finish();
   return rewrites.map(({ run }) => run.id);
 }
 

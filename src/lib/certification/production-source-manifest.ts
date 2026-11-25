@@ -5,6 +5,7 @@ import { includesProductionInputs } from "./production-claim-policy";
 
 const productionSourceManifestSchema = z.object({
   version: z.literal(1),
+  countedTransportFeedstockIds: z.array(z.string().min(1)).optional(),
   failedContributors: z.array(z.object({
     runId: z.string().min(1), version: z.number().int().positive(),
     facilityId: z.string().min(1), endDay: z.iso.date(),
@@ -34,4 +35,20 @@ export function claimingFailedEmissionRuns(ctx: RemovalSubmissionContext, remova
   const ids = new Set(manifest?.failedContributors.filter(run => claiming.has(run.creditBatchId)).map(run => run.runId));
   return [...new Map((ctx.failedEmissionRuns ?? []).filter(run => run.status === "failed" && ids.has(run.id))
     .map(run => [run.id, run])).values()];
+}
+
+export type ProductionSourceManifest = NonNullable<ReturnType<typeof readProductionSourceManifest>>;
+
+/** Canonical source identities, independently of numeric emissions or array order. */
+export function productionSourceManifestsEqual(
+  reviewed: ProductionSourceManifest | null,
+  current: ProductionSourceManifest | null,
+): boolean {
+  const canonical = (manifest: ProductionSourceManifest | null) => JSON.stringify({
+    failedContributors: (manifest?.failedContributors ?? []).map(run => ({ ...run,
+      feedstockIds: [...run.feedstockIds].sort(),
+    })).sort((a, b) => a.runId.localeCompare(b.runId)),
+    countedTransportFeedstockIds: [...(manifest?.countedTransportFeedstockIds ?? [])].sort(),
+  });
+  return canonical(reviewed) === canonical(current);
 }

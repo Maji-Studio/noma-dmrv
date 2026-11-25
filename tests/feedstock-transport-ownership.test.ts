@@ -151,7 +151,8 @@ it("orders failed transport owners across facilities and retains archive-inclusi
     const ctx = makeTestOrgContext();
     const early = await failedRunFixture(tx);
     const later = await failedRunFixture(tx);
-    await tx.update(creditBatches).set({ feedstockTypeId: early.type.id }).where(eq(creditBatches.id, later.batch!.id));
+    const [process] = await tx.insert(productionProcesses).values({ ...later.site, feedstockTypeId: early.type.id }).returning();
+    await tx.update(creditBatches).set({ feedstockTypeId: early.type.id, productionProcessId: process.id }).where(eq(creditBatches.id, later.batch!.id));
     await tx.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, later.run.id));
     await tx.insert(productionRunFeedstocks).values({ ...early.org, productionRunId: later.run.id, feedstockId: early.stock.id, wetMassUsedKg: 1 });
     await tx.update(productionRuns).set({ startTime: new Date("2026-03-01T00:00:00Z") }).where(eq(productionRuns.id, later.run.id));

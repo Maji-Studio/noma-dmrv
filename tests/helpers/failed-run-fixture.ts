@@ -7,11 +7,11 @@ import { TEST_ORG_ID, TEST_SITE_POSITION } from "./test-org";
 export async function failedRunFixture(tx: DbTransaction, options: { timezone?: string; endTime?: string; batch?: boolean } = {}) {
   const tag = crypto.randomUUID();
   const org = { organizationId: TEST_ORG_ID };
-  const [facility] = await tx.insert(facilities).values({ ...org, ...TEST_SITE_POSITION, timezone: options.timezone ?? "UTC", code: `FR-F-${tag}`, name: "Failed run fixture" }).returning();
+  const [facility] = await tx.insert(facilities).values({ ...org, ...TEST_SITE_POSITION, timezone: options.timezone ?? "UTC", code: `FR-F-${tag}`, name: `Failed run fixture ${tag}` }).returning();
   const site = { ...org, facilityId: facility.id };
-  const [type] = await tx.insert(feedstockTypes).values({ ...org, code: `FR-T-${tag}`, name: "Failed run fixture", usage: "pyrolysis", category: "forestry" }).returning();
-  const [bin] = await tx.insert(storageLocations).values({ ...site, code: `FR-B-${tag}`, name: "Failed run fixture", type: "feedstock_bin", feedstockTypeId: type.id }).returning();
-  const [reactor] = await tx.insert(reactors).values({ ...site, code: `FR-R-${tag}`, identifier: "Failed run fixture", reactorType: "fixed-bed" }).returning();
+  const [type] = await tx.insert(feedstockTypes).values({ ...org, code: `FR-T-${tag}`, name: `Failed run fixture ${tag}`, usage: "pyrolysis", category: "forestry" }).returning();
+  const [bin] = await tx.insert(storageLocations).values({ ...site, code: `FR-B-${tag}`, name: `Failed run fixture ${tag}`, type: "feedstock_bin", feedstockTypeId: type.id }).returning();
+  const [reactor] = await tx.insert(reactors).values({ ...site, code: `FR-R-${tag}`, identifier: `Failed run fixture ${tag}`, reactorType: "fixed-bed" }).returning();
   const [process] = await tx.insert(productionProcesses).values({ ...site, feedstockTypeId: type.id }).returning();
   const [stock] = await tx.insert(feedstocks).values(await feedstockFixtureValues(tx, { ...site, code: `FR-S-${tag}`, feedstockTypeId: type.id, storageLocationId: bin.id,
     deliveryDate: new Date("2026-01-01"), massWetKg: 1000, massDryKg: 1000, moistureContentPercent: 0, status: "complete" })).returning();

@@ -446,7 +446,7 @@ export async function buildRemovalContext(
     lineages,
     runs,
     failedEmissionRuns,
-    productionSourceManifest: { version: 1, failedContributors: failedContributors.sort((a, b) => a.runId.localeCompare(b.runId)) },
+    productionSourceManifest: { version: 1, countedTransportFeedstockIds: failedFeedstockIds.filter(id => failedRunIds.has(failedOwners.get(id) ?? "")).sort(), failedContributors: failedContributors.sort((a, b) => a.runId.localeCompare(b.runId)) },
     batchesWithSamples,
     attributionByRunId,
     memberBatchClaims,

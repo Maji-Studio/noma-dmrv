@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { creditBatchProductionRuns, creditBatchApplications, creditBatches, feedstocks, feedstockTypes, productionRuns, productionRunFeedstocks } from "@/db/schema";
+import { creditBatchProductionRuns, creditBatchApplications, creditBatches, feedstocks, feedstockTypes, productionRuns, productionRunFeedstocks, productionProcesses } from "@/db/schema";
 import { loadBatchEmissionContributors, loadRunEmissionContributors } from "@/data-access/credit-batch-emission-contributors";
 import { ensureTestOrg, makeTestOrgContext } from "./helpers/test-org";
 import { failedRunFixture } from "./helpers/failed-run-fixture";
@@ -46,7 +46,7 @@ describe("computed failed emission attachment", () => {
       const [stock] = await tx.insert(feedstocks).values({ ...fixture.stock, id: undefined, code: `FR-S2-${crypto.randomUUID()}` }).returning();
       await tx.insert(productionRunFeedstocks).values({ ...fixture.org, productionRunId: fixture.run.id, feedstockId: stock.id, wetMassUsedKg: 1 });
       expect((await loadRunEmissionContributors(ctx, [fixture.run.id, fixture.run.id], tx))).toHaveLength(1);
-      const [type] = await tx.insert(feedstockTypes).values({ ...fixture.type, id: undefined, code: `FR-T2-${crypto.randomUUID()}` }).returning();
+      const [type] = await tx.insert(feedstockTypes).values({ ...fixture.type, id: undefined, name: `Failed run second type ${crypto.randomUUID()}`, code: `FR-T2-${crypto.randomUUID()}` }).returning();
       await tx.update(feedstocks).set({ feedstockTypeId: type.id }).where(eq(feedstocks.id, stock.id));
       expect((await loadRunEmissionContributors(ctx, [fixture.run.id], tx))[0].unresolvedReason).toBe("mixed-feedstock");
       await tx.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, fixture.run.id));
@@ -60,9 +60,11 @@ it("isolates facilities and types even when the same local window overlaps", asy
   await expect(db.transaction(async tx => {
     const a = await failedRunFixture(tx);
     const b = await failedRunFixture(tx);
-    await tx.update(creditBatches).set({ feedstockTypeId: a.type.id }).where(eq(creditBatches.id, b.batch!.id));
+    const [typeProcess] = await tx.insert(productionProcesses).values({ ...b.site, feedstockTypeId: a.type.id }).returning();
+    await tx.update(creditBatches).set({ feedstockTypeId: a.type.id, productionProcessId: typeProcess.id }).where(eq(creditBatches.id, b.batch!.id));
     expect((await loadBatchEmissionContributors(ctx, [b.batch!.id], tx))[b.batch!.id].failedContributors).toEqual([]);
-    await tx.update(creditBatches).set({ facilityId: a.facility.id, feedstockTypeId: b.type.id }).where(eq(creditBatches.id, b.batch!.id));
+    const [facilityProcess] = await tx.insert(productionProcesses).values({ ...a.site, feedstockTypeId: b.type.id }).returning();
+    await tx.update(creditBatches).set({ facilityId: a.facility.id, feedstockTypeId: b.type.id, productionProcessId: facilityProcess.id }).where(eq(creditBatches.id, b.batch!.id));
     expect((await loadBatchEmissionContributors(ctx, [b.batch!.id], tx))[b.batch!.id].failedContributors).toEqual([]);
     expect((await loadRunEmissionContributors(ctx, [a.run.id], tx))[0].creditBatchId).toBe(a.batch!.id);
     throw ROLLBACK;

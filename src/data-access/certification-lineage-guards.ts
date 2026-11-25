@@ -1,3 +1,4 @@
+import { failedRunEmissionBatchCondition } from "./failed-run-emission-predicate";
 import type { DbTransaction } from "@/db";
 import {
   applications,
@@ -31,7 +32,7 @@ import {
   type CertificationArtifactLock,
 } from "@/lib/certification/submission-lock";
 import { SafeError } from "@/lib/errors";
-import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, exists, inArray, or, sql, type SQL } from "drizzle-orm";
 import { getFeedstockTransportOwners } from "./feedstock-transport-ownership";
 import { requireOrgScope } from "./utils";
 import { readRecordLockLineage, type StatementReads } from "./record-lock-lineage";
@@ -165,13 +166,19 @@ function lineageQueryWhere(
         eq(creditBatchApplications.organizationId, ctx.organizationId),
       ),
     )
-    .innerJoin(
-      creditBatchProductionRuns,
-      and(eq(creditBatchProductionRuns.creditBatchId, creditBatches.id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)),
-    )
-    .innerJoin(
+    // Failed sources reach certification through emissions, without joining
+    // the material membership or output-allocation graph.
+    .leftJoin(
       productionRuns,
-      and(eq(productionRuns.id, creditBatchProductionRuns.productionRunId), eq(productionRuns.organizationId, ctx.organizationId)),
+      and(eq(productionRuns.organizationId, ctx.organizationId), or(
+        exists(tx.select({ id: creditBatchProductionRuns.productionRunId })
+          .from(creditBatchProductionRuns).where(and(
+            eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
+            eq(creditBatchProductionRuns.creditBatchId, creditBatches.id),
+            eq(creditBatchProductionRuns.productionRunId, productionRuns.id),
+          ))),
+        failedRunEmissionBatchCondition(ctx),
+      )),
     )
     .leftJoin(
       productionRunFeedstocks,
@@ -335,9 +342,9 @@ async function lockLineage(
 }
 
 /** Lineage gained an artifact after its locks were taken; a writer never locks it late. */
-export class CertificationLineageChangedError extends SafeError {
+export class CertificationLineageChangedError extends DomainError {
   constructor() {
-    super("Certification lineage changed while it was being locked. Refresh and retry.");
+    super("conflict", "Certification lineage changed while it was being locked. Refresh and retry.", { retryable: true });
     this.name = "CertificationLineageChangedError";
   }
 }

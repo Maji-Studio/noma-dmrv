@@ -126,7 +126,7 @@ export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "e
   lineages: ChainOfCustodyData[];
   runs: ProductionRunForCertification[];
   failedEmissionRuns?: ProductionRunForCertification[];
-  productionSourceManifest?: { version: 1; failedContributors: import("@/data-access/credit-batch-emission-contributors").EmissionContributor[] };
+  productionSourceManifest?: { version: 1; countedTransportFeedstockIds?: string[]; failedContributors: import("@/data-access/credit-batch-emission-contributors").EmissionContributor[] };
   // The removal's member credit batches with their pooled lab Samples (by
   // `samples.creditBatchId`) — the CREDIT-BATCH-grained durability data plane
   // (ADR 0016). Drives the durability gates here and the per-batch

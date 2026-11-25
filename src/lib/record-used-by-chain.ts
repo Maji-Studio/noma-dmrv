@@ -17,6 +17,8 @@ export interface RecordUsedByNode {
 }
 
 export interface RecordUsedByEdge {
+  /** Present on computed emissions dependencies, never material provenance. */
+  dependency?: "production-emissions";
   from: string;
   to: string;
 }

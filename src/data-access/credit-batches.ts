@@ -648,9 +648,12 @@ export async function updateCreditBatch(
         requestedProductionRunIds:
           productionRunIds ?? currentProductionRunIds,
         currentProductionRunIds,
+        currentFailedRunIds: prepared.currentFailedRunIds,
+        previousScope: declarationSnapshot,
         matchingProductionRunIds: prepared.matchingProductionRunIds,
         expand: !heldAddOnly,
       });
+      prepared.prospectiveFailedRunIds = declaration.failedRunIds;
       resolvedProductionRunIds = declaration.runIds;
       lockedMembershipRuns = declaration.lockedRuns;
     }
@@ -861,7 +864,7 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
     }
     const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
       await getTransportFreezeFeedstockIds(ctx, tx, { runIds: prepared.currentProductionRunIds, batchIds: [id] }),
-      { mutation: "delete", subject: "credit batch" });
+      { mutation: "delete", subject: "credit batch", deletedCreditBatchId: id });
     await freeze(async () => {
       for (const entry of entries.filter((row) => row.kind === "zero" && !row.deletedAt)) {
         const [tombstone] = await tx.update(emissionEntries).set({ deletedAt: new Date(), updatedAt: new Date(),

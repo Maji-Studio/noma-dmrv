@@ -1,4 +1,5 @@
-import { and, asc, eq, exists, or } from "drizzle-orm";
+import { synchronizeFailedEmissionBatches } from "./failed-run-emission-write-guard";
+import { and, asc, eq, exists, or, sql } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { creditBatchProductionRuns, creditBatches, productionRuns, samples } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -6,6 +7,8 @@ import { conflictCode } from "@/lib/conflict-ref";
 import { formatTimezoneLabel } from "@/lib/date-utils";
 import { DomainError } from "@/lib/domain-errors";
 import { findTimezoneEntry } from "@/lib/timezones";
+import { failedRunEmissionBatchCondition } from "./failed-run-emission-predicate";
+import { assertLockedLineagesAllowMutation, tryLockCertifiedLineageArtifacts } from "./certification-lineage-guards";
 import { requireOrgScope } from "./utils";
 
 const FIRST_BLOCKER_LIMIT = 1;
@@ -34,6 +37,26 @@ export async function resolveFacilityTimezoneEdit(
 ): Promise<string | undefined> {
   requireOrgScope(ctx);
   if (isUnchangedFacilityTimezone(facility.timezone, requestedTimezone)) return;
+
+  // The facility row is already locked. Never wait for artifacts discovered
+  // here: submission may hold them while waiting for this facility.
+  const requestedDay = sql`(${productionRuns.endTime} AT TIME ZONE 'UTC' AT TIME ZONE ${requestedTimezone!})::date`;
+  const emissionBatches = await tx.selectDistinct({ id: creditBatches.id, code: creditBatches.code })
+    .from(creditBatches).innerJoin(productionRuns, and(
+      eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.facilityId, facility.id),
+      or(failedRunEmissionBatchCondition(ctx), failedRunEmissionBatchCondition(ctx, requestedDay)),
+    )).where(eq(creditBatches.organizationId, ctx.organizationId)).orderBy(creditBatches.code);
+  if (emissionBatches.length) {
+    const targets = emissionBatches.map(batch => ({ entityType: "creditBatch" as const, entityId: batch.id }));
+    const keys = await tryLockCertifiedLineageArtifacts(ctx, tx, targets);
+    if (!keys) throw new DomainError("conflict", "Certification inputs changed while saving the facility. Refresh and retry.", { retryable: true });
+    await synchronizeFailedEmissionBatches(ctx, tx, emissionBatches.map(batch => batch.id));
+    await assertLockedLineagesAllowMutation(ctx, tx, keys, targets.map(target => ({ target, mutation: "update" })));
+    const batch = emissionBatches[0];
+    throw new DomainError("conflict", facilityTimezoneChangeMessage(facility.code, batch.code, facility.timezone), {
+      conflict: { entity: "credit_batch", id: batch.id, code: conflictCode(batch.code) },
+    });
+  }
 
   // Membership and Sample writers hold the facility FOR SHARE before reading
   // facility-local dates. The FOR UPDATE row lock here serializes against them.

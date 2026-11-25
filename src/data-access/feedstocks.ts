@@ -1,3 +1,4 @@
+import { prepareFailedFeedstockEmissionWrite } from "./failed-feedstock-emission-write";
 import { earliestFeedstockEventTie } from '@/lib/feedstock-event-boundary';
 import { FEEDSTOCK_TRANSPORT_FIELDS } from "@/lib/record-lock-view";
 import { withIntakeAllocationIssues } from "@/lib/feedstock-allocation-errors";
@@ -646,6 +647,7 @@ export async function updateFeedstockInTransaction(
   capture?: CaptureActivity,
 ): Promise<FeedstockWithRelations> {
   requireOrgScope(ctx);
+  const prepareEmissionWrite = await prepareFailedFeedstockEmissionWrite(ctx, tx, feedstockId, data.feedstockTypeId, data.facilityId);
   const {
     transportDistanceKm,
     transportDistanceSource,
@@ -775,6 +777,7 @@ export async function updateFeedstockInTransaction(
 
   await snapshotStock?.(tx, stockDerivationChanged || storageReferenceNeedsValidation ? [locked.storageLocationId, effectiveStorageLocationId] : []);
 
+  const finishEmissionWrite = await prepareEmissionWrite(effectiveFeedstockTypeId !== locked.feedstockTypeId || effectiveFacilityId !== locked.facilityId);
   const [saved] = await tx
     .update(feedstocks)
     .set({
@@ -810,6 +813,7 @@ export async function updateFeedstockInTransaction(
   await syncFeedstockTransportLeg(ctx, tx, feedstockId, {
     refreshFromLocation: (transportDistanceKm !== undefined && locked.distanceKmOverride != null && distanceColumns.distanceKmOverride === null) || routeAnchorChanged,
   });
+  await finishEmissionWrite();
   if (capture) capture(feedstockId, { ...locked, ...transportBefore }, { ...saved, ...await readFeedstockTransportSnapshot(ctx, tx, feedstockId) });
 
   // Read the updated record back inside the transaction, so a failed read

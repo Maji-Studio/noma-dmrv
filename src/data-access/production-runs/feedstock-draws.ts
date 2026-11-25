@@ -1,3 +1,4 @@
+import { prepareFailedRunEmissionWrite } from "../failed-run-emission-write-guard";
 import { requireMultiBinRunsEnabled } from "@/lib/feature-switches";
 import { earliestFeedstockEventTie } from '@/lib/feedstock-event-boundary';
 import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze, type TransportOwnershipFreezeScope } from "../feedstock-transport-ownership-freeze";
@@ -233,6 +234,9 @@ export async function replaceProductionRunFeedstockDraws(
     }), ["feedstockDraws", index, "storageLocationId"]);
   }
 
+  const finishFailedEmissionWrite = await prepareFailedRunEmissionWrite(ctx, tx, params.productionRunId, {
+    facilityId: params.facilityId, feedstockDraws: draws,
+  });
   const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
     await getTransportFreezeFeedstockIds(ctx, tx, {
       runIds: [params.productionRunId], binIds: [...previousBins, ...draws.map(draw => draw.storageLocationId)],
@@ -266,6 +270,7 @@ export async function replaceProductionRunFeedstockDraws(
 
     await reallocateRunsForBins(ctx, tx, [...draws.map((draw) => draw.storageLocationId), ...previousBins], { onlyRunId: params.productionRunId, earliestEventAt: params.earliestEventAt, eventTie: previousTie, transportOwnershipFreeze });
 
+    await finishFailedEmissionWrite();
     return sumProductionRunFeedstockDraws(draws);
   });
 }

@@ -34,6 +34,17 @@ export async function lockProductionProcessScope(
   );
 }
 
+/** Late source discoveries cannot wait behind a batch writer holding this scope. */
+export async function tryLockProductionProcessScope(
+  ctx: OrgContext, tx: DbTransaction, params: { facilityId: string; feedstockTypeId: string },
+): Promise<boolean> {
+  requireOrgScope(ctx);
+  const rows = await tx.execute<{ locked: boolean }>(
+    sql`select pg_try_advisory_xact_lock(hashtextextended(${`${PRODUCTION_PROCESS_CURRENT_LOCK_SCOPE}:${params.facilityId}:${params.feedstockTypeId}`}, 0)) as locked`,
+  );
+  return rows.rows[0]?.locked === true;
+}
+
 async function findProductionProcessAtDate(
   ctx: OrgContext,
   params: { facilityId: string; feedstockTypeId: string; batchStartDate: Date },

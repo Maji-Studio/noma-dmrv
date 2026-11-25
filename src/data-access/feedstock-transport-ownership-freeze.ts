@@ -1,3 +1,4 @@
+import { synchronizeFailedEmissionBatches } from "./failed-run-emission-write-guard";
 import type { DbTransaction } from "@/db";
 import { creditBatchProductionRuns, feedstocks, productionRunFeedstocks, productionRuns } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -26,6 +27,8 @@ function batchKey(batches: { creditBatchId: string }[] | undefined): string | un
 export type TransportOwnershipChange = {
   mutation: "create" | "update" | "delete";
   subject: "production run" | "credit batch" | "facility" | "feedstock";
+  /** Explicit deletion already synchronized this batch before removing its row. */
+  deletedCreditBatchId?: string;
 };
 
 /** Include existing provenance and every intake a replacement bin draw can select, archived included like the allocator. */
@@ -98,6 +101,10 @@ export async function prepareFeedstockTransportOwnershipFreeze(
     if (artifacts === null) {
       throw new DomainError("conflict", `Certification records for ${await feedstockLabel(ctx, tx, changed[0])} are being changed. Save again in a moment.`, { retryable: true });
     }
+    await synchronizeFailedEmissionBatches(ctx, tx, changed.flatMap(id => [
+      ...(before.get(id) ?? []).map(owner => owner.creditBatchId),
+      ...(after.get(id) ?? []).map(owner => owner.creditBatchId),
+    ]).filter(id => id !== change.deletedCreditBatchId));
     for (const target of targets) {
       const lineage = await getLineageUnderLockedArtifacts(ctx, tx, artifacts, target);
       for (const previousTarget of previousTargets.get(target.entityId) ?? []) {
