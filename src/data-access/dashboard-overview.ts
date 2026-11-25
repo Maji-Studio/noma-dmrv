@@ -556,7 +556,8 @@ type AttentionKind =
   | "run-mass"
   | "feedstock-missing"
   | "application-evidence"
-  | "batch-pending";
+  | "batch-pending"
+  | "failed-emissions";
 
 function attentionKind(kind: AttentionKind): SQL<AttentionKind> {
   return sql<AttentionKind>`${kind}::text`;
@@ -592,7 +593,7 @@ interface AttentionRow {
   removals: BatchRemovalDisplayFacts[];
 }
 
-type FlagKind = Exclude<AttentionKind, "batch-pending">;
+type FlagKind = Exclude<AttentionKind, "batch-pending" | "failed-emissions">;
 
 /** Uncapped size of a capped branch, read in the same statement. */
 const branchTotal = sql<number>`count(*) over ()`.mapWith(Number);
@@ -645,7 +646,7 @@ function groupedRow(
 }
 
 /** Active batches take their title from `creditBatchAttention`. */
-const ATTENTION_TITLES: Record<Exclude<AttentionKind, "batch-pending">, string> = {
+const ATTENTION_TITLES: Record<FlagKind, string> = {
   "run-mass": "Complete run missing mass data",
   "feedstock-missing": "Feedstock record missing data",
   "application-evidence": "Application missing evidence",
@@ -659,7 +660,7 @@ const FLAG_ORDER: FlagKind[] = [
 ];
 
 function attentionHref(
-  kind: AttentionKind,
+  kind: Exclude<AttentionKind, "failed-emissions">,
   id: string,
   facilityId: string,
 ): string {
@@ -696,13 +697,22 @@ export async function getDashboardAttentionItems(
   requireOrgScope(ctx);
   const orgId = ctx.organizationId;
 
-  const failedEmissionTodos = await loadFacilityFailedEmissionTodos(ctx, facilityId);
-  const failedEmissionRows = failedEmissionTodos.map((todo): DashboardAttentionItem => ({
-    id: todo.id, stage: "production", recordKind: "productionRun", entityCode: todo.productionRun.code,
-    recordIds: [todo.productionRun.id], date: todo.emissionAttachment.endDay,
-    title: todo.detail, href: todo.target.href,
-  }));
   const rows: AttentionRow[] = await unionAll(
+    // Detect failed runs in the existing round trip, even without a batch.
+    db.select({
+      kind: attentionKind("failed-emissions"),
+      removals: sql<BatchRemovalDisplayFacts[]>`'[]'::jsonb`,
+      id: productionRuns.id,
+      code: productionRuns.code,
+      dateDay: noDay,
+      dateMs: noInstant,
+      ord: sql<number>`1`,
+      total: sql<number>`1`,
+      allIds: sql<string[]>`'{}'::text[]`,
+    }).from(productionRuns).where(and(
+      eq(productionRuns.organizationId, orgId), eq(productionRuns.facilityId, facilityId),
+      eq(productionRuns.status, "failed"), isNull(productionRuns.archivedAt),
+    )).limit(1),
     db
       .select({
         kind: attentionKind("run-mass"),
@@ -784,6 +794,13 @@ export async function getDashboardAttentionItems(
       .orderBy(asc(creditBatches.endDate)),
   );
 
+  const failedEmissionTodos = rows.some(row => row.kind === "failed-emissions")
+    ? await loadFacilityFailedEmissionTodos(ctx, facilityId) : [];
+  const failedEmissionRows = failedEmissionTodos.map((todo): DashboardAttentionItem => ({
+    id: todo.id, stage: "production", recordKind: "productionRun", entityCode: todo.productionRun.code,
+    recordIds: [todo.productionRun.id], date: todo.emissionAttachment.endDay,
+    title: todo.detail, href: todo.target.href,
+  }));
   const batchRows = rows.filter((row) => row.kind === "batch-pending")
     .map((row) => ({ row, removals: row.removals.map(removalDisplayFromFacts) }));
   // Only a submitted period can have come back from the verifier, so only its
@@ -837,7 +854,7 @@ export async function getDashboardAttentionItems(
         entityCode: row.code,
         date: row.dateDay,
         title: attention.period === "returned" ? RETURNED_BY_ISOMETRIC_LABEL : PERIOD_ENDED_NOT_SUBMITTED_TITLE,
-        href: attentionHref(row.kind, row.id, facilityId),
+        href: attentionHref("batch-pending", row.id, facilityId),
       });
     }
   }

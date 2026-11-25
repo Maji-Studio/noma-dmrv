@@ -1,3 +1,4 @@
+vi.mock("@/data-access/credit-batch-emission-contributors", () => ({ loadBatchEmissionContributors: vi.fn(async () => ({})) }));
 vi.mock("@/lib/certification/batch-emission-context", () => ({ loadBatchEmissionContext: vi.fn(async () => ({ batchFacts: {} })) }));
 vi.mock("@/data-access/transport-distance-fix-links", () => ({ getTransportDistanceFixLinks: vi.fn(async () => new Map()) }));
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations";
@@ -28,7 +29,6 @@ import { getTransportLegsWithEvidenceForEntities } from "@/data-access/transport
 import { listComponentBlueprints, listProjects, listGhgEntryTemplates, type IsometricComponentBlueprint, type IsometricProject, type IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { loadCertifyContextForCreditBatchForUser } from "@/lib/certification/certify-context-core";
 import { mockNormalizedLineageFacts, satisfiedVisualEvidenceDocuments, transportTemplate } from "./fixtures/certify-context";
-
 vi.mock("@/data-access/production-run-readings");
 vi.mock("@/data-access/production-run-reading-imports");
 vi.mock("@/fn/production-run-readings");

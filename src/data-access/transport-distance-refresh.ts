@@ -4,10 +4,8 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { deliveries, feedstocks } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { SafeError } from "@/lib/errors";
 import { DomainError } from "@/lib/domain-errors";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
-import { formatCertificationLineageLockMessage } from "@/lib/certification/lineage-lock-message";
 import type { RefreshTransportDistanceInput, TransportDistanceTarget } from "@/schemas/transport-distance-refresh";
 import { assertCanMutateCertifiedLineage, lockCertifiedLineageArtifacts, assertLockedLineagesAllowMutation } from "./certification-lineage-guards";
 import { distanceRefreshLineageTargets, getTransportDistanceDrift } from "./transport-distance-drift";
@@ -19,19 +17,24 @@ export { getTransportDistanceDrift } from "./transport-distance-drift";
 
 const LOCKED_REFRESH_MESSAGE = "The distance was not refreshed because its transport data belongs to a locked Removal. Ask an Organization Admin to review the linked Removal.";
 
+/** Preserve refresh-specific guidance when lineage guards name their holders. */
+async function withRefreshErrors<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await withFeedstockErrors(work, "certification_locked");
+  } catch (error) {
+    if (error instanceof DomainError && error.code === "certification_locked") {
+      throw new DomainError("certification_locked", LOCKED_REFRESH_MESSAGE);
+    }
+    throw error;
+  }
+}
+
 async function guardRefresh(ctx: OrgContext, tx: DbTransaction, target: TransportDistanceTarget) {
   requireOrgScope(ctx);
   const targets = await distanceRefreshLineageTargets(ctx, tx, target);
   const lockedKeys = await lockCertifiedLineageArtifacts(ctx, tx, targets);
   for (const lineageTarget of targets) {
-    try {
-      await withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, lineageTarget, "update"), "certification_locked");
-    } catch (error) {
-      if (error instanceof SafeError && error.message === formatCertificationLineageLockMessage({
-        mutation: "update", subjectEntityType: lineageTarget.entityType, lineageEntityType: lineageTarget.entityType,
-      })) throw new DomainError("certification_locked", LOCKED_REFRESH_MESSAGE);
-      throw error;
-    }
+    await withRefreshErrors(() => assertCanMutateCertifiedLineage(ctx, tx, lineageTarget, "update"));
   }
   return { targets, lockedKeys };
 }
@@ -64,7 +67,7 @@ export async function refreshDeliveryDistanceInTransaction(ctx: OrgContext, tx: 
     eq(deliveries.id, input.entityId), isNull(deliveries.archivedAt))).for("update");
   if (!row) throw new DomainError("not_found", "Delivery not found or archived.");
   assertRowVersion({ entity: "delivery", id: row.id, expectedVersion: input.expectedVersion, actualVersion: row.version });
-  await withFeedstockErrors(() => assertLockedLineagesAllowMutation(ctx, tx, lockedKeys, targets.map(lineageTarget => ({ target: lineageTarget, mutation: "update" }))), "certification_locked");
+  await withRefreshErrors(() => assertLockedLineagesAllowMutation(ctx, tx, lockedKeys, targets.map(lineageTarget => ({ target: lineageTarget, mutation: "update" }))));
   if (row.distanceKmOverride != null && row.distanceKmOverride > 0) throw new DomainError("validation_failed", "The distance was not refreshed because it has an override. Clear the override first.");
   const preview = await getTransportDistanceDrift(ctx, target, tx);
   if (preview.currentDistanceKm == null) throw new DomainError("validation_failed", "The distance was not refreshed because the location has no distance for this facility. Save a location distance first.");

@@ -404,6 +404,7 @@ describe("needs attention rows", () => {
 
 
 it("includes facility failed-emission checks without a batch and removes them on the next resolved read", async () => {
+  mocks.union.mockResolvedValue([{ kind: "failed-emissions" }]);
   mocks.failedTodos.mockResolvedValue([{
     id: "failed-run-emissions:run-1", title: "Assign failed run emissions", detail: "Run PR-1 is saved. Its emissions have no matching credit batch.",
     productionRun: { id: "run-1", code: "PR-1" }, target: { href: "/credit-batches?facility=test" },
@@ -416,4 +417,11 @@ it("includes facility failed-emission checks without a batch and removes them on
   expect(unresolved.batches.failedEmissions).toBe(1);
   mocks.failedTodos.mockResolvedValue([]);
   expect((await getDashboardAttentionItems(CTX, FACILITY_ID, DAY)).items).toEqual([]);
+});
+
+
+it("skips failed-emission guidance when the attention query finds no failed runs", async () => {
+  mocks.failedTodos.mockClear();
+  await getDashboardAttentionItems(CTX, FACILITY_ID, DAY);
+  expect(mocks.failedTodos).not.toHaveBeenCalled();
 });

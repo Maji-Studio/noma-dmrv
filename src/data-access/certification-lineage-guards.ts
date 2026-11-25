@@ -342,9 +342,9 @@ async function lockLineage(
 }
 
 /** Lineage gained an artifact after its locks were taken; a writer never locks it late. */
-export class CertificationLineageChangedError extends DomainError {
+export class CertificationLineageChangedError extends SafeError {
   constructor() {
-    super("conflict", "Certification lineage changed while it was being locked. Refresh and retry.", { retryable: true });
+    super("Certification lineage changed while it was being locked. Refresh and retry.");
     this.name = "CertificationLineageChangedError";
   }
 }

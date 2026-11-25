@@ -1,3 +1,4 @@
+vi.mock("@/data-access/credit-batch-emission-contributors", () => ({ loadBatchEmissionContributors: vi.fn(async () => ({})) }));
 import { listEmissionLineFilesForBatches } from "@/data-access/emission-line-files";
 import { loadBatchEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 vi.mock("@/data-access/emission-entry-carry", () => ({ loadBatchEmissionEntryCarry: vi.fn() }));
