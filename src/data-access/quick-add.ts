@@ -226,8 +226,8 @@ export async function createQuickStorageLocationInTransaction(
 ): Promise<EntityOption> {
   requireOrgScope(ctx);
 
-  storageLocationQuickAddSchema.parse(data);
   await lockActiveFacilityReference(ctx, tx, data.facilityId);
+  storageLocationQuickAddSchema.parse(data);
   if (data.feedstockTypeId) {
     await assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId, tx);
   }

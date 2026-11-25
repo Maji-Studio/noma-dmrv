@@ -43,6 +43,8 @@ const KEYED = [
 ];
 
 const EXCEPTION: Record<string, string> = {
+  "production-run-returns#recordProductionRunReturnFn": "Return posting carries its own persistent domain idempotencyKey, replayed under a request lock.",
+  "production-run-returns#correctProductionRunReturnFn": "Return correction carries its own persistent domain idempotencyKey for the atomic reversal and optional replacement.",
   "deliveries#createDeliveryFn": "Stock posting carries its own domain idempotencyKey.",
   "biochar-products#createBiocharProductFn": "Stock posting carries its own domain idempotencyKey.",
   "output-stock#postOutputStockFn": "Stock posting carries its own domain idempotencyKey.",

@@ -166,7 +166,9 @@ export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId
     intakeWetKg: m.massDeltaKg, dryKg: round((replay.remaining.get(m.id) ?? 0) * m.feedstockDryDeltaKg! / m.massDeltaKg),
     moisturePercent: m.moistureRatioUsed! * PERCENT,
   })));
-  pile.sort((a, b) => a.receivedAt.localeCompare(b.receivedAt) || a.id.localeCompare(b.id));
+  const recordedAtById = new Map([...batches, ...returnMovements].map(row => [row.id, row.createdAt.getTime()]));
+  pile.sort((a, b) => a.receivedAt.localeCompare(b.receivedAt)
+    || recordedAtById.get(a.id)! - recordedAtById.get(b.id)! || a.id.localeCompare(b.id));
   const drawWetKg = options.drawWetKg ?? 0;
   const available = [...replay.remaining].map(([id, wet]) => ({ id, units: BigInt(Math.round(wet * MASS_DECIMALS)) }));
   const availableWet = [...replay.remaining.values()].reduce((sum, wet) => sum + wet, 0);
