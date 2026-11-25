@@ -545,7 +545,7 @@ export function ProductionRunList() {
       editLabel="Edit production run"
       readOnly={sheetReadOnly}
       size="wide"
-      sections={sideSheetEntity ? productionRunSheetSections(sideSheetEntity, facilitiesWithLinked(facilities, linkedRecord)) : undefined}
+      sections={sideSheetEntity ? productionRunSheetSections(sideSheetEntity, facilitiesWithLinked(facilities, linkedRecord), { readOnly: !!sheetReadOnly }) : undefined}
     >
       <ProductionRunForm
         key={sideSheetEntity?.id ?? "create"}

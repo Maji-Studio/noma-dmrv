@@ -1,0 +1,22 @@
+/** Operator wording for the failed-run return surfaces (docs/ux-writing.md). */
+export const LEFTOVER_SECTION_TITLE = "Leftover material";
+export const LEFTOVER_SECTION_HINT = "Material left over from a failed run can go back into an uncarbonized bin of the same feedstock type. The limit is dry solids, so material that comes back wetter is allowed.";
+export const RETURN_ACTION_LABEL = "Return to storage";
+export const NOTHING_RETURNED = "Nothing has gone back to storage yet.";
+export const RETURN_FIGURE_LABELS = { fedIn: "Fed into the run", returned: "Returned to storage", remaining: "Can still return" } as const;
+export const RETURN_DRY_CAPTION = "Dry solids";
+export const RETURN_DEST_EMPTY = { message: "No uncarbonized bin takes this feedstock type yet. Tag a bin as uncarbonized first.", href: "/storage-bins", linkLabel: "Open storage bins" } as const;
+export const RETURN_WET_HINT = "Weight of the material as it goes back, water included.";
+export const RETURN_MOISTURE_HELPER = "Measure this material. It does not copy the run's moisture.";
+export const RETURN_REASON_HELPER = "What happened, such as material left in the reactor after a feed failure.";
+export const RETURN_REASON_PLACEHOLDER = "Say what material came back and why";
+export const CORRECTION_REASON_HELPER = "What was wrong with the earlier entry, such as a misread scale.";
+export const CORRECTION_REASON_PLACEHOLDER = "Say why this entry is being corrected";
+export const RETURN_CONFLICT_MESSAGE = "A return from this form is already saved. Check the run's returns before you submit again.";
+export const REVERSE_REASON_REQUIRED = "Enter why you reverse this entry.";
+export const REVERSE_REASON_HELPER = "Such as recorded twice, or the wrong bin.";
+export const REVERSE_CONFLICT_MESSAGE = "This entry was already changed from this dialog. Close it and check the run's returns.";
+export const ELIGIBILITY_FAILED = "The leftover material could not be checked. Refresh the page and try again.";
+export const ALLOWANCE_CAPTION_BEFORE = "Can still return";
+export const ALLOWANCE_CAPTION_AFTER = "After this return";
+export const RETURN_ROW_REST = 3;

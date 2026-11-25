@@ -6,7 +6,7 @@ import { formatMoisturePercent } from "@/lib/mass-moisture";
 
 const ICON_PX = 16;
 
-function ChangeBlock({ label, figure, caption, muted }: {
+export function ChangeBlock({ label, figure, caption, muted }: {
   label: string;
   figure: string;
   caption: string;

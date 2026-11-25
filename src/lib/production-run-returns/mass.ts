@@ -5,6 +5,7 @@ import { RETURN_PERCENT_SCALE, RETURN_MOISTURE_PERCENT_STEP } from '@/schemas/pr
 
 export const RETURN_GRAMS_PER_KG = 1_000;
 export const RETURN_SNAPSHOT_VERSION = 1;
+export const RETURN_OVER_CAP_MESSAGE = 'Returned dry mass exceeds the run consumption. Reduce the return.';
 export function returnGrams(kg: number): number {
   const grams = Math.round(kg * RETURN_GRAMS_PER_KG);
   if (!Number.isFinite(kg) || !Number.isSafeInteger(grams)) throw new SafeError('Enter a valid mass.');
@@ -24,7 +25,7 @@ export function returnMassBasis(wetMassKg: number, moisturePercent: number) {
 /** No display tolerance: every committed gram participates in the source cap. */
 export function remainingReturnDryKg(consumedDryKg: number, signedReturns: readonly number[]): number {
   const remaining = returnGrams(consumedDryKg) - signedReturns.reduce((sum, mass) => sum + returnGrams(mass), 0);
-  if (remaining < 0) throw new SafeError('Returned dry mass exceeds the run consumption. Reduce the return.');
+  if (remaining < 0) throw new SafeError(RETURN_OVER_CAP_MESSAGE);
   return remaining / RETURN_GRAMS_PER_KG;
 }
 export function assertReturnTime(occurredAt: Date, runEnd: Date | null, now: Date): void {

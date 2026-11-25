@@ -7,6 +7,8 @@ import { MoistureSplit } from "@/components/ui/moisture-split";
 import { flowBarWidthPercent, flowScaleKg } from "./production-run-flow-scale";
 import { ProductionIncidentTable } from "./production-incident-table";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
+import { ProductionRunReturns } from "./production-run-returns";
+import { LEFTOVER_SECTION_HINT, LEFTOVER_SECTION_TITLE } from "./production-run-return-copy";
 import { ProductionSampleTable } from "./production-sample-table";
 import { buildProductionRunWindowDetailFields, productionRunStatusCertStatus } from "./production-run-detail-fields";
 import type { ReactNode } from "react";
@@ -28,7 +30,7 @@ export function RunStatusBadge({ status }: { status: ProductionRunStatus }) {
   return <StatusBadge status={status} icon={STATUS_ICONS[status]} />;
 }
 
-export function productionRunSheetSections(run: ProductionRunWithRelations, facilities: readonly { id: string; timezone: string }[]): DetailPanelSection[] {
+export function productionRunSheetSections(run: ProductionRunWithRelations, facilities: readonly { id: string; timezone: string }[], options: { readOnly?: boolean } = {}): DetailPanelSection[] {
   // Feedstock in and biochar out are drawn to one mass scale, as in the form.
   const scaleKg = flowScaleKg(run.totalFeedstockWetMassKg, run.biocharOutputKg);
   return [
@@ -93,6 +95,13 @@ export function productionRunSheetSections(run: ProductionRunWithRelations, faci
         />
       ),
     },
+    // Leftover material goes back to storage only from a Failed run.
+    ...(run.status === "failed" ? [{
+      title: LEFTOVER_SECTION_TITLE,
+      hint: LEFTOVER_SECTION_HINT,
+      fields: [],
+      content: <ProductionRunReturns runId={run.id} facilityId={run.facilityId} feedstockWetMassKg={run.totalFeedstockWetMassKg} readOnly={options.readOnly} />,
+    }] : []),
     {
       title: "Energy",
       fields: [

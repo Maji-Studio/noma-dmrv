@@ -65,8 +65,8 @@ export function FeedstockLedgerRow({ entry, corrected, timeZone, facilityId, onE
           {reversalCaption({ recordedAt: entry.reversedBy.recordedAt, actorName: entry.reversedBy.actorName, replaced }, timeZone)}
         </p>
       )}
-      <StockSourceLink facilityId={facilityId} source={entry.sourceId && (entry.kind === "intake" || entry.kind === "run_draw" || entry.kind === "ingredient_draw")
-        ? { entity: entry.kind === "intake" ? "feedstock" : entry.kind === "run_draw" ? "productionRun" : "biocharProduct", id: entry.sourceId } : null} />
+      <StockSourceLink facilityId={facilityId} source={entry.sourceId && (entry.kind === "intake" || entry.kind === "run_draw" || entry.kind === "ingredient_draw" || entry.kind === "failed_run_return")
+        ? { entity: entry.kind === "intake" ? "feedstock" : entry.kind === "run_draw" || entry.kind === "failed_run_return" ? "productionRun" : "biocharProduct", id: entry.sourceId } : null} />
       {!entry.reversedBy && <LedgerBeforeAfter before={`${formatMassKg(entry.beforeWetKg)} wet mass`} after={`${formatMassKg(entry.afterWetKg)} wet mass`} />}
       {corrected && (
         <LedgerBeforeAfter title={`Corrects the lost mass from ${formatFacilityDateTime(corrected.occurredAt, timeZone)}`} labels={["Original", "Corrected"]}

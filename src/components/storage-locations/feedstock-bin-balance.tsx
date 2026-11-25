@@ -121,7 +121,7 @@ export function FeedstockBinBalance({ storageLocationId, facilityId, capacityKg,
   const estimatedDryKg = stock.data?.entries.at(-1)?.estimatedDryKg ?? (stock.data?.currentWetKg === 0 ? 0 : null);
   const estimatedMoisturePercent = currentWetKg > 0 && estimatedDryKg !== null ? Math.max(0, (currentWetKg - estimatedDryKg) / currentWetKg * PERCENT) : null;
   const waterKg = estimatedDryKg === null ? null : Math.max(currentWetKg - estimatedDryKg, 0);
-  const bands: PileBand[] = (stock.data?.batches ?? []).filter((batch) => batch.wetKg > 0).map((batch) => ({ label: batch.code, kg: estimatedDryKg === null ? batch.wetKg : batch.dryKg ?? 0, details: [
+  const bands: PileBand[] = (stock.data?.batches ?? []).filter((batch) => batch.wetKg > 0).map((batch) => ({ label: batch.kind === "failed_run_return" ? FEEDSTOCK_ENTRY_LABELS.failed_run_return : batch.code, kg: estimatedDryKg === null ? batch.wetKg : batch.dryKg ?? 0, details: [
     { label: "In the pile now", value: `${formatMassKg(batch.wetKg)} wet mass` },
     // A share is derived, so an empty pile leaves the row out.
     ...(currentWetKg > 0 ? [{ label: "Share of the pile", value: `${Math.round((batch.wetKg / currentWetKg) * PERCENT)}%` }] : []),

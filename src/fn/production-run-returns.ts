@@ -8,6 +8,7 @@ import { getProductionRunReturnEligibility, type ProductionRunReturnEligibility 
 import { recordProductionRunReturn, correctProductionRunReturn } from '@/lib/operations/production-run-returns';
 import { runOperationInProcess } from '@/lib/operations/runner';
 import { recordProductionRunReturnSchema, correctProductionRunReturnSchema, type RecordProductionRunReturnInput, type CorrectProductionRunReturnInput } from '@/schemas/production-run-returns';
+import { getProductionRunReturnRows, type ProductionRunReturnRow } from '@/data-access/production-run-returns/view';
 import { getProductionRunMaterialBalance } from '@/data-access/production-run-material-balance';
 import { withAction } from './with-action';
 
@@ -45,5 +46,11 @@ export async function getProductionRunReturnAllowanceFn(sourceProductionRunId: s
 export async function getProductionRunMaterialBalanceFn(sourceProductionRunId: string): Promise<ActionResult<Awaited<ReturnType<typeof getProductionRunMaterialBalance>>>> {
   return withAction(ctx => getProductionRunMaterialBalance(ctx, z.uuid().parse(sourceProductionRunId)), {
     fallbackMessage: 'Failed to load run material balance',
+  });
+}
+
+export async function getProductionRunReturnRowsFn(sourceProductionRunId: string): Promise<ActionResult<ProductionRunReturnRow[]>> {
+  return withAction(ctx => getProductionRunReturnRows(ctx, z.uuid().parse(sourceProductionRunId)), {
+    fallbackMessage: 'Failed to load returns',
   });
 }

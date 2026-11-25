@@ -80,3 +80,10 @@ it("hides Edit and Delete on a read-only bin's Lost mass entry but keeps the ent
   expect(buttons(renderer)).toEqual([]);
   expect(text(renderer.root)).toContain("Spilled");
 });
+
+it("links a failed-run return to its source run", async () => {
+  const RUN = "00000000-0000-4000-8000-0000000000aa";
+  const { renderer } = await render(entry({ kind: "failed_run_return", sourceId: RUN, wetDeltaKg: 50, editLockedReason: undefined }));
+  const link = renderer.root.findAllByType("a").find(node => /Open\s+production run/.test(text(node)));
+  expect(link?.props.href).toContain(RUN);
+});
