@@ -112,9 +112,6 @@ async function listProjectsWithConfiguration(
   }
 }
 
-const PRODUCTION_CONFIRMATION_MESSAGE =
-  "Confirm you want to save against the production Isometric environment.";
-
 // Org Admin-only: this action rewires which Isometric project every
 // future Removal / GHG-statement submission for the facility targets.
 // Platform admins also pass through requireOrgRole.
@@ -127,15 +124,6 @@ export async function saveFacilityCertifierMapping(
     // Check facility ownership before registry reads. The composite FK and
     // upsert organization guard also enforce it at the persistence boundary.
     await requireOrgFacility(orgCtx, parsed.facilityId);
-
-    if (
-      env.ISOMETRIC_ENVIRONMENT === "production" &&
-      !parsed.confirmProduction
-    ) {
-      throw new DomainError("validation_failed", PRODUCTION_CONFIRMATION_MESSAGE, {
-        issues: [{ path: ["confirmProduction"], code: "validation_failed", message: PRODUCTION_CONFIRMATION_MESSAGE }],
-      });
-    }
 
     const client = await resolveIsometricClient(orgCtx);
     let projects;

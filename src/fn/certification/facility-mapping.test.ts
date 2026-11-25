@@ -5,6 +5,7 @@ import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import {
   getCertifierProjectByFacility,
   listAllFacilitiesLinkedByProvider,
+  upsertCertifierProject,
 } from "@/data-access/certification";
 import { IsometricApiError, listProjects } from "@/lib/isometric";
 import { SafeError } from "@/lib/errors";
@@ -95,26 +96,20 @@ describe("loadFacilityCertifierMapping project listing", () => {
   });
 });
 
-describe("saveFacilityCertifierMapping refusals", () => {
-  const input = {
-    facilityId,
-    externalProjectId: "prj_1",
-    protocolSlug: "biochar",
-    externalFacilityId: "fcl_12345",
-    confirmProduction: false,
-  };
-
-  it("files the production confirmation at the confirmation field", async () => {
-    const message = "Confirm you want to save against the production Isometric environment.";
+describe("saveFacilityCertifierMapping in production", () => {
+  it("links without a production confirmation, since linking writes nothing to Isometric", async () => {
     const spy = vi.spyOn(env, "ISOMETRIC_ENVIRONMENT", "get").mockReturnValue("production");
+    vi.mocked(listProjects).mockResolvedValueOnce([{ id: "prj_1", name: "Project" }] as Awaited<ReturnType<typeof listProjects>>);
+    vi.mocked(upsertCertifierProject).mockResolvedValueOnce({ facilityId } as Awaited<ReturnType<typeof upsertCertifierProject>>);
     try {
-      expect(await saveFacilityCertifierMapping(input)).toEqual({
-        success: false,
-        error: message,
-        code: "validation_failed",
-        issues: [{ path: ["confirmProduction"], code: "validation_failed", message }],
+      const result = await saveFacilityCertifierMapping({
+        facilityId,
+        externalProjectId: "prj_1",
+        protocolSlug: "biochar",
+        externalFacilityId: "fcl_12345",
       });
-      expect(listProjects).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ success: true });
+      expect(upsertCertifierProject).toHaveBeenCalledOnce();
     } finally {
       spy.mockRestore();
     }

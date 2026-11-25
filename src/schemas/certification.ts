@@ -51,7 +51,6 @@ export const saveMappingSchema = z.object({
         "Isometric facility ID must start with 'fcl_'. Copy it from Certify.",
     })
     .min(5, "Isometric facility ID looks too short. Copy it from Certify."),
-  confirmProduction: z.boolean().optional(),
 });
 
 export type SaveMappingInput = z.infer<typeof saveMappingSchema>;

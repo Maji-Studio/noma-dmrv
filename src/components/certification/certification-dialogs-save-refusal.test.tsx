@@ -120,7 +120,7 @@ describe("MethodBPrerequisitesSetup refusals", () => {
 });
 
 describe("FacilityCertifierForm refusals", () => {
-  const renderForm = (isProduction = false) =>
+  const renderForm = () =>
     render(
       <FacilityCertifierForm
         facilityId={FACILITY_ID}
@@ -131,7 +131,7 @@ describe("FacilityCertifierForm refusals", () => {
           },
           availableProjects: [{ id: "prj_test", name: "Test project" }],
           linkHints: [],
-          isProduction,
+          isProduction: false,
         } as never}
       />,
     );
@@ -143,15 +143,6 @@ describe("FacilityCertifierForm refusals", () => {
     const view = renderForm();
     fireEvent.submit(view.container.querySelector("form")!);
     await expectAtField(message, "externalFacilityId-error");
-  });
-
-  it("shows the production confirmation refusal under the checkbox", async () => {
-    // The shape saveFacilityCertifierMapping returns when the box is not ticked in production.
-    const message = "Confirm you want to save against the production Isometric environment.";
-    mocks.saveMapping.mockRejectedValue(refusal("confirmProduction", message));
-    const view = renderForm(true);
-    fireEvent.submit(view.container.querySelector("form")!);
-    await expectAtField(message);
   });
 
   it("keeps a registry failure in the footer with its exact text", async () => {
