@@ -21,8 +21,8 @@ export interface RecordLockSheetOptions {
   record?: UsedByRecord;
   /** The form disables nothing while In use, so only Sent gets a line. */
   inUseLocksNothing?: boolean;
-  /** A caption line that closes "Used by" (a Failed run's emissions batch, #1714). */
-  usedByClosing?: ReactNode;
+  /** Replaces the default "Used by" block (a Failed run's, which also reads its emissions batch, #1714). */
+  usedBy?: ReactNode;
 }
 
 /** The lock's verdict on an open edit form, with the in-place retry. */
@@ -39,7 +39,7 @@ export function recordLockSubmitBlock({ lock, status, retry, retrying }: RecordL
  * `canEdit` explicit where it combines with other rules.
  */
 export function recordLockSheetProps(options: RecordLockSheetOptions) {
-  const { lock, status, retry, retrying, subject, inUseLocksNothing, record, usedByClosing } = options;
+  const { lock, status, retry, retrying, subject, inUseLocksNothing, record, usedBy } = options;
   // In use that locks nothing has no line below, so the chip would claim a lock that isn't there.
   const showChip = !!lock && !(lock.level === "inUse" && inUseLocksNothing);
   return {
@@ -49,7 +49,7 @@ export function recordLockSheetProps(options: RecordLockSheetOptions) {
     ),
     // In edit mode the pending and failed states sit beside Save instead.
     editNotice: <RecordLockNotice lock={lock} subject={subject} inUseLocksNothing={inUseLocksNothing} />,
-    viewModeChildren: <RecordUsedBy lock={lock} record={record} closing={usedByClosing} />,
+    viewModeChildren: usedBy ?? <RecordUsedBy lock={lock} record={record} />,
     submitBlock: recordLockSubmitBlock(options),
   };
 }

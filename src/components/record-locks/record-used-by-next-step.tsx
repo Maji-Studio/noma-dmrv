@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useId, useState } from "react";
-import { ArrowRightIcon, CertificateIcon, StackIcon } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRightIcon, CertificateIcon, StackIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { RECORD_CODE_LINK, RECORD_NAME_LINK } from "@/components/ui/record-code-link";
 import { INLINE_HIT_AREA } from "@/components/ui/touch-target";
 import { recordHref } from "@/lib/record-links";
@@ -157,18 +157,32 @@ function BatchLink({ batch }: { batch: RecordUsedByBatch }) {
   );
 }
 
-/** "Credit batch: CB-26-003" and "Removal: RM-26-003", the forms' label wording, as one quiet caption line under the records. */
+/** Appended to a batch the record reaches only through a failed run's emissions (#1714). */
+export const EMISSIONS_ONLY_SUFFIX = ", emissions only";
+
+/** One "Credit batch: A and B" group; `suffix` closes an emissions-only group ("CB-26-001, emissions only"). */
+function BatchGroup({ batches, suffix }: { batches: RecordUsedByBatch[]; suffix?: string }) {
+  return (
+    <span className="flex flex-wrap items-center gap-x-6">
+      <CertificateIcon size={LINE_ICON} aria-hidden className="shrink-0" />
+      {batches.length === 1 ? "Credit batch:" : "Credit batches:"}
+      <span>{joinWithAnd(batches.map((batch) => <BatchLink key={batch.id} batch={batch} />))}{suffix}</span>
+    </span>
+  );
+}
+
+/**
+ * "Credit batch: CB-26-003" and "Removal: RM-26-003", the forms' label wording, as one quiet caption line under the records.
+ * A batch reached only through a failed run's emissions reads "CB-26-003, emissions only" (#1714).
+ */
 function BatchLine({ batches, removals }: { batches: RecordUsedByBatch[]; removals: UsedByNode[] }) {
   if (batches.length === 0 && removals.length === 0) return null;
+  const material = batches.filter((batch) => !batch.dependency);
+  const emissionsOnly = batches.filter((batch) => batch.dependency === "production-emissions");
   return (
     <p className="flex flex-wrap items-center gap-x-24 gap-y-8 body-caption text-[var(--color-text-secondary)]">
-      {batches.length > 0 && (
-        <span className="flex flex-wrap items-center gap-x-6">
-          <CertificateIcon size={LINE_ICON} aria-hidden className="shrink-0" />
-          {batches.length === 1 ? "Credit batch:" : "Credit batches:"}
-          {joinWithAnd(batches.map((batch) => <BatchLink key={batch.id} batch={batch} />))}
-        </span>
-      )}
+      {material.length > 0 && <BatchGroup batches={material} />}
+      {emissionsOnly.length > 0 && <BatchGroup batches={emissionsOnly} suffix={EMISSIONS_ONLY_SUFFIX} />}
       {removals.length > 0 && (
         <span className="flex flex-wrap items-center gap-x-6">
           <StackIcon size={LINE_ICON} aria-hidden className="shrink-0" />
@@ -180,24 +194,30 @@ function BatchLine({ batches, removals }: { batches: RecordUsedByBatch[]; remova
   );
 }
 
+/** The warning icon's colour: the token the form footer's warning Notice uses. */
+const WARNING_ICON_CLASS = "shrink-0 text-[var(--st-wait)]";
+
 /**
- * A Failed run's emissions line (#1714), in the credit batch caption's frame:
- * "Emissions count in credit batch CB-26-003", or what is missing and one link
- * to fix it. The run is not a batch member, so it never reads "Credit batch:".
+ * A Failed run's emissions caption on its sheet (#1714), in the credit batch
+ * caption's frame: what is missing, and where the link navigates, one link to
+ * fix it. A counted run is listed in Used by as "CB-26-003, emissions only"
+ * instead, so this caption never names an attached batch. `warning` takes the
+ * form footer's icon and colour.
  */
-export function EmissionsLine({ lead, batch, facilityId, action }: {
+export function EmissionsLine({ lead, action, tone = "neutral", children }: {
   lead: string;
-  batch: { id: string; code: string } | null;
-  facilityId: string;
-  action: { label: string; href: string } | null;
+  action?: { label: string; href: string } | null;
+  tone?: "neutral" | "warning";
+  /** A control after the text, such as Try again. */
+  children?: React.ReactNode;
 }) {
+  const LeadIcon = tone === "warning" ? WarningIcon : CertificateIcon;
   return (
-    <p className="flex flex-wrap items-center gap-x-6 gap-y-4 body-caption text-[var(--color-text-secondary)]">
-      <CertificateIcon size={LINE_ICON} aria-hidden className="shrink-0" />
-      <span>{lead}{batch && <Link href={recordHref("creditBatch", batch.id, { facilityId })} className={cn(RECORD_CODE_LINK, INLINE_HIT_AREA)}>{batch.code}</Link>}</span>
-      {action && (
-        <Link href={action.href} className={cn("underline underline-offset-4", INLINE_HIT_AREA)}>{action.label}</Link>
-      )}
+    <p className="flex flex-wrap items-center gap-x-6 gap-y-4 body-caption text-[var(--color-text-secondary)]" data-tone={tone}>
+      <LeadIcon size={LINE_ICON} weight={tone === "warning" ? "fill" : undefined} aria-hidden className={tone === "warning" ? WARNING_ICON_CLASS : "shrink-0"} />
+      <span>{lead}</span>
+      {action && <Link href={action.href} className={cn("underline underline-offset-4", INLINE_HIT_AREA)}>{action.label}</Link>}
+      {children}
     </p>
   );
 }

@@ -39,6 +39,11 @@ export function withUnmatchedUsers(chain: RecordUsedByChain, usedBy: RecordLockL
   };
 }
 
+/** Nothing to list: no direct user, no batch and no later Removal. */
+export function usedByGraphIsEmpty(graph: UsedByGraph): boolean {
+  return directUserGroups(graph).length === 0 && namedBatches(graph).length === 0 && laterRemovals(graph).length === 0;
+}
+
 /** Oldest first; records without a day last, then by code. */
 export function byDay(nodes: UsedByNode[]): UsedByNode[] {
   const time = (node: UsedByNode) => (node.at ? Date.parse(node.at) : Number.POSITIVE_INFINITY);

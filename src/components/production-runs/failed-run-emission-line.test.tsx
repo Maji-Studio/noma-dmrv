@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FailedRunEmissionGuidance } from "@/types/failed-run-emission-guidance";
 import { FailedRunEmissionTodosView } from "@/components/credit-batches/failed-run-emission-todos";
-import { FailedRunEmissionLineView } from "./failed-run-emission-line";
+import { FailedRunEmissionLineView, FailedRunSheetEmissionsView } from "./failed-run-emission-line";
 
 afterEach(cleanup);
 
@@ -16,10 +16,9 @@ const NO_MATCH = { ...BASE, state: "no-match" as const, batch: null, href: "/cre
 const MIXED = { ...BASE, productionRunId: "run-2", runCode: "PR-26-002", state: "mixed-feedstock" as const, batch: null, feedstockTypeName: null, href: "/production-runs/run-2" };
 
 describe("read sheet emissions line", () => {
-  it("links the attached batch", () => {
-    render(<FailedRunEmissionLineView guidance={BASE} />);
-    expect(screen.getByText(/Emissions count in credit batch/)).toBeTruthy();
-    expect(screen.getByRole("link", { name: "CB-26-010-A" }).getAttribute("href")).toContain("b-oct");
+  it("says nothing for a counted run: its batch is listed under Used by", () => {
+    const { container } = render(<FailedRunEmissionLineView guidance={BASE} />);
+    expect(container.textContent).toBe("");
   });
 
   it("says no credit batch yet with one link", () => {
@@ -28,10 +27,23 @@ describe("read sheet emissions line", () => {
     expect(screen.getByRole("link", { name: "Open credit batches" }).getAttribute("href")).toBe("/credit-batches?facility=fac-1");
   });
 
-  it("links a mixed feedstock run to its feedstock", () => {
-    render(<FailedRunEmissionLineView guidance={MIXED} />);
+  it("warns on mixed and empty feedstock with no link to the sheet it is on", () => {
+    const { container, rerender } = render(<FailedRunEmissionLineView guidance={MIXED} />);
     expect(screen.getByText("Its feedstock records hold more than one feedstock type.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Review feedstock sources" })).toBeTruthy();
+    expect(container.querySelector('[data-tone="warning"]')).toBeTruthy();
+    expect(screen.queryByRole("link")).toBeNull();
+    rerender(<FailedRunEmissionLineView guidance={{ ...MIXED, state: "empty-feedstock" }} />);
+    expect(screen.getByText("Its emissions have no feedstock type.")).toBeTruthy();
+    expect(container.querySelector('[data-tone="warning"]')).toBeTruthy();
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("names a failed check with Try again that re-reads", () => {
+    const onRetry = vi.fn();
+    render(<FailedRunSheetEmissionsView guidance={undefined} isError isFetching={false} onRetry={onRetry} />);
+    expect(screen.getByText("Couldn't check where its emissions count.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
   });
 });
 
