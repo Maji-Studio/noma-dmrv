@@ -6,6 +6,7 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { useCorrectProductionRunReturn } from "@/hooks/use-production-run-returns";
 import { ConflictError } from "@/lib/conflict-ref";
+import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import { formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
 import type { ProductionRunReturnRow } from "@/data-access/production-run-returns/view";
 import { REVERSE_CONFLICT_MESSAGE, REVERSE_REASON_HELPER, REVERSE_REASON_REQUIRED } from "./production-run-return-copy";
@@ -52,7 +53,7 @@ export function ProductionRunReturnReverseDialog({ runId, entry, timeZone, onClo
   return (
     <DeleteConfirmDialog isOpen title="Reverse return" width="md" confirmLabel="Reverse return"
       message={<>
-        <p>{formatMassKg(entry.wetMassKg)} wet mass from {formatFacilityDateTime(entry.occurredAt, timeZone)} comes out of {entry.destinationName ?? "the bin"}.</p>
+        <p>{formatMassKg(entry.wetMassKg, { digits: MASS_KG_STORAGE_DECIMALS })} wet mass from {formatFacilityDateTime(entry.occurredAt, timeZone)} comes out of {entry.destinationName ?? "the bin"}.</p>
         <p className="body-caption">The returns list keeps the entry, crossed out, with your reason.</p>
       </>}
       onConfirm={confirm} onCancel={onClose} isPending={correct.isPending} errorMessage={serverError}>

@@ -8,7 +8,7 @@ import { FormField, FormTextarea, MassMoistureFields, ResolvedErrorRevalidator }
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import { FormActions } from "@/components/forms/form-actions";
 import { FormEntitySelect } from "@/components/forms/entity-select/form-entity-select";
-import { useSaveRefusal } from "@/components/forms/use-save-refusal";
+import { SERVER_ERROR_TYPE, useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { ChangeBlock } from "@/components/storage-locations/feedstock-loss-change";
 import { useToast } from "@/components/ui/toast";
 import { useFacilityClock } from "@/hooks/use-facility-context";
@@ -21,8 +21,8 @@ import { RETURN_GRAMS_PER_KG, RETURN_OVER_CAP_MESSAGE } from "@/lib/production-r
 import type { ProductionRunReturnRow } from "@/data-access/production-run-returns/view";
 import { returnFormSchema, type ReturnFormData, type ReturnFormInput } from "./production-run-return-schema";
 import {
-  ALLOWANCE_CAPTION_AFTER, ALLOWANCE_CAPTION_BEFORE, CORRECTION_REASON_HELPER, CORRECTION_REASON_PLACEHOLDER, RETURN_ACTION_LABEL, RETURN_CONFLICT_MESSAGE,
-  RETURN_DEST_EMPTY, RETURN_DRY_CAPTION, RETURN_MOISTURE_HELPER, RETURN_REASON_HELPER, RETURN_REASON_PLACEHOLDER, RETURN_WET_HINT,
+  AFTER_NEEDS_MASS, AFTER_NEEDS_MOISTURE, ALLOWANCE_CAPTION_AFTER, ALLOWANCE_CAPTION_BEFORE, CORRECTION_REASON_HELPER, CORRECTION_REASON_PLACEHOLDER, RETURN_ACTION_LABEL, RETURN_CONFLICT_MESSAGE,
+  RETURN_DEST_EMPTY, RETURN_DRY_CAPTION, RETURN_MOISTURE_HELPER, RETURN_REASON_HELPER, RETURN_REASON_PLACEHOLDER, 
 } from "./production-run-return-copy";
 
 const CORRECTION_SUBMIT_LABEL = "Save correction";
@@ -60,7 +60,6 @@ export function ProductionRunReturnForm({ runId, facilityId, feedstockTypeId, re
   // One key per open form, so a double submit replays the saved entry instead of returning twice.
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [serverError, setServerError] = useState<string | null>(null);
-  const [capError, setCapError] = useState<{ message: string; wetMassKg: unknown } | null>(null);
 
   const { register, handleSubmit, control, trigger, setError, resetField, formState: { errors } } = useForm<ReturnFormInput, unknown, ReturnFormData>({
     resolver: zodResolver(returnFormSchema),
@@ -77,12 +76,15 @@ export function ProductionRunReturnForm({ runId, facilityId, feedstockTypeId, re
   // A correction puts the original's dry mass back before it takes the new entry's.
   const allowanceKg = remainingDryKg + (correction?.dryMassKg ?? 0);
   const overAllowance = returnDryKg !== null && Math.round(returnDryKg * RETURN_GRAMS_PER_KG) > Math.round(allowanceKg * RETURN_GRAMS_PER_KG);
-  const serverCapMessage = capError && capError.wetMassKg === wetInput ? capError.message : undefined;
-  const wetError = errors.wetMassKg?.message ?? (overAllowance ? RETURN_OVER_CAP_MESSAGE : serverCapMessage);
+  const wetError = errors.wetMassKg?.message ?? (overAllowance ? RETURN_OVER_CAP_MESSAGE : undefined);
 
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
-    if (overAllowance) return;
+    if (overAllowance) {
+      // Filed on the field inside the submit, so the form counts as refused and the summary lists it.
+      setError("wetMassKg", { type: SERVER_ERROR_TYPE, message: RETURN_OVER_CAP_MESSAGE });
+      return;
+    }
     try {
       if (correction) {
         await correct.mutateAsync({ sourceProductionRunId: runId, storageLocationId: correction.storageLocationId, correctsMovementId: correction.id,
@@ -100,7 +102,7 @@ export function ProductionRunReturnForm({ runId, facilityId, feedstockTypeId, re
         return;
       }
       if (error instanceof Error && error.message === RETURN_OVER_CAP_MESSAGE) {
-        setCapError({ message: error.message, wetMassKg: wetInput });
+        setError("wetMassKg", { type: SERVER_ERROR_TYPE, message: error.message });
         return;
       }
       setServerError(refuseSave(error, error instanceof Error ? error.message : "The return was not saved. Check the form and try again."));
@@ -108,6 +110,10 @@ export function ProductionRunReturnForm({ runId, facilityId, feedstockTypeId, re
   });
 
   const afterKg = returnDryKg === null || overAllowance ? null : allowanceKg - returnDryKg;
+  // Name the gap: over the allowance, a missing moisture, or no mass yet.
+  const afterFigure = afterKg !== null ? formatMassKg(afterKg)
+    : returnDryKg !== null ? `Over by ${formatMassKg(returnDryKg - allowanceKg)}`
+      : wetKg !== null && wetKg > 0 ? AFTER_NEEDS_MOISTURE : AFTER_NEEDS_MASS;
   return (
     <form id={formId} onSubmit={onSubmit} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
@@ -119,14 +125,14 @@ export function ProductionRunReturnForm({ runId, facilityId, feedstockTypeId, re
         materialLabel="Returned"
         wetMassKg={wetInput}
         moisturePercent={moistureInput}
-        wet={{ id: "wetMassKg", required: true, error: wetError, disabled: pending, placeholder: "e.g. 50", hint: RETURN_WET_HINT, registration: register("wetMassKg") }}
+        wet={{ id: "wetMassKg", required: true, error: wetError, disabled: pending, placeholder: "e.g. 50", registration: register("wetMassKg") }}
         moisture={{ id: "moisturePercent", required: true, error: errors.moisturePercent?.message, disabled: pending, placeholder: "e.g. 30",
           helperText: RETURN_MOISTURE_HELPER, registration: register("moisturePercent") }}
       />
       <div role="group" aria-label={`${ALLOWANCE_CAPTION_BEFORE} ${formatMassKg(allowanceKg)} dry solids`} className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-8">
         <ChangeBlock label={ALLOWANCE_CAPTION_BEFORE} figure={formatMassKg(allowanceKg)} caption={RETURN_DRY_CAPTION} />
         <ArrowRightIcon size={16} aria-hidden="true" className="self-center text-[var(--color-icon-secondary)]" />
-        <ChangeBlock label={ALLOWANCE_CAPTION_AFTER} figure={afterKg === null ? "Enter a mass" : formatMassKg(afterKg)} caption={RETURN_DRY_CAPTION} muted={afterKg === null} />
+        <ChangeBlock label={ALLOWANCE_CAPTION_AFTER} figure={afterFigure} caption={RETURN_DRY_CAPTION} muted={afterKg === null} />
       </div>
       <FormField id="occurredAt" label="Date and time" required error={errors.occurredAt?.message} cue={clock.hint}>
         <EventTimeInput control={control} name="occurredAt" id="occurredAt" timeZone={clock.timeZone} disabled={pending} />

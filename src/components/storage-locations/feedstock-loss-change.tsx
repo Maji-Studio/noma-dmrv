@@ -1,20 +1,23 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 
 const ICON_PX = 16;
 
-export function ChangeBlock({ label, figure, caption, muted }: {
+export function ChangeBlock({ label, figure, caption, muted, labelAddon }: {
   label: string;
+  /** Sits beside the label, such as an (i). */
+  labelAddon?: ReactNode;
   figure: string;
   caption: string;
   muted?: boolean;
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-2 py-4">
-      <span className="body-caption text-[var(--color-text-secondary)]">{label}</span>
+      <span className="flex items-center gap-4 body-caption text-[var(--color-text-secondary)]">{label}{labelAddon}</span>
       <span className={`body-large font-medium tabular-nums ${muted ? "text-[var(--color-text-tertiary)]" : ""}`}>{figure}</span>
       <span className="body-caption text-[var(--color-text-secondary)]">{caption}</span>
     </div>

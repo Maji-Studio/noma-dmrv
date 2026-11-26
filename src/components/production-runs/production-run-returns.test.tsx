@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   rows: [] as unknown[],
   eligibility: {} as Record<string, unknown>,
   balance: null as unknown,
+  balanceError: false,
 }));
 
 vi.mock("next/link", () => ({ default: ({ children, href }: { children: ReactNode; href: string }) => <a href={href}>{children}</a> }));
@@ -36,7 +37,7 @@ vi.mock("@/hooks/use-production-run-returns", () => ({
   useCorrectProductionRunReturn: () => mocks.correct,
   useProductionRunReturns: () => ({ data: mocks.rows, isLoading: false, error: null }),
   useProductionRunReturnEligibility: () => ({ data: mocks.eligibility, isLoading: false, error: null }),
-  useProductionRunMaterialBalance: () => ({ data: mocks.balance, isLoading: false, error: null }),
+  useProductionRunMaterialBalance: () => ({ data: mocks.balance, isLoading: false, error: mocks.balanceError ? new Error("x") : null }),
 }));
 // The bin picker is its own component; here it is one field that holds the chosen id.
 vi.mock("@/components/forms/entity-select/form-entity-select", () => ({
@@ -62,6 +63,7 @@ beforeEach(() => {
   mocks.record.mutateAsync.mockReset();
   mocks.correct.mutateAsync.mockReset();
   mocks.rows = [];
+  mocks.balanceError = false;
   mocks.eligibility = eligible;
   mocks.balance = { balance: { runId: RUN_ID, consumedDryKg: 140, usableOutputDryKg: 0, activeReturnedDryKg: 0, conversionLossDryKg: 140 } };
 });
@@ -88,6 +90,30 @@ describe("Leftover material section", () => {
     expect(screen.getByRole("button", { name: "Return to storage" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Correct" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Reverse" })).toBeTruthy();
+  });
+
+  it("shows the conversion loss and storage-precision masses for a partial return", () => {
+    mocks.rows = [{ ...savedReturn, wetMassKg: 0.001, dryMassKg: 0.0007 }];
+    mocks.balance = { balance: { runId: RUN_ID, consumedDryKg: 140, usableOutputDryKg: 60, activeReturnedDryKg: 35, conversionLossDryKg: 45 } };
+    render(<ProductionRunReturns runId={RUN_ID} facilityId={FACILITY_ID} feedstockWetMassKg={200} />);
+    expect(screen.getByText("Conversion loss")).toBeTruthy();
+    expect(screen.getByText("45 kg")).toBeTruthy();
+    expect(screen.getByText(/0\.001 kg wet mass/)).toBeTruthy();
+  });
+
+  it("says nothing returned with the empty state, and shows an error when the balance cannot load", () => {
+    mocks.balanceError = true;
+    mocks.balance = undefined;
+    render(<ProductionRunReturns runId={RUN_ID} facilityId={FACILITY_ID} feedstockWetMassKg={200} />);
+    expect(screen.getByText("Nothing has gone back to storage yet.")).toBeTruthy();
+    expect(screen.getByText(/material balance could not be loaded/)).toBeTruthy();
+  });
+
+  it("keeps only the next step for a fully returned run", () => {
+    mocks.eligibility = { ...eligible, eligible: false, code: "ineligible", remainingDryKg: 0, blocker: "All consumed dry material has been returned. Correct an existing return to change its measurements." };
+    render(<ProductionRunReturns runId={RUN_ID} facilityId={FACILITY_ID} feedstockWetMassKg={200} />);
+    expect(screen.queryByText(/All consumed dry material/)).toBeNull();
+    expect(screen.getByText("Correct an existing return to change its measurements.")).toBeTruthy();
   });
 
   it("states the blocker as one line and offers no return action", () => {
@@ -140,6 +166,15 @@ describe("Return to storage form", () => {
     await submit("Return to storage");
     expect(await screen.findByText(RETURN_OVER_CAP_MESSAGE)).toBeTruthy();
     expect(mocks.record.mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("names the gap in the after block: over the allowance, then missing moisture", async () => {
+    form();
+    expect(screen.getByText("Enter a mass")).toBeTruthy();
+    fill(/Returned wet mass/, "200");
+    expect(screen.getByText("Enter the moisture")).toBeTruthy();
+    fill(/Returned moisture/, "10");
+    expect(screen.getByText("Over by 80 kg")).toBeTruthy();
   });
 
   it("saves a valid return with a request key", async () => {

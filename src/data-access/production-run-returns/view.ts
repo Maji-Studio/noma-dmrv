@@ -2,6 +2,7 @@ import { aliasedTable, and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
 import { binMovements, storageLocations, users } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
+import { activeReturns, RETURN_MOVEMENT_TYPE, RETURN_MOVEMENT_TYPES, RETURN_REVERSAL_MOVEMENT_TYPE } from '@/lib/production-run-returns/active-returns';
 import { requireOrgScope } from '../utils';
 
 type Reader = Pick<typeof db, 'select'>;
@@ -39,13 +40,15 @@ export async function getProductionRunReturnRows(ctx: OrgContext, sourceProducti
     .leftJoin(users, eq(users.id, binMovements.createdBy))
     .leftJoin(destination, and(eq(destination.organizationId, ctx.organizationId), eq(destination.id, binMovements.storageLocationId)))
     .where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.sourceProductionRunId, sourceProductionRunId),
-      inArray(binMovements.movementType, ['failed_run_return', 'failed_run_return_reversal'])))
+      inArray(binMovements.movementType, [...RETURN_MOVEMENT_TYPES])))
     .orderBy(binMovements.occurredAt, binMovements.postingSequence);
-  const reversals = new Map(rows.filter(row => row.movement.movementType === 'failed_run_return_reversal' && row.movement.correctsMovementId)
+  const reversals = new Map(rows.filter(row => row.movement.movementType === RETURN_REVERSAL_MOVEMENT_TYPE && row.movement.correctsMovementId)
     .map(row => [row.movement.correctsMovementId!, row]));
-  const replacements = new Map(rows.filter(row => row.movement.movementType === 'failed_run_return' && row.movement.correctsMovementId)
+  const replacements = new Map(rows.filter(row => row.movement.movementType === RETURN_MOVEMENT_TYPE && row.movement.correctsMovementId)
     .map(row => [row.movement.correctsMovementId!, row.movement.id]));
-  return rows.filter(row => row.movement.movementType === 'failed_run_return').map(({ movement, actorName, destinationName, destinationCode }) => {
+  // The shared rule decides which returns are still active; the rest are reversed, or replaced when a correction follows.
+  const activeIds = new Set(activeReturns(rows.map(row => row.movement)).map(movement => movement.id));
+  return rows.filter(row => row.movement.movementType === RETURN_MOVEMENT_TYPE).map(({ movement, actorName, destinationName, destinationCode }) => {
     const reversal = reversals.get(movement.id);
     const replacementId = replacements.get(movement.id) ?? null;
     return {
@@ -54,7 +57,7 @@ export async function getProductionRunReturnRows(ctx: OrgContext, sourceProducti
       moisturePercent: Math.round((movement.moistureRatioUsed ?? 0) * PERCENT * MOISTURE_PERCENT_SCALE) / MOISTURE_PERCENT_SCALE,
       occurredAt: (movement.occurredAt ?? movement.createdAt).toISOString(), recordedAt: movement.createdAt.toISOString(),
       actorName, reason: movement.reason,
-      state: reversal ? (replacementId ? 'replaced' : 'reversed') : 'active',
+      state: activeIds.has(movement.id) ? 'active' : replacementId ? 'replaced' : 'reversed',
       reversal: reversal ? { reason: reversal.movement.reason, recordedAt: reversal.movement.createdAt.toISOString(), actorName: reversal.actorName } : null,
       replacementId, replacesId: movement.correctsMovementId,
     } satisfies ProductionRunReturnRow;

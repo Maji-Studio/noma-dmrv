@@ -121,14 +121,21 @@ export function FeedstockBinBalance({ storageLocationId, facilityId, capacityKg,
   const estimatedDryKg = stock.data?.entries.at(-1)?.estimatedDryKg ?? (stock.data?.currentWetKg === 0 ? 0 : null);
   const estimatedMoisturePercent = currentWetKg > 0 && estimatedDryKg !== null ? Math.max(0, (currentWetKg - estimatedDryKg) / currentWetKg * PERCENT) : null;
   const waterKg = estimatedDryKg === null ? null : Math.max(currentWetKg - estimatedDryKg, 0);
-  const bands: PileBand[] = (stock.data?.batches ?? []).filter((batch) => batch.wetKg > 0).map((batch) => ({ label: batch.kind === "failed_run_return" ? FEEDSTOCK_ENTRY_LABELS.failed_run_return : batch.code, kg: estimatedDryKg === null ? batch.wetKg : batch.dryKg ?? 0, details: [
-    { label: "In the pile now", value: `${formatMassKg(batch.wetKg)} wet mass` },
-    // A share is derived, so an empty pile leaves the row out.
-    ...(currentWetKg > 0 ? [{ label: "Share of the pile", value: `${Math.round((batch.wetKg / currentWetKg) * PERCENT)}%` }] : []),
-    { label: "Received", value: `${formatMassKg(batch.intakeWetKg)} wet mass` },
-    { label: "Moisture at intake", value: batch.moisturePercent === null ? NO_MOISTURE_READING : formatMoisturePercent(batch.moisturePercent) },
-    { label: "Received on", value: formatFacilityDateTime(batch.receivedAt, zone) },
-  ] }));
+  const pileBatches = (stock.data?.batches ?? []).filter((batch) => batch.wetKg > 0);
+  const bands: PileBand[] = pileBatches.map((batch) => {
+    // A return reads in return words; intake words would say the bin received a delivery.
+    const returned = batch.kind === "failed_run_return";
+    return { label: returned ? `Returned ${formatFacilityDay(batch.receivedAt, zone)}` : batch.code, kg: estimatedDryKg === null ? batch.wetKg : batch.dryKg ?? 0, details: [
+      { label: "In the pile now", value: `${formatMassKg(batch.wetKg)} wet mass` },
+      // A share is derived, so an empty pile leaves the row out.
+      ...(currentWetKg > 0 ? [{ label: "Share of the pile", value: `${Math.round((batch.wetKg / currentWetKg) * PERCENT)}%` }] : []),
+      { label: returned ? "Returned" : "Received", value: `${formatMassKg(batch.intakeWetKg)} wet mass` },
+      { label: returned ? "Moisture when returned" : "Moisture at intake", value: batch.moisturePercent === null ? NO_MOISTURE_READING : formatMoisturePercent(batch.moisturePercent) },
+      { label: returned ? "Returned on" : "Received on", value: formatFacilityDateTime(batch.receivedAt, zone) },
+    ] };
+  });
+  const onlyReturns = pileBatches.length > 0 && pileBatches.every((batch) => batch.kind === "failed_run_return");
+  const noun = onlyReturns ? "return" : pileBatches.some((batch) => batch.kind === "failed_run_return") ? "delivery or return" : "delivery";
   if (waterKg !== null && waterKg > 0) bands.push({ label: ESTIMATED_WATER_LABEL, kg: waterKg, category: "existing-water", details: [
     { label: ESTIMATED_WATER_LABEL, value: formatMassKg(waterKg) },
     { label: "Moisture", value: formatMoisturePercent(estimatedMoisturePercent) },
@@ -152,7 +159,7 @@ export function FeedstockBinBalance({ storageLocationId, facilityId, capacityKg,
       onAdjust={onAdjust}
     >
       {stock.data && (empty || bands.length === 0) && <EmptyState icon={null} title="No stock in this bin" padding="sm" />}
-      {!empty && bands.length > 0 && <MixPileBay label={estimatedDryKg === null ? "Wet feedstock by delivery, moisture unknown" : "Feedstock solids by delivery"} bands={bands} capacityKg={capacityKg} />}
+      {!empty && bands.length > 0 && <MixPileBay label={estimatedDryKg === null ? `Wet feedstock by ${noun}, moisture unknown` : `Feedstock solids by ${noun}`} bands={bands} capacityKg={capacityKg} />}
     </StockCard>
     <StockChartCard history={<FeedstockStockHistory storageLocationId={storageLocationId} facilityId={facilityId} timeZone={zone} readOnly={readOnly} moisturePercent={estimatedMoisturePercent}
       renderTrigger={(open, icon) => <CardTextButton icon={icon} onClick={open}>History</CardTextButton>} />}>

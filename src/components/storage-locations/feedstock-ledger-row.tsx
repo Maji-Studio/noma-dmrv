@@ -55,6 +55,7 @@ export function FeedstockLedgerRow({ entry, corrected, timeZone, facilityId, onE
   const chips = [...(entry.reversedBy ? [replaced ? "Replaced" : "Reversed"] : []), ...(corrected ? ["Correction"] : [])];
   // The times show under Original and Corrected only when the correction moved the entry.
   const movedTime = !!corrected && corrected.occurredAt !== entry.occurredAt;
+  const isReturn = entry.kind === "failed_run_return";
   const amount = entry.kind === "count" && entry.countedWetKg !== null ? `${formatMassKg(entry.countedWetKg)} wet mass` : signedWet(entry.wetDeltaKg);
   return (
     <LedgerLine id={`feedstock-entry-${entry.id}`} time={formatFacilityTime(new Date(entry.occurredAt), timeZone, TIME_FORMAT)}
@@ -62,14 +63,14 @@ export function FeedstockLedgerRow({ entry, corrected, timeZone, facilityId, onE
       amount={amount} after={formatMassKg(entry.afterWetKg)} struck={reversed}>
       {entry.reversedBy && (
         <p className="body-caption text-[var(--color-text-secondary)]">
-          {reversalCaption({ recordedAt: entry.reversedBy.recordedAt, actorName: entry.reversedBy.actorName, replaced }, timeZone)}
+          {reversalCaption({ recordedAt: entry.reversedBy.recordedAt, actorName: entry.reversedBy.actorName, replaced, returnEntry: isReturn }, timeZone)}
         </p>
       )}
       <StockSourceLink facilityId={facilityId} source={entry.sourceId && (entry.kind === "intake" || entry.kind === "run_draw" || entry.kind === "ingredient_draw" || entry.kind === "failed_run_return")
         ? { entity: entry.kind === "intake" ? "feedstock" : entry.kind === "run_draw" || entry.kind === "failed_run_return" ? "productionRun" : "biocharProduct", id: entry.sourceId } : null} />
       {!entry.reversedBy && <LedgerBeforeAfter before={`${formatMassKg(entry.beforeWetKg)} wet mass`} after={`${formatMassKg(entry.afterWetKg)} wet mass`} />}
       {corrected && (
-        <LedgerBeforeAfter title={`Corrects the lost mass from ${formatFacilityDateTime(corrected.occurredAt, timeZone)}`} labels={["Original", "Corrected"]}
+        <LedgerBeforeAfter title={`Corrects the ${isReturn ? "return" : "lost mass"} from ${formatFacilityDateTime(corrected.occurredAt, timeZone)}`} labels={["Original", "Corrected"]}
           before={{ value: signedWet(corrected.wetDeltaKg), caption: movedTime ? formatFacilityDateTime(corrected.occurredAt, timeZone) : undefined }}
           after={{ value: signedWet(entry.wetDeltaKg), caption: movedTime ? formatFacilityDateTime(entry.occurredAt, timeZone) : undefined }} />
       )}
@@ -78,7 +79,8 @@ export function FeedstockLedgerRow({ entry, corrected, timeZone, facilityId, onE
         ...(entry.moisturePercent !== null ? [{ label: "Moisture", value: formatMoisturePercent(entry.moisturePercent) }] : []),
         ...(entry.kind === "count" ? [{ label: "Change", value: signedWet(entry.wetDeltaKg) }] : []),
         ...(entry.reason ? [{ label: corrected ? "Why corrected" : "Reason", value: entry.reason }] : []),
-        ...(entry.reversedBy && !replaced ? [{ label: "Why deleted", value: entry.reversedBy.reason }] : []),
+        // A return is reversed, not deleted, matching the Reverse action on the run.
+        ...(entry.reversedBy && !replaced ? [{ label: isReturn ? "Why reversed" : "Why deleted", value: entry.reversedBy.reason }] : []),
         { label: "Recorded", value: recordedBy(entry.recordedAt, entry.occurredAt, entry.actorName, timeZone) },
       ]} />
       {entry.kind === "loss" && !reversed && onEdit && onDelete && (entry.editLockedReason === null

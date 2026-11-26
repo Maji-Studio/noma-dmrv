@@ -87,3 +87,16 @@ it("links a failed-run return to its source run", async () => {
   const link = renderer.root.findAllByType("a").find(node => /Open\s+production run/.test(text(node)));
   expect(link?.props.href).toContain(RUN);
 });
+
+it("words a corrected or reversed return as a return, not as lost mass or a deletion", async () => {
+  const original = entry({ id: "r1", kind: "failed_run_return", wetDeltaKg: 50, reason: "Left in the reactor", editLockedReason: undefined });
+  const correction = await render(entry({ id: "r2", kind: "failed_run_return", wetDeltaKg: 45, correctsMovementId: "r1", reason: "Scale misread", editLockedReason: undefined }), original);
+  expect(text(correction.renderer.root)).toContain("Corrects the return from");
+  expect(text(correction.renderer.root)).not.toContain("lost mass");
+  const reversed = await render(entry({ id: "r1", kind: "failed_run_return", reversed: true, wetDeltaKg: 50, editLockedReason: undefined,
+    reversedBy: { id: "x", reason: "Recorded twice", recordedAt: AT, actorName: "Asha", replacementId: null } }));
+  const markup = text(reversed.renderer.root);
+  expect(markup).toContain("Why reversed");
+  expect(markup).toContain("Reversed");
+  expect(markup).not.toContain("Why deleted");
+});

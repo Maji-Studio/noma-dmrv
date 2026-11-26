@@ -8,6 +8,12 @@
 
 import Link from "next/link";
 import { useId, useState } from "react";
+import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ExplanationInfo } from "@/components/ui/explanation-info";
+import { Skeleton } from "@/components/ui/loading-skeleton";
+import { Notice } from "@/components/ui/notice";
+import { INLINE_HIT_AREA } from "@/components/ui/touch-target";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { Button } from "@/components/ui";
 import { TextAction } from "@/components/ui/text-action";
@@ -21,13 +27,15 @@ import { reversalCaption } from "@/lib/loss-correction-messages";
 import { recordHref } from "@/lib/record-links";
 import type { ProductionRunReturnRow } from "@/data-access/production-run-returns/view";
 import {
-  ELIGIBILITY_FAILED, NOTHING_RETURNED, RETURN_ACTION_LABEL, RETURN_DRY_CAPTION, RETURN_FIGURE_LABELS, RETURN_ROW_REST,
+  BALANCE_FAILED, BLOCKER_FULLY_RETURNED_NEXT, CONVERSION_LOSS_HINT, CONVERSION_LOSS_LABEL, ELIGIBILITY_FAILED, NOTHING_RETURNED, RETURN_ACTION_LABEL,
+  RETURN_DRY_CAPTION, RETURN_FIGURE_LABELS, RETURN_ROW_REST, RETURNS_LOADING,
 } from "./production-run-return-copy";
 import { ProductionRunReturnForm } from "./production-run-return-form";
 import { ProductionRunReturnReverseDialog } from "./production-run-return-reverse-dialog";
 
 const MUTED = "text-[var(--color-text-secondary)]";
 const DRY_CAPTION_SEPARATOR = ", ";
+const massKg = (kg: number | null) => formatMassKg(kg, { digits: MASS_KG_STORAGE_DECIMALS });
 
 function ReturnRow({ row, facilityId, timeZone, onCorrect, onReverse }: {
   row: ProductionRunReturnRow;
@@ -44,27 +52,27 @@ function ReturnRow({ row, facilityId, timeZone, onCorrect, onReverse }: {
       <div className="flex items-start justify-between gap-12">
         <div className="flex min-w-0 flex-col">
           <span className="flex flex-wrap items-center gap-x-8 gap-y-2">
-            <Link className="body-small font-medium underline underline-offset-4" href={recordHref("storageBin", row.storageLocationId, { facilityId })}>{binName}</Link>
+            <Link className={`body-small font-medium underline underline-offset-4 ${INLINE_HIT_AREA}`} href={recordHref("storageBin", row.storageLocationId, { facilityId })}>{binName}</Link>
             {chips.map((chip) => <StockChip key={chip}>{chip}</StockChip>)}
           </span>
           <span className={`body-caption ${MUTED}`}>
-            {formatMoisturePercent(row.moisturePercent)} moisture{DRY_CAPTION_SEPARATOR}{formatMassKg(row.dryMassKg)} dry
+            {formatMoisturePercent(row.moisturePercent)} moisture{DRY_CAPTION_SEPARATOR}{massKg(row.dryMassKg)} dry
           </span>
         </div>
         <span className={`shrink-0 body-small font-medium tabular-nums ${struck ? "line-through text-[var(--color-text-tertiary)]" : ""}`}>
-          {formatMassKg(row.wetMassKg)} wet mass
+          {massKg(row.wetMassKg)} wet mass
         </span>
       </div>
       <p className={`body-caption ${MUTED}`}>{formatFacilityDateTime(row.occurredAt, timeZone)}{row.actorName ? ` by ${row.actorName}` : ""}</p>
       {row.reversal && (
         <p className={`body-caption ${MUTED}`}>
-          {reversalCaption({ recordedAt: row.reversal.recordedAt, actorName: row.reversal.actorName, replaced: row.state === "replaced" }, timeZone)} {row.reversal.reason}
+          {reversalCaption({ recordedAt: row.reversal.recordedAt, actorName: row.reversal.actorName, replaced: row.state === "replaced", returnEntry: true }, timeZone)} {row.reversal.reason}
         </p>
       )}
       {(onCorrect || onReverse) && row.state === "active" && (
-        <div className="-ml-16 flex flex-wrap gap-8">
-          {onCorrect && <Button type="button" variant="noOutline" onClick={onCorrect}>Correct</Button>}
-          {onReverse && <Button type="button" variant="noOutline" onClick={onReverse}>Reverse</Button>}
+        <div className="flex flex-wrap gap-x-16">
+          {onCorrect && <TextAction type="button" onClick={onCorrect}>Correct</TextAction>}
+          {onReverse && <TextAction type="button" onClick={onReverse}>Reverse</TextAction>}
         </div>
       )}
     </li>
@@ -88,14 +96,18 @@ export function ProductionRunReturns({ runId, facilityId, feedstockWetMassKg, re
   const [reversing, setReversing] = useState<ProductionRunReturnRow | null>(null);
   const returnTitleId = useId();
 
-  if (returns.isLoading || eligibility.isLoading || balance.isLoading) return <p className={`body-small ${MUTED}`}>Loading leftover material</p>;
-  if (returns.error || eligibility.error || !eligibility.data) return <p className={`body-small ${MUTED}`}>{ELIGIBILITY_FAILED}</p>;
+  if (returns.isLoading || eligibility.isLoading || balance.isLoading) {
+    return <div role="status" aria-label={RETURNS_LOADING} className="flex flex-col gap-8"><Skeleton className="h-[48px]" width="100%" /><Skeleton className="h-[48px]" width="100%" /></div>;
+  }
+  if (returns.error || eligibility.error || !eligibility.data) return <Notice tone="error">{ELIGIBILITY_FAILED}</Notice>;
 
   const rows = returns.data ?? [];
   const active = rows.filter((row) => row.state === "active");
   const check = eligibility.data;
   const figures = balance.data?.balance;
   const returnedWetKg = active.reduce((sum, row) => sum + row.wetMassKg, 0);
+  // At zero the figure already says nothing can return; only the next step is left to say.
+  const fullyReturned = check.code === "ineligible" && check.remainingDryKg === 0;
   const locked = check.code === "certification_locked";
   const canWrite = !readOnly && !locked;
   const feedstockTypeId = check.returnedFeedstockTypeId;
@@ -105,15 +117,19 @@ export function ProductionRunReturns({ runId, facilityId, feedstockWetMassKg, re
 
   return (
     <div className="flex flex-col gap-16">
-      {figures && (
-        <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
-          <ChangeBlock label={RETURN_FIGURE_LABELS.fedIn} figure={formatMassKg(feedstockWetMassKg)} caption={`wet mass${DRY_CAPTION_SEPARATOR}${formatMassKg(figures.consumedDryKg)} dry`} />
-          <ChangeBlock label={RETURN_FIGURE_LABELS.returned} figure={formatMassKg(returnedWetKg)} caption={`wet mass${DRY_CAPTION_SEPARATOR}${formatMassKg(figures.activeReturnedDryKg)} dry`} />
-          <ChangeBlock label={RETURN_FIGURE_LABELS.remaining} figure={formatMassKg(figures.consumedDryKg - figures.activeReturnedDryKg)} caption={RETURN_DRY_CAPTION.toLowerCase()} />
+      {balance.error ? <Notice tone="error">{BALANCE_FAILED}</Notice> : figures && (
+        <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
+          <ChangeBlock label={RETURN_FIGURE_LABELS.fedIn} figure={massKg(feedstockWetMassKg)} caption={`wet mass${DRY_CAPTION_SEPARATOR}${massKg(figures.consumedDryKg)} dry`} />
+          <ChangeBlock label={RETURN_FIGURE_LABELS.returned} figure={massKg(returnedWetKg)} caption={`wet mass${DRY_CAPTION_SEPARATOR}${massKg(figures.activeReturnedDryKg)} dry`} />
+          <ChangeBlock label={RETURN_FIGURE_LABELS.remaining} figure={massKg(figures.consumedDryKg - figures.activeReturnedDryKg)} caption={RETURN_DRY_CAPTION.toLowerCase()} />
+          <ChangeBlock label={CONVERSION_LOSS_LABEL} figure={massKg(figures.conversionLossDryKg)} caption={RETURN_DRY_CAPTION.toLowerCase()}
+            labelAddon={<ExplanationInfo title={CONVERSION_LOSS_LABEL} hint={CONVERSION_LOSS_HINT} />} />
         </div>
       )}
-      {!check.eligible && check.blocker && <p className={`body-small ${MUTED}`}>{check.blocker}</p>}
-      {rows.length === 0 ? <p className={`body-small ${MUTED}`}>{NOTHING_RETURNED}</p> : (
+      {!check.eligible && check.blocker && (
+        <Notice tone={fullyReturned ? "info" : "warning"}>{fullyReturned ? BLOCKER_FULLY_RETURNED_NEXT : check.blocker}</Notice>
+      )}
+      {rows.length === 0 ? <EmptyState padding="sm" icon={null} title={NOTHING_RETURNED} /> : (
         <div className="flex flex-col">
           <ul>
             {shown.map((row) => (

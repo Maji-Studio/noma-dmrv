@@ -5,6 +5,10 @@ import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-conte
 import { EventTimeInput } from "@/components/forms/event-time-input";
 
 import { useId } from "react";
+import { FormError } from "@/components/forms/form-error";
+import { LABEL_HIT_AREA } from "@/components/ui/touch-target";
+import { InfoHint } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import { useForm, useWatch, type Resolver } from "react-hook-form";
 import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
@@ -47,6 +51,8 @@ const schemaResolver = zodResolver(storageLocationFormSchema);
 /** The schema reads the draft, null type included, and refuses a missing type. */
 const resolveStorageLocation: Resolver<StorageLocationFormValues, unknown, StorageLocationFormData> = (values, context, options) =>
   schemaResolver(values as StorageLocationFormData, context, options as Parameters<typeof schemaResolver>[2]);
+
+const UNCARBONIZED_HINT = "Material from a failed run. Keeps it apart from fresh feedstock.";
 
 /** Native min, max and step for each number input, read from the schema. */
 const numberBounds = numberInputConstraintsFor(storageLocationFormSchema);
@@ -332,26 +338,23 @@ export function StorageLocationForm({
           />
           </div>
           <div className="md:col-span-2">
-            <FormField
-              id="uncarbonized"
-              label="Uncarbonized"
-              hint="Material from a failed run. Keeps it apart from fresh feedstock."
-              error={errors.uncarbonized?.message}
-              helperText={identityLocked ? "Fixed once this bin has stock or history." : undefined}
-            >
-              <label className="flex min-h-44 cursor-pointer items-center gap-8">
-                <input
-                  type="checkbox"
-                  id="uncarbonized"
-                  className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
-                  disabled={isSubmitting || identityLocked}
-                  {...register("uncarbonized")}
-                />
-                <span className="body-medium text-[var(--color-text-primary)]">
-                  This bin holds uncarbonized material
-                </span>
-              </label>
-            </FormField>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-6">
+                <label htmlFor="uncarbonized" className={cn(LABEL_HIT_AREA, "flex items-center gap-12 cursor-pointer")}>
+                  <input
+                    type="checkbox"
+                    id="uncarbonized"
+                    className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
+                    disabled={isSubmitting || identityLocked}
+                    {...register("uncarbonized")}
+                  />
+                  <span className="body-medium text-[var(--color-text-primary)]">This bin holds uncarbonized material</span>
+                </label>
+                <InfoHint label="About uncarbonized bins">{UNCARBONIZED_HINT}</InfoHint>
+              </div>
+              {identityLocked && <p className="body-caption text-[var(--color-text-tertiary)]">Fixed once this bin has stock or history.</p>}
+              <FormError id="uncarbonized-error" message={errors.uncarbonized?.message} />
+            </div>
           </div>
         </div>
       )}

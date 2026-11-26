@@ -9,12 +9,14 @@ export interface StockEntryReversal {
   recordedAt: string;
   actorName: string | null;
   replaced: boolean;
+  /** Word the lone reversal as Reversed, for failed-run returns, whose action is Reverse. */
+  returnEntry?: boolean;
 }
 
 /** The caption under a crossed-out stock entry, shared by the feedstock and output stock histories. */
 export function reversalCaption(reversal: StockEntryReversal | null, timeZone: string): string {
   const cause = !reversal ? 'Reversed.'
     : reversal.replaced ? `Replaced by the correction recorded ${formatFacilityDateTime(reversal.recordedAt, timeZone)}.`
-      : `Deleted ${formatFacilityDateTime(reversal.recordedAt, timeZone)}${reversal.actorName ? ` by ${reversal.actorName}` : ''}.`;
+      : `${reversal.returnEntry ? 'Reversed' : 'Deleted'} ${formatFacilityDateTime(reversal.recordedAt, timeZone)}${reversal.actorName ? ` by ${reversal.actorName}` : ''}.`;
   return `${cause} It no longer counts toward the stock.`;
 }
