@@ -20,7 +20,7 @@ import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import { parseWatchedNumber } from "@/lib/mass-moisture";
 import { RETURN_GRAMS_PER_KG, RETURN_OVER_CAP_MESSAGE } from "@/lib/production-run-returns/mass";
 import type { ProductionRunReturnRow } from "@/data-access/production-run-returns/view";
-import { returnFormSchema, type ReturnFormData, type ReturnFormInput } from "./production-run-return-schema";
+import { returnFormSchema, type ReturnFormData, type ReturnFormInput } from "@/schemas/production-run-returns";
 import {
   AFTER_NEEDS_MASS, AFTER_NEEDS_MOISTURE, ALLOWANCE_CAPTION_AFTER, ALLOWANCE_CAPTION_BEFORE, CORRECTION_REASON_HELPER, CORRECTION_REASON_PLACEHOLDER, RETURN_ACTION_LABEL, RETURN_CONFLICT_MESSAGE,
   RETURN_DEST_EMPTY, RETURN_DRY_CAPTION, RETURN_MOISTURE_HELPER, RETURN_REASON_HELPER, RETURN_REASON_PLACEHOLDER, 

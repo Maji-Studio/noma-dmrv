@@ -406,6 +406,8 @@ export async function enrichStorageLocationRows(
                 THEN CASE WHEN ${binMovements.movementType} = 'loss'
                   THEN 'Lost mass corrected' ELSE 'Lost mass deleted' END
                 WHEN ${binMovements.movementType} = 'loss' THEN 'Recorded loss'
+                WHEN ${binMovements.movementType}::text = 'failed_run_return' THEN 'Failed-run return'
+                WHEN ${binMovements.movementType}::text = 'failed_run_return_reversal' THEN 'Failed-run return reversed'
                 ELSE 'Stock-take adjustment'
               END,
               ${binMovements.postingSequence},

@@ -614,6 +614,56 @@ describe("storage-location lastActivityAt sort", () => {
     }
   });
 
+  it("labels failed-run returns and their reversals", async () => {
+    const runId = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const fixture = await createFixture(runId);
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+
+    try {
+      const [original] = await db.insert(binMovements).values({
+        organizationId: TEST_ORG_ID,
+        storageLocationId: fixture.quietBinId,
+        lane: "feedstock",
+        movementType: "failed_run_return",
+        massDeltaKg: ORIGINAL_LOSS_KG,
+        feedstockDryDeltaKg: ORIGINAL_LOSS_KG,
+        moistureRatioUsed: 0,
+        sourceProductionRunId: fixture.productionRunIds[0],
+        returnedFeedstockTypeId: fixture.feedstockTypeId,
+        occurredAt: T5_PRODUCT_STORED,
+        createdAt: T5_PRODUCT_STORED,
+        idempotencyKey: crypto.randomUUID(),
+        inputSnapshot: { version: 1, sourceRunVersion: 1, actorId: ctx.userId,
+          consumedDryKg: ORIGINAL_LOSS_KG, consumedWetKg: ORIGINAL_LOSS_KG,
+          runMoisturePercent: 0, allocations: [], draws: [] },
+        reason: "Failed batch returned",
+      }).returning();
+      const before = await getStorageLocations(ctx, { facilityId: fixture.facilityId, pageSize: PAGE_SIZE });
+      expect(before.items.find(bin => bin.id === fixture.quietBinId)?.lastActivity).toMatchObject({
+        label: "Failed-run return", type: "in", massKg: ORIGINAL_LOSS_KG,
+      });
+
+      await db.insert(binMovements).values({
+        ...original,
+        id: crypto.randomUUID(),
+        postingSequence: undefined,
+        movementType: "failed_run_return_reversal",
+        massDeltaKg: -ORIGINAL_LOSS_KG,
+        feedstockDryDeltaKg: -ORIGINAL_LOSS_KG,
+        correctsMovementId: original.id,
+        idempotencyKey: crypto.randomUUID(),
+        createdAt: T6_STOCK_TAKE,
+        reason: "Return reversed",
+      });
+      const after = await getStorageLocations(ctx, { facilityId: fixture.facilityId, pageSize: PAGE_SIZE });
+      expect(after.items.find(bin => bin.id === fixture.quietBinId)?.lastActivity).toMatchObject({
+        label: "Failed-run return reversed", type: "out", massKg: ORIGINAL_LOSS_KG,
+      });
+    } finally {
+      await cleanupFixture(fixture);
+    }
+  });
+
   it.each([
     { action: "delete", replacementIdFirst: false },
     { action: "edit", replacementIdFirst: true },

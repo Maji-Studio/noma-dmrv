@@ -4,6 +4,8 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { binMovements, feedstockBinMethodChanges, facilities, feedstocks, feedstockTypes, productionRunFeedstocks, productionRunFeedstockDraws, productionRuns, storageLocations, users } from '@/db/schema';
 import { recordProductionRunReturn, recordProductionRunReturnInTransaction, correctProductionRunReturn, getProductionRunReturnHistory } from '@/data-access/production-run-returns';
+import { getProductionRunReturnRows } from '@/data-access/production-run-returns/view';
+import { RETURN_OVER_CAP_MESSAGE } from '@/lib/production-run-returns/mass';
 import { deriveLaneStock } from '@/data-access/lane-stock-derivation';
 import { getFeedstockBinStock, replayFeedstockBinStock } from '@/data-access/feedstock-bin-ledger';
 import { createBinMovement, recordStockTakeMovement } from '@/data-access/bin-movements';
@@ -104,7 +106,7 @@ describe('failed-run return writer and ledger', { timeout: TIMEOUT_MS }, () => {
   it('allows several destinations up to the exact shared cap, using run moisture rather than intake moisture', async () => {
     await recordProductionRunReturn(fixture.ctx, input());
     await recordProductionRunReturn(fixture.ctx, input({ storageLocationId: secondBinId }));
-    await expect(recordProductionRunReturn(fixture.ctx, input({ wetMassKg: 0.001, moisturePercent: 0 }))).rejects.toThrow('exceeds');
+    await expect(recordProductionRunReturn(fixture.ctx, input({ wetMassKg: 0.001, moisturePercent: 0 }))).rejects.toThrow(RETURN_OVER_CAP_MESSAGE);
     expect(await getProductionRunReturnHistory(fixture.ctx, runId)).toHaveLength(2);
   });
 
@@ -190,7 +192,7 @@ describe('failed-run return writer and ledger', { timeout: TIMEOUT_MS }, () => {
 
   it('rolls back the reversal when a replacement exceeds the cap', async () => {
     const original = await recordProductionRunReturn(fixture.ctx, input());
-    await expect(correctProductionRunReturn(fixture.ctx, correction(original.id, input({ wetMassKg: 101 })))).rejects.toThrow('exceeds');
+    await expect(correctProductionRunReturn(fixture.ctx, correction(original.id, input({ wetMassKg: 101 })))).rejects.toThrow(RETURN_OVER_CAP_MESSAGE);
     expect(await getProductionRunReturnHistory(fixture.ctx, runId)).toHaveLength(1);
     expect((await getFeedstockBinStock(fixture.ctx, binId)).currentWetKg).toBe(50);
   });
@@ -200,10 +202,15 @@ describe('failed-run return writer and ledger', { timeout: TIMEOUT_MS }, () => {
     await recordProductionRunReturn(fixture.ctx, input({ occurredAt: '2026-01-02T13:00:00Z' }));
     await correctProductionRunReturn(fixture.ctx, correction(original.id));
     const active = (await getProductionRunReturnHistory(fixture.ctx, runId)).find(row => row.movementType === 'failed_run_return' && row.id !== original.id)!;
+    expect((await getProductionRunReturnRows(fixture.ctx, runId)).find(row => row.id === active.id)?.editLockedReason).toBeNull();
     const blocker = kind === 'count'
       ? await recordStockTakeMovement(fixture.ctx, { storageLocationId: binId, lane: 'feedstock', reason: 'Confirmed count', countedMassKg: 50, countedWetMassKg: 50, moistureRatioUsed: 0.2 })
       : await createBinMovement(fixture.ctx, { storageLocationId: binId, lane: 'feedstock', movementType: 'loss', massDeltaKg: -1,
       occurredAt: new Date('2026-01-02T14:00:00Z'), reason: 'Measured spill', idempotencyKey: crypto.randomUUID() });
+    const returnRows = await getProductionRunReturnRows(fixture.ctx, runId);
+    expect(returnRows.find(row => row.id === active.id)?.editLockedReason).toEqual(expect.any(String));
+    expect(returnRows.find(row => row.id === active.id)?.editLockedReason).not.toBe('');
+    expect(returnRows.find(row => row.id === original.id)?.editLockedReason).toBeNull();
     const [bin] = await db.select({ code: storageLocations.code }).from(storageLocations).where(and(
       eq(storageLocations.organizationId, fixture.ctx.organizationId), eq(storageLocations.id, binId),
     ));

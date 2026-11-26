@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { facilities, storageLocations } from "@/db/schema";
+import { facilities, feedstockTypes, storageLocations } from "@/db/schema";
 import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
@@ -30,6 +30,16 @@ describe("quick-add storage-location atomicity", () => {
         name: `Quick Add Enrichment Failure Facility ${tag}`,
       })
       .returning({ id: facilities.id });
+    const [feedstockType] = await db
+      .insert(feedstockTypes)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `FST-QA-FAIL-${tag}`,
+        name: `Quick Add Enrichment Failure Type ${tag}`,
+        category: "forestry",
+        usage: "pyrolysis",
+      })
+      .returning({ id: feedstockTypes.id });
     getStorageLocationByIdMock.mockRejectedValueOnce(
       new Error("Injected enrichment failure"),
     );
@@ -42,6 +52,7 @@ describe("quick-add storage-location atomicity", () => {
           name,
           type: "feedstock_bin",
           facilityId: facility.id,
+          feedstockTypeId: feedstockType.id,
         },
       )).rejects.toThrow("Injected enrichment failure");
 
@@ -52,6 +63,7 @@ describe("quick-add storage-location atomicity", () => {
       expect(inserted).toBeUndefined();
     } finally {
       await db.delete(storageLocations).where(eq(storageLocations.name, name));
+      await db.delete(feedstockTypes).where(eq(feedstockTypes.id, feedstockType.id));
       await db.delete(facilities).where(eq(facilities.id, facility.id));
     }
   });

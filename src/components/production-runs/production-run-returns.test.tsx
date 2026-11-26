@@ -55,7 +55,7 @@ import { productionRunSheetSections } from "./production-run-read-sections";
 const savedReturn: ProductionRunReturnRow = {
   id: RETURN_ID, storageLocationId: BIN_ID, destinationName: "Return bin", destinationCode: "BIN-R", wetMassKg: 50, moisturePercent: 30, dryMassKg: 35,
   occurredAt: "2026-11-20T12:00:00.000Z", recordedAt: "2026-11-20T12:05:00.000Z", actorName: "Asha", reason: "Left in the reactor",
-  state: "active", reversal: null, replacementId: null, replacesId: null,
+  state: "active", editLockedReason: null, reversal: null, replacementId: null, replacesId: null,
 };
 const eligible = { eligible: true, blocker: null, code: null, consumedDryKg: 140, returnedDryKg: 35, remainingDryKg: 105, returnedFeedstockTypeId: TYPE_ID };
 

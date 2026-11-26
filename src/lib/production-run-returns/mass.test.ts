@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertReturnTime, remainingReturnDryKg, returnMassBasis, reverseReturnMass } from './mass';
+import { assertReturnTime, remainingReturnDryKg, returnMassBasis, reverseReturnMass, RETURN_OVER_CAP_MESSAGE } from './mass';
 
 describe('failed-run return mass', () => {
   it('derives gram-resolution solids and allows wetter returns', () => {
@@ -9,7 +9,7 @@ describe('failed-run return mass', () => {
   });
   it('compares cumulative grams exactly with no display tolerance', () => {
     expect(remainingReturnDryKg(0.3, [0.1, 0.2])).toBe(0);
-    expect(() => remainingReturnDryKg(0.3, [0.1, 0.201])).toThrow('exceeds');
+    expect(() => remainingReturnDryKg(0.3, [0.1, 0.201])).toThrow(RETURN_OVER_CAP_MESSAGE);
     expect(remainingReturnDryKg(10, [7, -7, 8])).toBe(2);
   });
   it.each([[0, 20], [-1, 20], [Infinity, 20], [NaN, 20], [1, NaN], [1, -1], [1, 100], [0.001, 99.99]])('refuses invalid or zero-solids mass %s / %s', (wet, moisture) => {

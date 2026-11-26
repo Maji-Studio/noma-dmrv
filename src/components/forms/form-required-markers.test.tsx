@@ -126,6 +126,7 @@ const NOT_SHEET_FORMS: Record<string, string> = {
   "components/oauth/consent-form.tsx": "auth page card",
   "components/emissions/manual-entry-form.tsx": "emissions line drawer",
   "components/storage-locations/feedstock-loss-form.tsx": "feedstock Lost mass sheet and edit dialog",
+  "components/production-runs/production-run-return-form.tsx": "failed-run return dialog",
 };
 
 function ProductionSampleFormHarness() {
