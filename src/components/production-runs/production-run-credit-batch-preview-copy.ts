@@ -18,6 +18,7 @@ import {
   UNSAVED_FAILED_RUN_EMISSIONS,
   type FailedRunEmissionCopy,
 } from "@/lib/production-runs/failed-run-emission-copy";
+import type { ProductionRunCreditBatchPreviewInput } from "@/schemas/production-run-credit-batch-preview";
 import type {
   CreditBatchPreviewBatch,
   ProductionRunCreditBatchPreview,
@@ -29,6 +30,25 @@ export type ProductionRunCreditBatchPreviewView =
   | { state: "pending" }
   | { state: "error" }
   | ProductionRunCreditBatchPreview;
+
+/**
+ * A saved Failed run's attachment names a batch for the saved end day,
+ * facility and source bins only. Once the form edits any of them the line
+ * would name a batch the save will not use, so the attachment is dropped and
+ * the unsaved wording shows until the run is saved again.
+ */
+export function keepSavedAttachmentIfUnchanged(
+  view: ProductionRunCreditBatchPreviewView,
+  current: ProductionRunCreditBatchPreviewInput,
+  saved: ProductionRunCreditBatchPreviewInput | null,
+): ProductionRunCreditBatchPreviewView {
+  if (!saved || !("savedEmissionAttachment" in view) || !view.savedEmissionAttachment) return view;
+  const same = current.facilityId === saved.facilityId
+    && current.endTime === saved.endTime
+    && current.feedstockStorageLocationIds.length === saved.feedstockStorageLocationIds.length
+    && current.feedstockStorageLocationIds.every((id, index) => id === saved.feedstockStorageLocationIds[index]);
+  return same ? view : { ...view, savedEmissionAttachment: undefined };
+}
 
 const INCOMPLETE_LEAD = {
   facility: "Choose a facility in the sidebar to see the credit batch.",

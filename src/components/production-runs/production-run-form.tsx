@@ -912,6 +912,7 @@ export function ProductionRunForm({
             control={control}
             facilityId={watchedFacilityId}
             productionRunId={productionRun?.id}
+            saved={productionRun ? { facilityId: productionRun.facilityId, values: defaultValues } : undefined}
             timeZone={formTimezone}
             clearEndTime={shouldClearProductionRunEndTime({
               from: transitionFrom,

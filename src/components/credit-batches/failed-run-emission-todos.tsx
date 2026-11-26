@@ -6,10 +6,14 @@
  * and the empty state alike. It clears when a matching batch exists.
  */
 import { MissingRunLinks } from "./credit-batch-missing-runs-notice";
+import { Button } from "@/components/ui";
 import { Notice } from "@/components/ui/notice";
 import { describeFailedRunEmissionTodo, failedRunEmissionTodoTitle } from "@/lib/production-runs/failed-run-emission-copy";
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { useFacilityFailedRunEmissionTodos } from "@/hooks/use-facility-failed-run-emission-todos";
 import type { FailedRunEmissionGuidance } from "@/types/failed-run-emission-guidance";
+
+export const FAILED_RUN_TODOS_ERROR_MESSAGE = "Couldn't check which failed runs have emissions without a credit batch.";
 
 export function FailedRunEmissionTodosView({ items, facilityId }: { items: readonly FailedRunEmissionGuidance[]; facilityId: string }) {
   if (items.length === 0) return null;
@@ -29,6 +33,18 @@ export function FailedRunEmissionTodosView({ items, facilityId }: { items: reado
 
 export function FailedRunEmissionTodos({ facilityId }: { facilityId: string }) {
   const todos = useFacilityFailedRunEmissionTodos(facilityId);
-  if (todos.isError || !todos.data) return null;
+  // A failed read is not "nothing to do": say so, like the list's own Notices, and offer Try again.
+  if (todos.isError) {
+    return (
+      <Notice
+        tone="warning"
+        data-testid="failed-run-emission-todos-error"
+        action={<Button variant="weak" size="small" busy={todos.isFetching} onClick={() => void todos.refetch()}>{TRY_AGAIN_LABEL}</Button>}
+      >
+        {FAILED_RUN_TODOS_ERROR_MESSAGE}
+      </Notice>
+    );
+  }
+  if (!todos.data) return null;
   return <FailedRunEmissionTodosView items={todos.data.map((todo) => todo.emissionAttachment)} facilityId={facilityId} />;
 }
