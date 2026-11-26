@@ -1,4 +1,5 @@
 /** Production run side-sheet view mode: the sections config for EntitySideSheet. */
+import { productionRunRecordsOutput } from "@/lib/production-runs/lifecycle";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { resolveFacilityTimezone } from "@/lib/date-utils";
 import { formatMassKg } from "@/lib/format-utils";
@@ -32,7 +33,8 @@ export function RunStatusBadge({ status }: { status: ProductionRunStatus }) {
 
 export function productionRunSheetSections(run: ProductionRunWithRelations, facilities: readonly { id: string; timezone: string }[], options: { readOnly?: boolean } = {}): DetailPanelSection[] {
   // Feedstock in and biochar out are drawn to one mass scale, as in the form.
-  const scaleKg = flowScaleKg(run.totalFeedstockWetMassKg, run.biocharOutputKg);
+  const records = productionRunRecordsOutput(run.status);
+  const scaleKg = flowScaleKg(run.totalFeedstockWetMassKg, records ? run.biocharOutputKg : null);
   return [
     {
       title: "Run setup",
@@ -75,7 +77,7 @@ export function productionRunSheetSections(run: ProductionRunWithRelations, faci
         />
       ),
     },
-    {
+    ...(!records ? [] : [{
       title: "Output",
       fields: [
         {
@@ -94,7 +96,7 @@ export function productionRunSheetSections(run: ProductionRunWithRelations, faci
           barWidthPercent={flowBarWidthPercent(run.biocharOutputKg, scaleKg)}
         />
       ),
-    },
+    }]),
     // Leftover material goes back to storage only from a Failed run.
     ...(run.status === "failed" ? [{
       title: LEFTOVER_SECTION_TITLE,

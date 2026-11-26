@@ -20,9 +20,9 @@ export const PRODUCTION_RUN_STATUSES = [
 
 export type ProductionRunStatus = (typeof PRODUCTION_RUN_STATUSES)[number];
 
-export const PRODUCTION_RUN_CREATE_STATUSES = ["running", "complete"] as const;
+export const PRODUCTION_RUN_CREATE_STATUSES = ["running", "complete", "failed"] as const;
 export const PRODUCTION_RUN_CREATE_STATUS_MESSAGE =
-  "A new production run can only start as Running or Complete.";
+  "A new production run can only start as Running, Complete or Failed.";
 
 export function assertProductionRunCreateStatus(status: ProductionRunStatus): void {
   if (PRODUCTION_RUN_CREATE_STATUSES.some((allowed) => allowed === status)) return;
@@ -40,6 +40,11 @@ export function isTerminalProductionRunStatus(
   status: ProductionRunStatus,
 ): status is TerminalProductionRunStatus {
   return status === "complete" || status === "failed";
+}
+
+/** A failed run produced no biochar, so it records no output. */
+export function productionRunRecordsOutput(status: ProductionRunStatus): boolean {
+  return status !== "failed";
 }
 
 export type ProductionRunOutcomeInput = {
@@ -193,7 +198,8 @@ export function getProductionRunOutcomeViolations(
     violations.push({ code: "running-end-forbidden" });
   }
 
-  if (dryOutputExceedsDryInput(input)) {
+  // A failed run records no output, so any output stored on it is not compared.
+  if (productionRunRecordsOutput(input.status) && dryOutputExceedsDryInput(input)) {
     violations.push({ code: "dry-mass-balance-exceeded" });
   }
 

@@ -55,6 +55,7 @@ import {
   allowedProductionRunStatusesFrom,
   isTerminalProductionRunStatus,
   PRODUCTION_RUN_CREATE_STATUSES,
+  productionRunRecordsOutput,
   shouldClearProductionRunEndTime,
   shouldIncludeProductionRunEndTime,
 } from "@/lib/production-runs/lifecycle";
@@ -123,6 +124,21 @@ interface ProductionRunFormProps {
   /** The saved run's lock: a product, stock entry or count fixes its output basis. */
   lock?: RecordLockView;
 }
+/**
+ * A failed run's Output section is hidden, so its mass and moisture are neither
+ * checked nor submitted. They stay in the form (switching back shows them) and
+ * in the saved record (an update that omits them leaves them alone). The output
+ * bin is submitted as null, which releases it.
+ */
+const OUTPUT_FIELDS = ["biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"] as const;
+
+function withoutHiddenOutput<T extends { status?: unknown }>(values: T): T {
+  if (productionRunRecordsOutput(values.status as ProductionRunStatus)) return values;
+  const rest: Record<string, unknown> = { ...values, biocharStorageLocationId: null };
+  for (const field of OUTPUT_FIELDS) if (field !== "biocharStorageLocationId") delete rest[field];
+  return rest as T;
+}
+
 export function ProductionRunForm({
   productionRun,
   onSubmit,
@@ -195,7 +211,7 @@ export function ProductionRunForm({
         unknown,
         ProductionRunFormData
       >
-    )(values, context, options);
+    )(withoutHiddenOutput(values), context, options);
   const {
     register,
     handleSubmit,
@@ -679,15 +695,11 @@ export function ProductionRunForm({
         </div>
       </FormSection>
 
-      {/* ── Output ── */}
-      <FormSection
+      {/* ── Output (a failed run has none) ── */}
+      {productionRunRecordsOutput(watchedStatus) && <FormSection
         title="Output"
         icon={<PackageIcon size={14} weight="bold" />}
-        fields={[
-          "biocharStorageLocationId",
-          "biocharOutputKg",
-          "biocharMoisturePercent",
-        ]}
+        fields={[...OUTPUT_FIELDS]}
       >
 
         <FormField
@@ -760,7 +772,7 @@ export function ProductionRunForm({
             destinationBinName={selectedDestBin?.name ?? null}
           />
         )}
-      </FormSection>
+      </FormSection>}
 
       {/* ── Energy ── */}
       <FormSection

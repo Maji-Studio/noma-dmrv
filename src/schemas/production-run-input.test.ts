@@ -62,3 +62,9 @@ it.each(inputs)("publishes conditional output requirements for $name", ({ schema
   expect(fields.biocharMoisturePercent.description).toContain("Required when complete");
   expect(fields.biocharOutputKg.description).toContain("Must be positive when complete");
 });
+
+it("create schemas accept failed and still refuse cancelled", () => {
+  const base = { facilityId: crypto.randomUUID(), reactorId: crypto.randomUUID(), startTime: "2026-03-10T08:00:00Z" };
+  expect(createProductionRunInput.safeParse({ ...base, status: "failed" }).success).toBe(true);
+  expect(createProductionRunInput.safeParse({ ...base, status: "cancelled" }).success).toBe(false);
+});

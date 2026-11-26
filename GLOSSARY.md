@@ -29,9 +29,10 @@ date runs by the day they started on the facility's calendar.
 
 **Production run status**:
 New runs default to *Running*. Operators may create an already-finished run
-as *Complete* with its end time, feedstock and biochar output recorded.
-Missing completion fields prevent saving. *Failed* and *Cancelled* are actions
-on a saved run; neither is available on create.
+as *Complete* with its end time, feedstock and biochar output recorded, or as
+*Failed* with its end time, feedstock and feedstock moisture recorded (no
+biochar output). Missing fields prevent saving. *Cancelled* is an action on a
+saved run; it is not available on create.
 *Complete* — the batch finished and its core quantities (feedstock
 consumed, biochar output) are recorded. *Failed* — the run physically
 happened and consumed feedstock but did not produce usable biochar;

@@ -8,6 +8,7 @@ import type { RecordLockHolder } from "@/lib/record-lock";
 import type { CertifiedLineageEntityType, CertifiedLineageTarget } from "./certification-lineage-guards";
 import { isCountMovement } from "./output-stock-count";
 import { requireOrgScope } from "./utils";
+import { productionRunRecordsOutput } from "@/lib/production-runs/lifecycle";
 
 type Reader = Pick<DbTransaction, "select">;
 
@@ -60,7 +61,7 @@ export async function readRecordDependentsBatch(
       for (const row of batches) push(row.runId, { kind: "creditBatch", id: row.id });
       for (const row of effects) push(row.runId, { kind: "stockEntry", id: row.id });
       for (const run of runs) {
-        if (!run.biocharStorageLocationId) continue;
+        if (!run.biocharStorageLocationId || !productionRunRecordsOutput(run.status)) continue;
         const counts = movements.filter(movement => movement.storageLocationId === run.biocharStorageLocationId &&
           isCountMovement(movement) && run.createdAt <= movement.createdAt &&
           (!run.endTime || (movement.occurredAt && run.endTime <= movement.occurredAt)));

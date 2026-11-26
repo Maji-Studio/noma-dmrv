@@ -12,7 +12,8 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from '@/lib/errors';
-import { and, eq, sql, notInArray } from "drizzle-orm";
+import { and, eq, inArray, sql, notInArray } from "drizzle-orm";
+import { PRODUCTION_RUN_STATUSES, productionRunRecordsOutput, type ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 import { formatFacilityDateTime } from "@/lib/format-utils";
 import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { isCountMovementSql } from "../output-stock-count";
@@ -39,7 +40,9 @@ export async function getProductionRunDependentProduct(
   };
   const [count] = await tx.select({ reason: binMovements.reason, at: binMovements.occurredAt }).from(binMovements)
     .innerJoin(productionRuns, and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, productionRunId), eq(productionRuns.biocharStorageLocationId, binMovements.storageLocationId)))
+    // A failed run contributes no output, so a later count does not cover it.
     .where(and(eq(binMovements.organizationId, ctx.organizationId), isCountMovementSql(),
+      inArray(productionRuns.status, PRODUCTION_RUN_STATUSES.filter(productionRunRecordsOutput)),
       sql`(${productionRuns.endTime} is null or (${productionRuns.endTime} at time zone 'UTC') <= ${binMovements.occurredAt})`, sql`${productionRuns.createdAt} <= ${binMovements.createdAt}`)).limit(1);
   if (count) throw new SafeError(`Production stock is covered by count: ${count.reason} (${await at(count.at)}).`);
   const [effect] = await tx.select({ kind: binMovements.outputKind, reason: binMovements.reason, at: binMovements.occurredAt })
@@ -81,7 +84,12 @@ export async function assertProductionRunOutputBasisChange(ctx: OrgContext, tx: 
   requireOrgScope(ctx);
   const before = new Map(Object.entries(previous));
   const after = new Map(Object.entries(next));
-  const changed = ['status', 'startTime', 'endTime', 'facilityId', 'reactorId', 'biocharStorageLocationId', 'biocharOutputKg', 'biocharMoisturePercent'].some(key => {
+  const OUTPUT_KEYS = ['biocharStorageLocationId', 'biocharOutputKg', 'biocharMoisturePercent'];
+  // A run that stays failed has no output, so releasing its bin is not an output-basis change.
+  const stayedFailed = !productionRunRecordsOutput(before.get('status') as ProductionRunStatus)
+    && !productionRunRecordsOutput((after.get('status') ?? before.get('status')) as ProductionRunStatus);
+  const changed = ['status', 'startTime', 'endTime', 'facilityId', 'reactorId', 'biocharStorageLocationId', 'biocharOutputKg', 'biocharMoisturePercent']
+    .filter(key => !(stayedFailed && OUTPUT_KEYS.includes(key))).some(key => {
     const oldValue = before.get(key);
     const newValue = after.get(key);
     return newValue !== undefined && !recordFieldEqual(key, oldValue, newValue);

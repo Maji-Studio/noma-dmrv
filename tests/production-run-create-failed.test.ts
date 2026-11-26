@@ -1,0 +1,312 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { eq, inArray } from "drizzle-orm";
+import { db } from "@/db";
+import { createCreditBatch } from "@/data-access/credit-batches";
+import { createProductionRun, updateProductionRun } from "@/data-access/production-runs/mutations";
+import { deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
+import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
+import { feedstocks, feedstockTypes } from "@/db/schema/feedstock";
+import { binMovements } from "@/db/schema/bin-movements";
+import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
+import { productionProcesses } from "@/db/schema/production-processes";
+import { productionRunFeedstockDraws, productionRunFeedstocks, productionRuns } from "@/db/schema/production";
+import { productionVersion } from "./helpers/production-version";
+import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
+import { deleteStorageLocation } from "@/data-access/storage-locations";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+
+const AVAILABLE_WET_KG = 5_000;
+const DRAW_KG = 400;
+const MOISTURE_PERCENT = 20;
+const OUTPUT_KG = 50;
+
+describe("create a production run as Failed", () => {
+  const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+  const ctx = makeTestOrgContext("test-user-create-failed");
+  let facilityId = "";
+  const reactorIds: string[] = [];
+  let feedstockTypeId = "";
+  let binId = "";
+  let feedstockId = "";
+  const runIds: string[] = [];
+  const binIdsToDelete: string[] = [];
+  const movementIds: string[] = [];
+  const binVersion = async (id: string) => (await db.select({ v: storageLocations.version }).from(storageLocations).where(eq(storageLocations.id, id)))[0].v;
+  const batchIds: string[] = [];
+
+  async function newReactor(label: string) {
+    const [reactor] = await db.insert(reactors).values({
+      organizationId: TEST_ORG_ID, code: `R-FAIL-${label}-${tag}`, identifier: `Failed ${label} ${tag}`,
+      facilityId, reactorType: "auger",
+    }).returning({ id: reactors.id });
+    reactorIds.push(reactor.id);
+    return reactor.id;
+  }
+
+  beforeAll(async () => {
+    await ensureTestOrg();
+    const [facility] = await db.insert(facilities).values({
+      ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID,
+      code: `FAC-FAIL-${tag}`, name: `Failed Facility ${tag}`,
+    }).returning({ id: facilities.id });
+    facilityId = facility.id;
+    const [type] = await db.insert(feedstockTypes).values({
+      organizationId: TEST_ORG_ID, code: `FT-FAIL-${tag}`, name: `Failed Feedstock ${tag}`,
+      category: "forestry", usage: "pyrolysis",
+    }).returning({ id: feedstockTypes.id });
+    feedstockTypeId = type.id;
+    const [bin] = await db.insert(storageLocations).values({
+      organizationId: TEST_ORG_ID, code: `BIN-FAIL-${tag}`, name: `Failed Bin ${tag}`,
+      type: "feedstock_bin", facilityId, feedstockTypeId,
+    }).returning({ id: storageLocations.id });
+    binId = bin.id;
+    const [feedstock] = await db.insert(feedstocks).values(await feedstockFixtureValues(db, {
+      organizationId: TEST_ORG_ID, code: `FS-FAIL-${tag}`, facilityId, status: "complete", feedstockTypeId,
+      massWetKg: AVAILABLE_WET_KG, massDryKg: 4_000, storageLocationId: binId,
+    })).returning({ id: feedstocks.id });
+    feedstockId = feedstock.id;
+  });
+
+  afterAll(async () => {
+    if (runIds.length) {
+      await db.delete(creditBatchProductionRuns).where(inArray(creditBatchProductionRuns.productionRunId, runIds));
+      await db.delete(productionRunFeedstocks).where(inArray(productionRunFeedstocks.productionRunId, runIds));
+      await db.delete(productionRunFeedstockDraws).where(inArray(productionRunFeedstockDraws.productionRunId, runIds));
+      await db.delete(productionRuns).where(inArray(productionRuns.id, runIds));
+    }
+    if (batchIds.length) await db.delete(creditBatches).where(inArray(creditBatches.id, batchIds));
+    await db.delete(productionProcesses).where(eq(productionProcesses.feedstockTypeId, feedstockTypeId));
+    if (movementIds.length) await db.delete(binMovements).where(inArray(binMovements.id, movementIds));
+    if (binIdsToDelete.length) await db.delete(storageLocations).where(inArray(storageLocations.id, binIdsToDelete));
+    await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
+    await cleanupFeedstockFixtureParents(db);
+    await db.delete(storageLocations).where(eq(storageLocations.id, binId));
+    await db.delete(feedstockTypes).where(eq(feedstockTypes.id, feedstockTypeId));
+    if (reactorIds.length) await db.delete(reactors).where(inArray(reactors.id, reactorIds));
+    await db.delete(facilities).where(eq(facilities.id, facilityId));
+  });
+
+  it("saves a failed run with draws, withdraws the feedstock, and posts no output or credit batch membership", async () => {
+    const batch = await createCreditBatch(ctx, {
+      code: `CB-FAIL-${tag}`, facilityId, feedstockTypeId,
+      startDate: new Date("2026-03-01T00:00:00.000Z"), endDate: new Date("2026-03-31T00:00:00.000Z"),
+      productionRunIds: [],
+    });
+    batchIds.push(batch.id);
+
+    const run = await createProductionRun(ctx, {
+      code: `PR-FAIL-${tag}`, facilityId, reactorId: await newReactor("A"), status: "failed",
+      startTime: new Date("2026-03-10T08:00:00Z"), endTime: new Date("2026-03-10T10:00:00Z"),
+      feedstockMoisturePercent: MOISTURE_PERCENT,
+      feedstockDraws: [{ storageLocationId: binId, wetMassKg: DRAW_KG }],
+    });
+    runIds.push(run.id);
+
+    expect(run.status).toBe("failed");
+    expect(run.feedstockMassDryKg).toBe(320);
+    expect(await deriveFeedstockWetStockKg(ctx, db, binId)).toBe(AVAILABLE_WET_KG - DRAW_KG);
+    const [stored] = await db.select({ outputPostedAt: productionRuns.outputPostedAt, biocharOutputKg: productionRuns.biocharOutputKg })
+      .from(productionRuns).where(eq(productionRuns.id, run.id));
+    expect(stored.outputPostedAt).toBeNull();
+    expect(stored.biocharOutputKg).toBeNull();
+    const memberships = await db.select().from(creditBatchProductionRuns)
+      .where(eq(creditBatchProductionRuns.productionRunId, run.id));
+    expect(memberships).toEqual([]);
+  });
+
+  it("posts no output stock even when biochar output is sent with a failed run", async () => {
+    const run = await createProductionRun(ctx, {
+      code: `PR-FAIL-OUT-${tag}`, facilityId, reactorId: await newReactor("B"), status: "failed",
+      startTime: new Date("2026-03-11T08:00:00Z"), endTime: new Date("2026-03-11T10:00:00Z"),
+      feedstockMoisturePercent: MOISTURE_PERCENT,
+      feedstockDraws: [{ storageLocationId: binId, wetMassKg: 100 }],
+      biocharOutputKg: OUTPUT_KG,
+    });
+    runIds.push(run.id);
+    const [stored] = await db.select({ outputPostedAt: productionRuns.outputPostedAt })
+      .from(productionRuns).where(eq(productionRuns.id, run.id));
+    expect(stored.outputPostedAt).toBeNull();
+    const memberships = await db.select().from(creditBatchProductionRuns)
+      .where(eq(creditBatchProductionRuns.productionRunId, run.id));
+    expect(memberships).toEqual([]);
+  });
+
+  it("refuses a failed run without an end time, feedstock or moisture", async () => {
+    const reactorId = await newReactor("C");
+    const base = {
+      facilityId, reactorId, status: "failed" as const, startTime: new Date("2026-03-12T08:00:00Z"),
+      endTime: new Date("2026-03-12T10:00:00Z"), feedstockMoisturePercent: MOISTURE_PERCENT,
+      feedstockDraws: [{ storageLocationId: binId, wetMassKg: 100 }],
+    };
+    await expect(createProductionRun(ctx, { ...base, code: `PR-FAIL-NOEND-${tag}`, endTime: null }))
+      .rejects.toThrow("A failed run needs an end time");
+    await expect(createProductionRun(ctx, { ...base, code: `PR-FAIL-NODRAW-${tag}`, feedstockDraws: [] }))
+      .rejects.toMatchObject({ code: "validation_failed" });
+    await expect(createProductionRun(ctx, { ...base, code: `PR-FAIL-NOMOIST-${tag}`, feedstockMoisturePercent: null }))
+      .rejects.toMatchObject({ code: "validation_failed" });
+  });
+
+  it("still refuses Cancelled on create", async () => {
+    await expect(createProductionRun(ctx, {
+      code: `PR-CANCEL-${tag}`, facilityId, reactorId: await newReactor("D"), status: "cancelled",
+      startTime: new Date("2026-03-13T08:00:00Z"), endTime: null, cancellationReason: "Entered in error",
+    })).rejects.toThrow("A new production run can only start as Running, Complete or Failed.");
+  });
+
+  it("scopes the create to the caller's organization", async () => {
+    await expect(createProductionRun({ ...ctx, organizationId: "org_other_failed_create" }, {
+      code: `PR-FAIL-ORG-${tag}`, facilityId, reactorId: await newReactor("E"), status: "failed",
+      startTime: new Date("2026-03-14T08:00:00Z"), endTime: new Date("2026-03-14T10:00:00Z"),
+      feedstockMoisturePercent: MOISTURE_PERCENT,
+      feedstockDraws: [{ storageLocationId: binId, wetMassKg: 100 }],
+    })).rejects.toThrow(/not found/i);
+  });
+
+  describe("a failed run holds no output bin", () => {
+    const newOutputBin = async () => {
+      const id = await createProductionRunOutputBin(TEST_ORG_ID, facilityId);
+      binIdsToDelete.push(id);
+      return id;
+    };
+    const storedBin = async (id: string) => (await db.select({ bin: productionRuns.biocharStorageLocationId })
+      .from(productionRuns).where(eq(productionRuns.id, id)))[0].bin;
+
+    it("stores no bin when a failed run is created with one", async () => {
+      const outBin = await newOutputBin();
+      const run = await createProductionRun(ctx, {
+        code: `PR-FAIL-BIN-${tag}`, facilityId, reactorId: await newReactor("BIN"), status: "failed",
+        startTime: new Date("2026-05-10T08:00:00Z"), endTime: new Date("2026-05-10T10:00:00Z"),
+        feedstockMoisturePercent: MOISTURE_PERCENT, feedstockDraws: [{ storageLocationId: binId, wetMassKg: 100 }],
+        biocharStorageLocationId: outBin,
+      });
+      runIds.push(run.id);
+      expect(await storedBin(run.id)).toBeNull();
+    });
+
+    it("releases the bin of an older failed run on save, so the bin can be deleted", async () => {
+      const outBin = await newOutputBin();
+      const run = await createProductionRun(ctx, {
+        code: `PR-FAIL-REL-${tag}`, facilityId, reactorId: await newReactor("REL"), status: "failed",
+        startTime: new Date("2026-05-11T08:00:00Z"), endTime: new Date("2026-05-11T10:00:00Z"),
+        feedstockMoisturePercent: MOISTURE_PERCENT, feedstockDraws: [{ storageLocationId: binId, wetMassKg: 100 }],
+      });
+      runIds.push(run.id);
+      await db.update(productionRuns).set({ biocharStorageLocationId: outBin, biocharOutputKg: 5, biocharMoisturePercent: 0 }).where(eq(productionRuns.id, run.id));
+      await expect(deleteStorageLocation(ctx, outBin, await binVersion(outBin))).rejects.toThrow();
+
+      await updateProductionRun(ctx, run.id, {
+        expectedVersion: await productionVersion(ctx, "productionRuns", run.id), electricityKwh: 1, biocharStorageLocationId: null,
+      });
+      expect(await storedBin(run.id)).toBeNull();
+      const [kept] = await db.select({ kg: productionRuns.biocharOutputKg }).from(productionRuns).where(eq(productionRuns.id, run.id));
+      expect(kept.kg).toBe(5);
+      await deleteStorageLocation(ctx, outBin, await binVersion(outBin));
+    });
+
+    it("releases the bin even when the update omits it", async () => {
+      const outBin = await newOutputBin();
+      const run = await createProductionRun(ctx, {
+        code: `PR-FAIL-OMIT-${tag}`, facilityId, reactorId: await newReactor("OMIT"), status: "failed",
+        startTime: new Date("2026-05-12T08:00:00Z"), endTime: new Date("2026-05-12T10:00:00Z"),
+        feedstockMoisturePercent: MOISTURE_PERCENT, feedstockDraws: [{ storageLocationId: binId, wetMassKg: 100 }],
+      });
+      runIds.push(run.id);
+      await db.update(productionRuns).set({ biocharStorageLocationId: outBin }).where(eq(productionRuns.id, run.id));
+      await updateProductionRun(ctx, run.id, { expectedVersion: await productionVersion(ctx, "productionRuns", run.id), electricityKwh: 2 });
+      expect(await storedBin(run.id)).toBeNull();
+    });
+  });
+
+  describe("a later stock count in the run's output bin", () => {
+    const addCount = async (storageLocationId: string, occurredAt: Date) => {
+      const [movement] = await db.insert(binMovements).values({
+        organizationId: TEST_ORG_ID, storageLocationId, lane: "biochar", movementType: "adjustment", massDeltaKg: 0,
+        reason: "Fixture count", outputKind: "count", occurredAt, idempotencyKey: crypto.randomUUID(),
+        basisFingerprint: "fixture-count", inputSnapshot: {}, outputDryDeltaKg: "0", balanceBeforeDryKg: "0", balanceAfterDryKg: "0",
+      }).returning({ id: binMovements.id });
+      movementIds.push(movement.id);
+      return movement.id;
+    };
+    const newBin = async () => {
+      const id = await createProductionRunOutputBin(TEST_ORG_ID, facilityId);
+      binIdsToDelete.push(id);
+      return id;
+    };
+
+    it("lets an older failed run save an edit and release its bin, leaving the count alone", async () => {
+      const outBin = await newBin();
+      const run = await createProductionRun(ctx, {
+        code: `PR-FAIL-CNT-${tag}`, facilityId, reactorId: await newReactor("CNT"), status: "failed",
+        startTime: new Date("2026-06-10T08:00:00Z"), endTime: new Date("2026-06-10T10:00:00Z"),
+        feedstockMoisturePercent: MOISTURE_PERCENT, feedstockDraws: [{ storageLocationId: binId, wetMassKg: 100 }],
+      });
+      runIds.push(run.id);
+      await db.update(productionRuns).set({ biocharStorageLocationId: outBin }).where(eq(productionRuns.id, run.id));
+      const countId = await addCount(outBin, new Date("2026-06-11T08:00:00Z"));
+
+      await updateProductionRun(ctx, run.id, { expectedVersion: await productionVersion(ctx, "productionRuns", run.id), electricityKwh: 3 });
+
+      const [saved] = await db.select({ bin: productionRuns.biocharStorageLocationId, kwh: productionRuns.electricityKwh }).from(productionRuns).where(eq(productionRuns.id, run.id));
+      expect(saved).toEqual({ bin: null, kwh: 3 });
+      const [count] = await db.select({ id: binMovements.id }).from(binMovements).where(eq(binMovements.id, countId));
+      expect(count.id).toBe(countId);
+    });
+
+    it("still refuses an output change on a complete run covered by the count", async () => {
+      const outBin = await newBin();
+      const run = await createProductionRun(ctx, {
+        code: `PR-CMP-CNT-${tag}`, facilityId, reactorId: await newReactor("CCNT"), status: "complete",
+        startTime: new Date("2026-06-12T08:00:00Z"), endTime: new Date("2026-06-12T10:00:00Z"),
+        feedstockMoisturePercent: MOISTURE_PERCENT, feedstockDraws: [{ storageLocationId: binId, wetMassKg: 100 }],
+        biocharOutputKg: 20, biocharMoisturePercent: 0, biocharStorageLocationId: outBin,
+      });
+      runIds.push(run.id);
+      await addCount(outBin, new Date("2026-06-13T08:00:00Z"));
+      await expect(updateProductionRun(ctx, run.id, {
+        expectedVersion: await productionVersion(ctx, "productionRuns", run.id), biocharOutputKg: 30,
+      })).rejects.toThrow();
+      const [kept] = await db.select({ kg: productionRuns.biocharOutputKg, bin: productionRuns.biocharStorageLocationId }).from(productionRuns).where(eq(productionRuns.id, run.id));
+      expect(kept).toEqual({ kg: 20, bin: outBin });
+    });
+  });
+
+  describe("stored output on a failed run is not compared", () => {
+    const STORED_OUTPUT_KG = 60;
+    const EDITED_DRAW_KG = 50; // 50 kg at 20% is 40 kg dry, below the stored 60 kg output
+
+    async function runWithStoredOutput(label: string, status: "running" | "failed") {
+      const run = await createProductionRun(ctx, {
+        code: `PR-FAIL-${label}-${tag}`, facilityId, reactorId: await newReactor(label), status,
+        startTime: new Date("2026-04-10T08:00:00Z"), endTime: status === "failed" ? new Date("2026-04-10T10:00:00Z") : null,
+        feedstockMoisturePercent: MOISTURE_PERCENT, feedstockDraws: [{ storageLocationId: binId, wetMassKg: 100 }],
+      });
+      runIds.push(run.id);
+      await db.update(productionRuns).set({ biocharOutputKg: STORED_OUTPUT_KG, biocharMoisturePercent: 0 }).where(eq(productionRuns.id, run.id));
+      return run;
+    }
+    const storedOutput = async (id: string) => (await db.select({ kg: productionRuns.biocharOutputKg, moisture: productionRuns.biocharMoisturePercent })
+      .from(productionRuns).where(eq(productionRuns.id, id)))[0];
+
+    it("saves a feedstock edit on a failed run whose stored output exceeds the new dry input", async () => {
+      const run = await runWithStoredOutput("EDIT", "failed");
+      const saved = await updateProductionRun(ctx, run.id, {
+        expectedVersion: await productionVersion(ctx, "productionRuns", run.id),
+        feedstockMoisturePercent: MOISTURE_PERCENT, feedstockDraws: [{ storageLocationId: binId, wetMassKg: EDITED_DRAW_KG }],
+      });
+      expect(saved.totalFeedstockWetMassKg).toBe(EDITED_DRAW_KG);
+      expect(await storedOutput(run.id)).toEqual({ kg: STORED_OUTPUT_KG, moisture: 0 });
+    });
+
+    it("moves a running run with such output to failed", async () => {
+      const run = await runWithStoredOutput("MOVE", "running");
+      const saved = await updateProductionRun(ctx, run.id, {
+        expectedVersion: await productionVersion(ctx, "productionRuns", run.id),
+        status: "failed", endTime: new Date("2026-04-10T10:00:00Z"),
+        feedstockMoisturePercent: MOISTURE_PERCENT, feedstockDraws: [{ storageLocationId: binId, wetMassKg: EDITED_DRAW_KG }],
+      });
+      expect(saved.status).toBe("failed");
+      expect(await storedOutput(run.id)).toEqual({ kg: STORED_OUTPUT_KG, moisture: 0 });
+    });
+  });
+});
