@@ -1,4 +1,4 @@
-/** Database lifecycle contracts. Executed by the caller after sandbox review. */
+/** Real-DB lifecycle contracts for runs with returns. */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';

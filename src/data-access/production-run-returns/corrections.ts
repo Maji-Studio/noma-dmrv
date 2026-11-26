@@ -4,13 +4,13 @@ import { db, type DbTransaction } from '@/db';
 import { binMovements, type BinMovement } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { retryTransaction } from '@/lib/db/transaction-retry';
-import { DomainError } from '@/lib/domain-errors';
 import { SafeError } from '@/lib/errors';
 import { findFeedstockLossBlocker } from '@/lib/feedstock-loss-lock';
 import { reverseReturnMass, RETURN_SNAPSHOT_VERSION } from '@/lib/production-run-returns/mass';
 import { correctProductionRunReturnSchema, type CorrectProductionRunReturnInput } from '@/schemas/production-run-returns';
 import { findMovementRequest, lockMovementRequest, requestFingerprint } from '../bin-movement-requests';
 import { getFeedstockBinStock } from '../feedstock-bin-ledger';
+import { throwFeedstockLossLockError } from '../feedstock-loss-lock';
 import { requireOrgScope } from '../utils';
 import { lockReturnSource } from './locks';
 import { getProductionRunReturnAllowance } from './queries';
@@ -36,7 +36,7 @@ export async function correctProductionRunReturnInTransaction(ctx: OrgContext, t
   }
   const stock = await getFeedstockBinStock(ctx, original.storageLocationId, tx);
   const blocker = findFeedstockLossBlocker(stock.entries, original.id);
-  if (blocker) throw new DomainError('certification_locked', 'Return correction is blocked by a later withdrawal, loss or stock count. Correct that entry first.');
+  if (blocker) await throwFeedstockLossLockError(ctx, tx, original.storageLocationId, blocker);
   // A recording time after existing entries keeps equal physical times deterministic.
   // org-scope-ok: database wall clock has no tenant-owned rows.
   const { rows: [clock] } = await tx.execute<{ now: Date }>(sql`select clock_timestamp() as now`);

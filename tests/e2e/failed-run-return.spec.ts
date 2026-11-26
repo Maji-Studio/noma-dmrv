@@ -8,8 +8,8 @@
  */
 import type { Page } from "@playwright/test";
 import { DEC_ORG_ID } from "@/db/org-defaults";
-import { binMovements, storageLocations } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { binMovements, productionRuns, storageLocations } from "@/db/schema";
+import { and, desc, eq } from "drizzle-orm";
 import { createDbConnection } from "./fixtures/db";
 import { test, expect, type SeededChainData } from "./fixtures";
 import { selectEntity, waitForFacilityHydration, waitForSideSheet, waitForSideSheetClose } from "./fixtures/page-helpers";
@@ -38,8 +38,24 @@ async function createFailedRun(page: Page, seededData: SeededChainData) {
   await page.locator('[role="dialog"]').locator('button:has-text("Create production run")').click();
   await waitForSideSheetClose(page);
 
+  const { db, pool } = createDbConnection();
+  let runCode: string;
+  try {
+    // The seeded facility uses UTC, so the form's 08:00 is this instant.
+    const [run] = await db.select({ code: productionRuns.code }).from(productionRuns).where(and(
+      eq(productionRuns.organizationId, DEC_ORG_ID),
+      eq(productionRuns.facilityId, seededData.facility.id),
+      eq(productionRuns.reactorId, seededData.reactor.id),
+      eq(productionRuns.startTime, new Date(`${RUN_DATE}T08:00:00Z`)),
+    )).orderBy(desc(productionRuns.createdAt)).limit(1);
+    expect(run).toBeDefined();
+    runCode = run.code;
+  } finally {
+    await pool.end();
+  }
+
   await expect(async () => {
-    await page.locator("tbody tr").first().getByRole("button", { name: /Actions for/ }).click({ timeout: 5000 });
+    await page.locator("tbody tr").filter({ hasText: runCode }).getByRole("button", { name: /Actions for/ }).click({ timeout: 5000 });
     await page.getByRole("menuitem", { name: "Edit" }).click({ timeout: 5000 });
   }).toPass({ timeout: 30000 });
   await waitForSideSheet(page);
@@ -49,6 +65,7 @@ async function createFailedRun(page: Page, seededData: SeededChainData) {
   await chooseRunStatus(sheet, "failed");
   await sheet.locator('button:has-text("Save changes")').click();
   await waitForSideSheetClose(page);
+  return runCode;
 }
 
 test.describe("Failed-run return to storage (#439)", () => {
@@ -67,10 +84,10 @@ test.describe("Failed-run return to storage (#439)", () => {
     }
 
     try {
-      await createFailedRun(page, seededData);
+      const runCode = await createFailedRun(page, seededData);
 
       // The Failed run's view carries the section and its action.
-      await page.locator("tbody tr").first().click();
+      await page.locator("tbody tr").filter({ hasText: runCode }).click();
       await waitForSideSheet(page);
       const sheet = page.getByRole("dialog").first();
       await expect(sheet.getByRole("heading", { name: "Leftover material" })).toBeVisible();
@@ -103,7 +120,7 @@ test.describe("Failed-run return to storage (#439)", () => {
 
       // Reverse it from the run, with a reason.
       await page.goto(`/production-runs?facility=${seededData.facility.id}`);
-      await page.locator("tbody tr").first().click();
+      await page.locator("tbody tr").filter({ hasText: runCode }).click();
       await waitForSideSheet(page);
       await page.getByRole("dialog").first().getByRole("button", { name: "Reverse" }).click();
       const reverse = page.getByRole("dialog", { name: /Reverse return/ });

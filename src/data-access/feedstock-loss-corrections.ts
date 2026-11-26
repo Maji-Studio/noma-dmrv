@@ -10,15 +10,15 @@ import { DomainError } from '@/lib/domain-errors';
 import { ActionConflictError, SafeError } from '@/lib/errors';
 import {
   findFeedstockLossBlocker, findFeedstockLossCrossing,
-  formatFeedstockLossCrossingMessage, formatFeedstockLossLockReason,
+  formatFeedstockLossCrossingMessage,
 } from '@/lib/feedstock-loss-lock';
-import { formatFacilityDateTime } from '@/lib/format-utils';
 import { ALREADY_CORRECTED_MESSAGE, ALREADY_DELETED_MESSAGE } from '@/lib/loss-correction-messages';
 import { STOCK_CONFLICT_ENTITY } from '@/lib/stock-conflict-entities';
 import { findMovementRequest, lockMovementRequest, requestFingerprint } from './bin-movement-requests';
 import { isOverdraw, lockBinStock } from './bin-stock-guards';
 import { getFeedstockBinStock } from './feedstock-bin-ledger';
 import { assertFeedstockBinLanesNotNegative } from './feedstock-bin-stock-integrity';
+import { throwFeedstockLossLockError } from './feedstock-loss-lock';
 import { assertEventTimesNotFuture } from './future-event-time';
 import { getOutputStockFacilityTimezone } from './output-stock-dates';
 import { OUTPUT_STOCK_FUTURE_TIME_MESSAGE } from './output-stock-post';
@@ -94,21 +94,7 @@ export async function correctFeedstockLoss(ctx: OrgContext, input: CorrectFeedst
 
     const stock = await getFeedstockBinStock(ctx, input.storageLocationId, tx);
     const blocker = findFeedstockLossBlocker(stock.entries, original.id);
-    if (blocker) {
-      const [bin] = await tx.select({ code: storageLocations.code, facilityId: storageLocations.facilityId })
-        .from(storageLocations).where(and(
-          eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, input.storageLocationId),
-        ));
-      if (!bin) throw new SafeError('Storage bin not found');
-      const timeZone = await getOutputStockFacilityTimezone(ctx, bin.facilityId, tx);
-      const entity = blocker.kind === 'run_draw' ? STOCK_CONFLICT_ENTITY.productionRun
-        : blocker.kind === 'ingredient_draw' ? STOCK_CONFLICT_ENTITY.biocharProduct : STOCK_CONFLICT_ENTITY.binMovement;
-      throw new DomainError('certification_locked', formatFeedstockLossLockReason(blocker, timeZone), {
-        conflict: { entity: STOCK_CONFLICT_ENTITY.storageLocation, id: input.storageLocationId, code: conflictCode(bin.code) },
-        blockers: [{ entity, id: blocker.sourceId ?? blocker.id,
-          code: conflictCode(blocker.code ?? `${blocker.reason} (${formatFacilityDateTime(blocker.occurredAt, timeZone)})`) }],
-      });
-    }
+    if (blocker) await throwFeedstockLossLockError(ctx, tx, input.storageLocationId, blocker);
 
     if (input.replacement) {
       const crossing = findFeedstockLossCrossing(stock.entries, original.id, input.replacement.occurredAt.toISOString());

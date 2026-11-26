@@ -486,7 +486,7 @@ version. See [party locations](./api-master-data.md#party-locations) for distanc
 inputs, archived destinations, defaults, fills and delete refusals. Orders expose
 list and id-or-code reads under `orders:read`. Both read scopes are on by default.
 Storage locations use representation revision 5, exposing `formulationId`,
-`stockMode`, `drawOrder` and `uncarbonized`, and accept `type` and `formulationId` list filters.
+`stockMode`, `drawOrder` and `uncarbonized`, and accept `type`, `formulationId` and `uncarbonized` (`"true"` or `"false"`) list filters.
 For feedstock bins, `mix` means Mass weighted over remaining deliveries; `split`
 means In order, using `oldest_first` or `newest_first`. Feedstock bins have no sub-bins.
 

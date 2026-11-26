@@ -1,4 +1,4 @@
-/** Real database contracts. Migration and execution belong to the next implementation run. */
+/** Real-DB contracts for the failed-run return writer and ledger. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
@@ -200,10 +200,19 @@ describe('failed-run return writer and ledger', { timeout: TIMEOUT_MS }, () => {
     await recordProductionRunReturn(fixture.ctx, input({ occurredAt: '2026-01-02T13:00:00Z' }));
     await correctProductionRunReturn(fixture.ctx, correction(original.id));
     const active = (await getProductionRunReturnHistory(fixture.ctx, runId)).find(row => row.movementType === 'failed_run_return' && row.id !== original.id)!;
-    if (kind === 'count') await recordStockTakeMovement(fixture.ctx, { storageLocationId: binId, lane: 'feedstock', reason: 'Confirmed count', countedMassKg: 50, countedWetMassKg: 50, moistureRatioUsed: 0.2 });
-    else await createBinMovement(fixture.ctx, { storageLocationId: binId, lane: 'feedstock', movementType: 'loss', massDeltaKg: -1,
+    const blocker = kind === 'count'
+      ? await recordStockTakeMovement(fixture.ctx, { storageLocationId: binId, lane: 'feedstock', reason: 'Confirmed count', countedMassKg: 50, countedWetMassKg: 50, moistureRatioUsed: 0.2 })
+      : await createBinMovement(fixture.ctx, { storageLocationId: binId, lane: 'feedstock', movementType: 'loss', massDeltaKg: -1,
       occurredAt: new Date('2026-01-02T14:00:00Z'), reason: 'Measured spill', idempotencyKey: crypto.randomUUID() });
-    await expect(correctProductionRunReturn(fixture.ctx, correction(active.id))).rejects.toMatchObject({ code: 'certification_locked' });
+    const [bin] = await db.select({ code: storageLocations.code }).from(storageLocations).where(and(
+      eq(storageLocations.organizationId, fixture.ctx.organizationId), eq(storageLocations.id, binId),
+    ));
+    await expect(correctProductionRunReturn(fixture.ctx, correction(active.id))).rejects.toMatchObject({
+      code: 'certification_locked',
+      message: expect.stringContaining(`Correction blocked by a later ${kind === 'count' ? 'stock count' : 'lost mass'}: ${blocker.reason} (`),
+      conflict: { entity: 'storageLocation', id: binId, code: bin.code },
+      blockers: [{ entity: 'binMovement', id: blocker.id, code: expect.stringContaining(blocker.reason) }],
+    });
   });
 
   it('refuses mixed types while allowing multiple allocations of one type', async () => {
