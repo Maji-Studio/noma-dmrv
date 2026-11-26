@@ -1,3 +1,6 @@
+import { loadProductionSourceManifest } from "@/data-access/production-source-manifest";
+import { certificationSubmissions } from "@/db/schema";
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { eq } from "drizzle-orm";
 import { productionRuns, storageLocations, creditBatchProductionRuns } from "@/db/schema";
 import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
@@ -64,6 +67,26 @@ it.each([null, 0])("preserves a failed electricity reading of %s", async electri
     const facts = (await loadBatchesEmissionAutomaticFacts(makeTestOrgContext(), [fixture.batch!.id], {}, tx))[fixture.batch!.id];
     expect(facts.automaticFigures["run-electricity"]).toEqual(electricityKwh === null ? null : { magnitude: "0", unit: "kWh" });
     expect(facts.automaticRecordCounts?.["run-electricity"]).toBe(1);
+    throw ROLLBACK;
+  })).rejects.toBe(ROLLBACK);
+});
+
+
+it.each(["submitted", "draft", "rejected"] as const)("excludes failed-owned transport counted by another %s attempt", async status => {
+  await expect(db.transaction(async tx => {
+    const f = await failedRunFixture(tx);
+    const ctx = makeTestOrgContext();
+    const [holder, current] = await insertRemovalFixture(tx, [
+      { ...f.site }, { ...f.site },
+    ]);
+    await tx.insert(certificationSubmissions).values({ ...f.org, provider: "isometric", submissionType: "removal",
+      localEntityType: "removal", localEntityId: holder.id, version: 1, status,
+      metadata: { externalMutation: "none" }, payloadSnapshot: { transportFeedstockIds: [f.stock.id] } });
+    const manifest = await loadProductionSourceManifest(ctx, [f.batch!.id], tx, current.id);
+    expect(manifest.failedContributors.map(run => run.runId)).toEqual([f.run.id]);
+    expect(manifest.countedTransportFeedstockIds).toEqual(status === "rejected" ? [f.stock.id] : []);
+    // Its own historical snapshot must not remove transport on a retry.
+    expect((await loadProductionSourceManifest(ctx, [f.batch!.id], tx, holder.id)).countedTransportFeedstockIds).toEqual([f.stock.id]);
     throw ROLLBACK;
   })).rejects.toBe(ROLLBACK);
 });

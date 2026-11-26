@@ -1,3 +1,8 @@
+import { updateFeedstockInTransaction } from "@/data-access/feedstocks";
+import { feedstocks, productionProcesses, storageLocations } from "@/db/schema";
+import { getFeedstockTransportOwners } from "@/data-access/feedstock-transport-ownership";
+import { failedRunFixture } from "./helpers/failed-run-fixture";
+import { withLineageFixture } from "./helpers/certification-lineage-fixture";
 import { updateCreditBatch, deleteCreditBatch } from "@/data-access/credit-batches";
 import { runOperation } from "@/lib/operations/runner";
 import { updateProductionRun as updateRunOperation } from "@/lib/operations/production-runs";
@@ -148,5 +153,35 @@ it.each(["window", "delete"])("refuses a Sent batch %s while failed contribution
     await expect(write).rejects.toMatchObject({ code: "certification_locked" });
     expect((await db.select().from(creditBatches).where(eq(creditBatches.id, fixture.batchId)))[0]).toEqual(before);
     expect((await loadRunEmissionContributors(ctx, [run.id]))[0].creditBatchId).toBe(fixture.batchId);
+  });
+});
+
+
+const RETYPE_ROLLBACK = new Error("rollback transport retype fixture");
+it("refuses retyping a mixed failed source when it steals a Sent holder's shared intake transport", async () => {
+  await withLineageFixture(async holder => {
+    await expect(db.transaction(async tx => {
+      const f = await failedRunFixture(tx);
+      await tx.update(storageLocations).set({ feedstockTypeId: null }).where(eq(storageLocations.id, f.stock.storageLocationId));
+      const [process] = await tx.insert(productionProcesses).values({ ...f.site, feedstockTypeId: holder.feedstockTypeId }).returning();
+      await tx.update(creditBatches).set({ feedstockTypeId: holder.feedstockTypeId, productionProcessId: process.id })
+        .where(eq(creditBatches.id, f.batch!.id));
+      await tx.insert(productionRunFeedstocks).values({ ...f.org, productionRunId: f.run.id,
+        feedstockId: holder.feedstockId, wetMassUsedKg: 10 });
+      await tx.update(productionRuns).set({ status: "complete" }).where(eq(productionRuns.id, holder.productionRunId));
+      // A submitted snapshot is frozen (migration 0167): add the counted attempt instead of editing the fixture's.
+      await tx.insert(certificationSubmissions).values({ organizationId: ctx.organizationId, provider: "isometric",
+        submissionType: "removal", localEntityType: "removal", localEntityId: holder.removalId,
+        externalId: `ext_retype_${holder.removalId}`, version: 2, status: "submitted", payloadHash: "hash-retype",
+        payloadSnapshot: { transportFeedstockIds: [holder.feedstockId] }, submittedAt: new Date("2026-06-17T00:00:00Z") });
+      expect((await loadRunEmissionContributors(ctx, [f.run.id], tx))[0].creditBatchId).toBeNull();
+      expect((await getFeedstockTransportOwners(ctx, [holder.feedstockId], tx)).get(holder.feedstockId)).toBe(holder.productionRunId);
+      await expect(tx.transaction(savepoint => updateFeedstockInTransaction(ctx, savepoint, f.stock.id, {
+        expectedVersion: f.stock.version, feedstockTypeId: holder.feedstockTypeId,
+      }))).rejects.toMatchObject({ code: "certification_locked", message: expect.stringContaining("transport legs") });
+      expect((await tx.select().from(feedstocks).where(eq(feedstocks.id, f.stock.id)))[0]).toEqual(f.stock);
+      expect((await getFeedstockTransportOwners(ctx, [holder.feedstockId], tx)).get(holder.feedstockId)).toBe(holder.productionRunId);
+      throw RETYPE_ROLLBACK;
+    })).rejects.toBe(RETYPE_ROLLBACK);
   });
 });

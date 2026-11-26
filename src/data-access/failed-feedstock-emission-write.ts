@@ -1,3 +1,4 @@
+import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze } from "./feedstock-transport-ownership-freeze";
 import { and, eq, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { productionRunFeedstocks, productionRuns } from "@/db/schema";
@@ -34,7 +35,7 @@ export async function prepareFailedFeedstockEmissionWrite(
     const sources = await readSources();
     if (sources.some(run => !facilityIds.includes(run.facilityId))) throw changed();
     if (!sources.length) return async () => {};
-    const runs = await tx.select({ id: productionRuns.id, facilityId: productionRuns.facilityId })
+    const runs = await tx.select({ id: productionRuns.id, facilityId: productionRuns.facilityId, status: productionRuns.status })
       .from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId),
         inArray(productionRuns.id, sources.map(run => run.id))))
       .orderBy(productionRuns.id).for("update", { skipLocked: true });
@@ -49,10 +50,15 @@ export async function prepareFailedFeedstockEmissionWrite(
       await synchronizeFailedEmissionBatches(ctx, tx, batchIds);
       return async () => {};
     }
+    // Capture ownership before the intake mutation; the returned finish step
+    // checks it after the write, within the same rollback boundary.
+    const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
+      await getTransportFreezeFeedstockIds(ctx, tx, { runIds: runs.filter(run => run.status === "failed").map(run => run.id) }),
+      { mutation: "update", subject: "feedstock" });
     const finish: (() => Promise<void>)[] = [];
     for (const run of runs) finish.push(await prepareFailedRunEmissionWrite(ctx, tx, run.id, {
       feedstockTypeIds: prospectiveTypeId ? [prospectiveTypeId] : [],
     }));
-    return async () => { for (const check of finish) await check(); };
+    return async () => freeze(async () => { for (const check of finish) await check(); });
   };
 }

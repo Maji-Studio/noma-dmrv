@@ -11,6 +11,7 @@ import { buildEntityReadinessResult } from "./certify-readiness-gaps";
  */
 export function buildCertifyEntityReadiness(args: {
   runs: ProductionRunForCertification[];
+  failedEmissionRuns?: ProductionRunForCertification[];
   batchesWithSamples: CreditBatchWithSamples[];
   transportLegs: TransportLegsByCategory;
   requiredTransportCategories: readonly TransportCategory[];
@@ -20,6 +21,7 @@ export function buildCertifyEntityReadiness(args: {
     args.batchesWithSamples,
     args.transportLegs,
     args.requiredTransportCategories,
+    args.failedEmissionRuns,
   );
 
   return {

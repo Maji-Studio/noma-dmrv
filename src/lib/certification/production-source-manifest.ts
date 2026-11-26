@@ -3,8 +3,10 @@ import { SafeError } from "@/lib/errors";
 import type { RemovalSubmissionContext } from "./certify-context-types";
 import { includesProductionInputs } from "./production-claim-policy";
 
+export const PRODUCTION_SOURCE_MANIFEST_VERSION = 1;
+
 const productionSourceManifestSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(PRODUCTION_SOURCE_MANIFEST_VERSION),
   countedTransportFeedstockIds: z.array(z.string().min(1)).optional(),
   failedContributors: z.array(z.object({
     runId: z.string().min(1), version: z.number().int().positive(),
@@ -37,7 +39,7 @@ export function claimingFailedEmissionRuns(ctx: RemovalSubmissionContext, remova
     .map(run => [run.id, run])).values()];
 }
 
-export type ProductionSourceManifest = NonNullable<ReturnType<typeof readProductionSourceManifest>>;
+export type ProductionSourceManifest = z.infer<typeof productionSourceManifestSchema>;
 
 /** Canonical source identities, independently of numeric emissions or array order. */
 export function productionSourceManifestsEqual(

@@ -1,3 +1,5 @@
+import { getTransportFeedstockIdsCountedElsewhere } from "@/data-access/certification-lineage-guards";
+import { PRODUCTION_SOURCE_MANIFEST_VERSION, readProductionSourceManifest } from "./production-source-manifest";
 import { loadBatchEmissionContributors } from "@/data-access/credit-batch-emission-contributors";
 import { getFeedstockTransportOwners } from "@/data-access/feedstock-transport-ownership";
 import type { CoveredContenders } from "@/lib/certification/covered-contenders";
@@ -320,6 +322,8 @@ export async function buildRemovalContext(
   const failedFeedstockIds = [...new Set(failedContributors.flatMap(run => run.feedstockIds))];
   const failedOwners = await getFeedstockTransportOwners(orgCtx, failedFeedstockIds);
   const failedRunIds = new Set(failedEmissionRuns.map(run => run.id));
+  const countedElsewhere = await getTransportFeedstockIdsCountedElsewhere(orgCtx, failedFeedstockIds, scope.removalId);
+  const countedFailedFeedstockIds = failedFeedstockIds.filter(id => failedRunIds.has(failedOwners.get(id) ?? "") && !countedElsewhere.has(id));
 
   // Batch-pooled Samples drive durability, transport, and readiness (ADR 0016).
   // The same durability blockers gate the submit pipeline below.
@@ -329,7 +333,7 @@ export async function buildRemovalContext(
     lineages,
   });
   entityIds.feedstockIds = [...new Set([...entityIds.feedstockIds,
-    ...failedFeedstockIds.filter(id => failedRunIds.has(failedOwners.get(id) ?? ""))])];
+    ...countedFailedFeedstockIds])];
   entityIds.feedstockTransportOwnedElsewhere = entityIds.feedstockIds.length === 0 &&
     (entityIds.feedstockTransportOwnedElsewhere === true || failedFeedstockIds.length > 0);
   const requiredTransportCategories = collectProductionClaimAwareRequiredTransportCategories({
@@ -363,18 +367,11 @@ export async function buildRemovalContext(
   }
   const entityReadiness = await buildCertifyEntityReadiness({
     runs,
+    failedEmissionRuns,
     batchesWithSamples,
     transportLegs,
     requiredTransportCategories,
   });
-  const failedReadiness = failedEmissionRuns.flatMap(run => {
-    const fields = ["feedstockWetMassKg", "feedstockMoisturePercent", "dieselOperationLiters", "dieselGensetLiters", "preprocessingFuelLiters", "electricityKwh"] as const;
-    const missing = fields.filter(field => run[field] == null);
-    const hasReadings = "hasReadingsFile" in run && run.hasReadingsFile === true;
-    return [...missing.map(field => `Production run ${run.code}: missing ${field}`),
-      ...(hasReadings ? [] : [`Production run ${run.code}: missing readings CSV file`])];
-  });
-  entityReadiness.gaps.push(...failedReadiness);
   // One mass-accounting walk: the per-run attribution the submit pipeline
   // scopes by AND the Review-flow summary, so the two can never diverge.
   const { attributionByRunId, runSummary } = buildMassAccounting(
@@ -447,7 +444,7 @@ export async function buildRemovalContext(
     lineages,
     runs,
     failedEmissionRuns,
-    productionSourceManifest: { version: 1, countedTransportFeedstockIds: failedFeedstockIds.filter(id => failedRunIds.has(failedOwners.get(id) ?? "")).sort(), failedContributors: failedContributors.sort((a, b) => a.runId.localeCompare(b.runId)) },
+    productionSourceManifest: readProductionSourceManifest({ productionSourceManifest: { version: PRODUCTION_SOURCE_MANIFEST_VERSION, countedTransportFeedstockIds: countedFailedFeedstockIds.sort(), failedContributors: failedContributors.sort((a, b) => a.runId.localeCompare(b.runId)) } })!,
     batchesWithSamples,
     attributionByRunId,
     memberBatchClaims,

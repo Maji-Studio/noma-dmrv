@@ -530,6 +530,7 @@ describe("buildRemovalSubmissionBuild", () => {
     ctx.memberBatchClaims[0].claimedByRemovalId = followup ? "other-removal" : null;
     if (failed) {
       const failedRun = { ...run, id: "failed-run", status: "failed" as const,
+        startTime: new Date("2025-12-30T12:00:00Z"), endTime: new Date("2026-01-10T12:00:00Z"),
         biocharDryMassKg: 9999, feedstockMassDryKg: 123, dieselOperationLiters: 2,
         dieselGensetLiters: 3, preprocessingFuelLiters: 4, electricityKwh: 5 };
       ctx.failedEmissionRuns = [failedRun, failedRun];
@@ -538,6 +539,7 @@ describe("buildRemovalSubmissionBuild", () => {
         feedstockIds: ["feedstock-a"], creditBatchId: "batch-1", creditBatchCode: "CB-1", kind: "failed", unresolvedReason: null,
       }] };
     }
+    ctx.productionSourceManifest ??= { version: 1, failedContributors: [], countedTransportFeedstockIds: [] };
     ctx.lineSources = reviewedTemplateSources(template, { "component-safety-margin": { scope: "operating", automaticSource: "safety-margin", entryPolicy: "additive", origin: "reviewed" } });
     ctx.submissionLineageBlockers = buildSubmissionLineageBlockers(
       ctx.lineages, ["feedstock-without-leg"], {},
@@ -579,13 +581,19 @@ describe("buildRemovalSubmissionBuild", () => {
       return;
     }
     const build = await buildPromise;
+    if (!failed || followup) expect(build.semanticPayload).not.toHaveProperty("productionSourceManifest");
+    if (failed && !followup) {
+      expect(build.semanticPayload.startedOn).toBe("2025-12-30T00:00:00.000Z");
+      expect(build.agg.earliestStartTime).toEqual(run.startTime);
+      expect(build.agg.latestEndTime).toEqual(run.endTime);
+    }
     if (failed) {
       expect(build.agg).toMatchObject({ totalBiocharDryMassKg: 600, totalFeedstockDryMassKg: followup ? 0 : 4123,
         totalStartupDieselLitres: followup ? 0 : 2, totalGensetDieselLitres: followup ? 0 : 7, totalElectricityKwh: followup ? 0 : 5 });
       expect(build.agg.sourceProductionRunIds).toEqual(followup ? [run.id] : [run.id, "failed-run"]);
       const snapshot = materializeRemovalSubmissionSnapshot({ compiled: build, template,
         externalProjectId: "project-1", removalId: "removal-1", nextVersion: 1, supersedePreviousId: null });
-      expect(readProductionSourceManifest(snapshot.payloadSnapshot)).toEqual(followup ? { version: 1, failedContributors: [] } : ctx.productionSourceManifest);
+      expect(readProductionSourceManifest(snapshot.payloadSnapshot)).toEqual(followup ? null : ctx.productionSourceManifest);
     }
 
     expect(build.transportFeedstockIds).toEqual(["feedstock-a", "feedstock-b"]);

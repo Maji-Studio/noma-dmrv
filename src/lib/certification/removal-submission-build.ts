@@ -760,6 +760,7 @@ export async function buildRemovalSubmissionBuild(args: {
   const reportingWindow = resolveRemovalReportingWindow({
     facilityTimezone: ctx.facilityTimezone,
     earliestProductionStartTime: agg.earliestStartTime,
+    failedContributorStartTimes: failedEmissionRuns.map(run => run.startTime),
     latestProductionEndTime: agg.latestEndTime,
     latestApplicationTime,
   });
@@ -848,7 +849,8 @@ export async function buildRemovalSubmissionBuild(args: {
       removalTemplate,
     ),
     sourceProductionRunIds: [...agg.sourceProductionRunIds].sort(),
-    productionSourceManifest,
+    ...(productionSourceManifest && (productionSourceManifest.failedContributors.length > 0 ||
+      (productionSourceManifest.countedTransportFeedstockIds?.length ?? 0) > 0) ? { productionSourceManifest } : {}),
     startedOn: reportingWindow.startedOn.toISOString(),
     completedOn: reportingWindow.completedOn.toISOString(),
     sourceIds,

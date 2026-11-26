@@ -1,5 +1,5 @@
 import { failedRunEmissionBatchCondition } from "./failed-run-emission-predicate";
-import type { DbTransaction } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import {
   applications,
   biocharProducts,
@@ -77,6 +77,43 @@ function targetCondition(target: CertifiedLineageTarget): SQL {
 /** Snapshot key written by removal-submission-build.ts (materializeRemovalSubmissionSnapshot). */
 const TRANSPORT_FEEDSTOCK_IDS_KEY = "transportFeedstockIds";
 
+// Shared snapshot predicate: lineage locks include legacy snapshots, while
+// recount prevention requires an explicit counted intake identity.
+function countedTransportCondition(ctx: OrgContext, feedstockId: string | SQL, removalCondition: SQL, includeLegacy: boolean): SQL {
+  return sql<boolean>`exists (
+    select 1 from ${certificationSubmissions}
+    where ${certificationSubmissions.organizationId} = ${ctx.organizationId}
+      and ${certificationSubmissions.provider} = 'isometric'
+      and ${certificationSubmissions.localEntityType} = 'removal'
+      and ${certificationSubmissions.submissionType} = 'removal'
+      and ${removalCondition}
+      and not (
+        ${certificationSubmissions.status} = 'rejected'
+        and ${certificationSubmissions.externalId} is null
+        and (${certificationSubmissions.metadata}->>${SUBMISSION_METADATA_KEYS.externalMutation} is null
+          or ${certificationSubmissions.metadata}->>${SUBMISSION_METADATA_KEYS.externalMutation} not in (${SUBMISSION_EXTERNAL_MUTATIONS.possible}, ${SUBMISSION_EXTERNAL_MUTATIONS.confirmed}))
+        and ${certificationSubmissions.lockedAt} is null
+      )
+      and ${certificationSubmissions.payloadSnapshot} is not null
+      and ((${includeLegacy} and not (${certificationSubmissions.payloadSnapshot} ? ${TRANSPORT_FEEDSTOCK_IDS_KEY}))
+        or (${certificationSubmissions.payloadSnapshot}->${TRANSPORT_FEEDSTOCK_IDS_KEY}) ? ${feedstockId})
+  )`;
+}
+
+export async function getTransportFeedstockIdsCountedElsewhere(
+  ctx: OrgContext, ids: readonly string[], removalId?: string | null,
+  reader: Pick<DbTransaction, "select" | "selectDistinct"> = db,
+): Promise<Set<string>> {
+  requireOrgScope(ctx);
+  if (!ids.length) return new Set();
+  const rows = await reader.select({ id: feedstocks.id }).from(feedstocks).where(and(
+    eq(feedstocks.organizationId, ctx.organizationId), inArray(feedstocks.id, [...ids]),
+    countedTransportCondition(ctx, sql`${feedstocks.id}::text`,
+      removalId ? sql`${certificationSubmissions.localEntityId} <> ${removalId}` : sql`true`, false),
+  ));
+  return new Set(rows.map(row => row.id));
+}
+
 function transportTargetCondition(ctx: OrgContext, target: CertifiedLineageTarget, owner: string | undefined): SQL {
   // No eligible transport owner must retain the lock through every linked run.
   if (!owner) return targetCondition(target);
@@ -87,24 +124,7 @@ function transportTargetCondition(ctx: OrgContext, target: CertifiedLineageTarge
   // with no registry mutation never reached Isometric, so cannot have counted
   // anything and are excluded. A Removal without a snapshot is covered by the
   // current owner. Artifact/row lock order is unchanged.
-  const countedTransport = sql<boolean>`exists (
-    select 1 from ${certificationSubmissions}
-    where ${certificationSubmissions.organizationId} = ${ctx.organizationId}
-      and ${certificationSubmissions.provider} = 'isometric'
-      and ${certificationSubmissions.localEntityType} = 'removal'
-      and ${certificationSubmissions.submissionType} = 'removal'
-      and ${certificationSubmissions.localEntityId} = ${certifierRemovals.id}
-      and not (
-        ${certificationSubmissions.status} = 'rejected'
-        and ${certificationSubmissions.externalId} is null
-        and (${certificationSubmissions.metadata}->>${SUBMISSION_METADATA_KEYS.externalMutation} is null
-          or ${certificationSubmissions.metadata}->>${SUBMISSION_METADATA_KEYS.externalMutation} not in (${SUBMISSION_EXTERNAL_MUTATIONS.possible}, ${SUBMISSION_EXTERNAL_MUTATIONS.confirmed}))
-        and ${certificationSubmissions.lockedAt} is null
-      )
-      and ${certificationSubmissions.payloadSnapshot} is not null
-      and (not (${certificationSubmissions.payloadSnapshot} ? ${TRANSPORT_FEEDSTOCK_IDS_KEY})
-        or (${certificationSubmissions.payloadSnapshot}->${TRANSPORT_FEEDSTOCK_IDS_KEY}) ? ${target.entityId})
-  )`;
+  const countedTransport = countedTransportCondition(ctx, target.entityId, eq(certificationSubmissions.localEntityId, certifierRemovals.id), true);
   return and(targetCondition(target), or(eq(productionRuns.id, owner), countedTransport))!;
 }
 

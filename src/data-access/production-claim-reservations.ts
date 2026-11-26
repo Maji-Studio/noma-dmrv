@@ -209,7 +209,7 @@ export async function reserveProductionEmissionsClaims(
       );
     }
 
-    await assertProductionSourceManifestFresh(ctx, tx, productionIds, args.frozenProductionSourceManifest ?? null);
+    await assertProductionSourceManifestFresh(ctx, tx, productionIds, args.frozenProductionSourceManifest ?? null, args.removalId);
 
     await assertComponentFileClaimFresh(ctx, tx, batches.filter(batch => productionIds.includes(batch.id)), args.frozenLineFileSet ?? []);
 

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { readProductionSourceManifest, claimingFailedEmissionRuns, productionSourceManifestsEqual } from "./production-source-manifest";
+import { readProductionSourceManifest, claimingFailedEmissionRuns, productionSourceManifestsEqual, PRODUCTION_SOURCE_MANIFEST_VERSION } from "./production-source-manifest";
 import type { RemovalSubmissionContext } from "./certify-context-types";
 
 it("keeps historical manifests unknown and rejects malformed recorded manifests", () => {
@@ -37,4 +37,12 @@ it("compares source identity, versions, attachment and counted transport indepen
   expect(productionSourceManifestsEqual(manifest, revision)).toBe(false);
   expect(productionSourceManifestsEqual(manifest, { ...manifest, countedTransportFeedstockIds: ["stock-b"] })).toBe(false);
   expect(productionSourceManifestsEqual(null, manifest)).toBe(false);
+});
+
+it("uses the schema version and treats an empty manifest as absent", () => {
+  const empty = readProductionSourceManifest({ productionSourceManifest: {
+    version: PRODUCTION_SOURCE_MANIFEST_VERSION, failedContributors: [], countedTransportFeedstockIds: [],
+  } });
+  expect(empty?.version).toBe(PRODUCTION_SOURCE_MANIFEST_VERSION);
+  expect(productionSourceManifestsEqual(null, empty)).toBe(true);
 });

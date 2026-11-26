@@ -1,3 +1,4 @@
+import type { ProductionSourceManifest } from "./production-source-manifest";
 import type { BatchEntityReadinessIssue } from "@/lib/certification/batch-health";
 import type { EntryCorrectionState } from "@/lib/certification/removal-entry-correction";
 import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
@@ -126,7 +127,7 @@ export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "e
   lineages: ChainOfCustodyData[];
   runs: ProductionRunForCertification[];
   failedEmissionRuns?: ProductionRunForCertification[];
-  productionSourceManifest?: { version: 1; countedTransportFeedstockIds?: string[]; failedContributors: import("@/data-access/credit-batch-emission-contributors").EmissionContributor[] };
+  productionSourceManifest?: ProductionSourceManifest;
   // The removal's member credit batches with their pooled lab Samples (by
   // `samples.creditBatchId`) — the CREDIT-BATCH-grained durability data plane
   // (ADR 0016). Drives the durability gates here and the per-batch
