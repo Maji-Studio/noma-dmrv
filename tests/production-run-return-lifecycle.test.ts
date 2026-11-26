@@ -10,7 +10,8 @@ import { updateProductionRun } from '@/data-access/production-runs/mutations';
 import { deleteProductionRun } from '@/data-access/production-runs/delete';
 import { readRecordDependents } from '@/data-access/record-lock-dependents';
 import { reallocateRunsForBins } from '@/data-access/feedstock-run-allocations';
-import { updateStorageLocation } from '@/data-access/storage-locations';
+import { archiveStorageLocation, updateStorageLocation } from '@/data-access/storage-locations';
+import { getFeedstockBinStock } from '@/data-access/feedstock-bin-ledger';
 import { createProductionRunFixture, createTestPool, removeIntakeFixture } from './helpers/operation-fixture';
 import { openOperationBarrier, waitForBlockedOperations } from './helpers/operation-barrier';
 import type { RecordProductionRunReturnInput } from '@/schemas/production-run-returns';
@@ -76,6 +77,26 @@ function mutate(kind: typeof MUTATION_CASES[number]) {
 }
 
 describe('return source lifecycle', { timeout: TIMEOUT_MS }, () => {
+  it.each([false, true])('marks a running run failed after its emptied source is archived (resubmit draws: %s)', async resubmitDraws => {
+    await db.update(productionRuns).set({ status: 'running', endTime: null }).where(eq(productionRuns.id, runId));
+    expect((await getFeedstockBinStock(fixture.ctx, fixture.binId)).currentWetKg).toBe(0);
+    const archived = await archiveStorageLocation(fixture.ctx, fixture.binId, 1);
+    expect(archived.archivedAt).toBeInstanceOf(Date);
+    const originalDraws = await db.select().from(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, runId));
+    const originalAllocations = await db.select().from(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, runId));
+
+    await expect(updateProductionRun(fixture.ctx, runId, { expectedVersion: 1, status: 'failed',
+      endTime: new Date('2026-01-02T10:00:00Z'),
+      ...(resubmitDraws ? { feedstockDraws: [{ storageLocationId: fixture.binId, wetMassKg: CONSUMED_WET_KG }] } : {}),
+    })).resolves.toMatchObject({ status: 'failed', facilityId: fixture.facilityId, version: 2 });
+
+    const [saved] = await db.select().from(productionRuns).where(eq(productionRuns.id, runId));
+    expect(saved).toMatchObject({ status: 'failed', version: 2 });
+    expect(await db.select().from(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, runId))).toEqual(originalDraws);
+    expect(await db.select().from(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, runId))).toEqual(originalAllocations);
+    expect(await getProductionRunReturnHistory(fixture.ctx, runId)).toHaveLength(0);
+  });
+
   it('refuses moving facilities when source draws are resubmitted unchanged', async () => {
     const tag = crypto.randomUUID();
     const [facility] = await db.select().from(facilities).where(eq(facilities.id, fixture.facilityId));

@@ -40,6 +40,7 @@ export async function lockProductionRunUpdateStock(
   tx: DbTransaction,
   snapshot: ProductionRunStockSnapshot,
   data: ProductionRunStockUpdate,
+  options: { allowArchivedFeedstockSources?: boolean } = {},
 ): Promise<void> {
   requireOrgScope(ctx);
   const feedstockStockChanged =
@@ -64,7 +65,9 @@ export async function lockProductionRunUpdateStock(
   const sortedIds = [...new Set(binIds.filter((id): id is string => id != null))].sort();
   for (const binId of sortedIds) {
     await lockBinStock(ctx, tx, binId, {
-      allowArchived: startOnlyFeedstockChange && !biocharBinIds.includes(binId),
+      allowArchived: (startOnlyFeedstockChange ||
+        options.allowArchivedFeedstockSources === true && snapshot.feedstockStorageLocationIds.includes(binId)) &&
+        !biocharBinIds.includes(binId),
     });
   }
 }

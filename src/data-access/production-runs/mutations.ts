@@ -557,6 +557,9 @@ export async function updateProductionRunInTransaction(
         biocharStorageLocationId: existing.biocharStorageLocationId,
       },
       { ...data, feedstockDraws: normalizedFeedstockDraws },
+      // Finishing retains historical sources. Changed draws are validated below.
+      { allowArchivedFeedstockSources: effectiveStatus !== existing.status &&
+        effectiveStatus !== "running" && targetFacilityId === existing.facilityId },
     );
 
     const [locked] = await tx
@@ -735,7 +738,9 @@ export async function updateProductionRunInTransaction(
           data,
         );
 
-      if (!feedstockDrawsChanged && (lockedTargetFacilityId !== locked.facilityId || lockedTargetStatus !== locked.status)) {
+      // Terminal outcomes retain their sources; reopening needs active bins.
+      if (!feedstockDrawsChanged && (lockedTargetFacilityId !== locked.facilityId ||
+        lockedTargetStatus !== locked.status && lockedTargetStatus === "running")) {
         await validateProductionRunFeedstockDrawSources(
           ctx,
           tx,
