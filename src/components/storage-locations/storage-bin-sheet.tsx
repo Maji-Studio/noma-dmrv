@@ -139,6 +139,7 @@ export function StorageBinSheet({
         key={editingEntity?.id ?? "create"}
         storageLocation={editingEntity as StorageLocation | undefined}
         lock={lock}
+        showUncarbonized
         onSubmit={state?.mode === "edit" ? handleUpdate : handleCreate}
         onCancel={close}
         isSubmitting={isSubmitting}

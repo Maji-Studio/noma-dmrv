@@ -91,6 +91,14 @@ describe("StorageLocationForm feedstock draw method", () => {
     expect(screen.queryByText(/sub-bin/)).toBeNull();
   });
 
+  it("shows the uncarbonized tag only where the parent asks for it", () => {
+    render(<StorageLocationForm defaultType="feedstock_bin" onSubmit={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.queryByLabelText(/holds uncarbonized material/)).toBeNull();
+    cleanup();
+    render(<StorageLocationForm defaultType="feedstock_bin" showUncarbonized onSubmit={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.getByLabelText(/holds uncarbonized material/)).toBeTruthy();
+  });
+
   it("hides the draw order for Mass weighted", () => {
     render(<StorageLocationForm defaultType="feedstock_bin" onSubmit={vi.fn()} onCancel={vi.fn()} />);
     fireEvent.click(screen.getByRole("radio", { name: /Mass weighted/ }));

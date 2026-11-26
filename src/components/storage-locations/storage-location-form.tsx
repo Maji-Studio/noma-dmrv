@@ -81,6 +81,8 @@ interface StorageLocationFormProps {
   defaultFacilityId?: string;
   /** The saved bin's lock: stock history fixes its storage type and feedstock type. */
   lock?: RecordLockView;
+  /** Shows the uncarbonized tag. Only the Storage bins page sets it; pickers filter tagged bins out. */
+  showUncarbonized?: boolean;
 }
 
 export function StorageLocationForm({
@@ -98,6 +100,7 @@ export function StorageLocationForm({
   defaultFormulationId,
   defaultFacilityId,
   lock,
+  showUncarbonized = false,
 }: StorageLocationFormProps) {
   const isEditMode = !!storageLocation;
   // The identity guard (#767) refuses these two once any stock row points at
@@ -337,7 +340,7 @@ export function StorageLocationForm({
             filterBy={feedstockTypeFilter}
           />
           </div>
-          <div className="md:col-span-2">
+          {showUncarbonized && <div className="md:col-span-2">
             <div className="flex flex-col gap-4">
               <div className="flex items-center gap-6">
                 <label htmlFor="uncarbonized" className={cn(LABEL_HIT_AREA, "flex items-center gap-12 cursor-pointer")}>
@@ -355,7 +358,7 @@ export function StorageLocationForm({
               {identityLocked && <p className="body-caption text-[var(--color-text-tertiary)]">Fixed once this bin has stock or history.</p>}
               <FormError id="uncarbonized-error" message={errors.uncarbonized?.message} />
             </div>
-          </div>
+          </div>}
         </div>
       )}
 

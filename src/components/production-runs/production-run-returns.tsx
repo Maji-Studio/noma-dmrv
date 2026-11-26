@@ -66,10 +66,12 @@ function ReturnRow({ row, facilityId, timeZone, onCorrect, onReverse }: {
       <p className={`body-caption ${MUTED}`}>{formatFacilityDateTime(row.occurredAt, timeZone)}{row.actorName ? ` by ${row.actorName}` : ""}</p>
       {row.reversal && (
         <p className={`body-caption ${MUTED}`}>
-          {reversalCaption({ recordedAt: row.reversal.recordedAt, actorName: row.reversal.actorName, replaced: row.state === "replaced", returnEntry: true }, timeZone)} {row.reversal.reason}
+          {reversalCaption({ recordedAt: row.reversal.recordedAt, actorName: row.reversal.actorName, replaced: row.state === "replaced", returnEntry: true }, timeZone)}
+          <br />
+          {row.state === "replaced" ? "Why corrected" : "Why reversed"}: {row.reversal.reason}
         </p>
       )}
-      {(onCorrect || onReverse) && row.state === "active" && (
+      {row.state === "active" && row.editLockedReason ? <Notice tone="info">{row.editLockedReason}</Notice> : (onCorrect || onReverse) && row.state === "active" && (
         <div className="flex flex-wrap gap-x-16">
           {onCorrect && <TextAction type="button" onClick={onCorrect}>Correct</TextAction>}
           {onReverse && <TextAction type="button" onClick={onReverse}>Reverse</TextAction>}
@@ -125,7 +127,7 @@ export function ProductionRunReturns({ runId, facilityId, feedstockWetMassKg, re
             labelAddon={<ExplanationInfo title={CONVERSION_LOSS_LABEL} hint={CONVERSION_LOSS_HINT} />} />
         </div>
       )}
-      {!check.eligible && check.blocker && (
+      {!check.eligible && check.blocker && (canWrite || !fullyReturned) && (
         <Notice tone={fullyReturned ? "info" : "warning"}>{fullyReturned ? BLOCKER_FULLY_RETURNED_NEXT : check.blocker}</Notice>
       )}
       {rows.length === 0 ? <EmptyState padding="sm" icon={null} title={NOTHING_RETURNED} /> : (

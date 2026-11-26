@@ -141,6 +141,28 @@ describe("Leftover material section", () => {
     expect(screen.getByText("Bin 5")).toBeTruthy();
   });
 
+  it("shows the lock reason instead of Correct and Reverse on a blocked return", () => {
+    mocks.rows = [{ ...savedReturn, editLockedReason: "Bin stock moved after this return." }];
+    render(<ProductionRunReturns runId={RUN_ID} facilityId={FACILITY_ID} feedstockWetMassKg={200} />);
+    expect(screen.getByText("Bin stock moved after this return.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Correct" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reverse" })).toBeNull();
+  });
+
+  it("labels the reason on a reversed and a replaced return", () => {
+    const reversal = { recordedAt: "2026-11-21T09:00:00.000Z", actorName: "Asha", reason: "Wrong bin" };
+    mocks.rows = [{ ...savedReturn, id: "a", state: "reversed", reversal }, { ...savedReturn, id: "b", state: "replaced", reversal: { ...reversal, reason: "Scale misread" } }];
+    render(<ProductionRunReturns runId={RUN_ID} facilityId={FACILITY_ID} feedstockWetMassKg={200} />);
+    expect(screen.getByText(/Why reversed: Wrong bin/)).toBeTruthy();
+    expect(screen.getByText(/Why corrected: Scale misread/)).toBeTruthy();
+  });
+
+  it("does not name the next step on a read-only fully returned run", () => {
+    mocks.eligibility = { ...eligible, eligible: false, code: "ineligible", remainingDryKg: 0, blocker: "All consumed dry material has been returned. Correct an existing return to change its measurements." };
+    render(<ProductionRunReturns runId={RUN_ID} facilityId={FACILITY_ID} feedstockWetMassKg={200} readOnly />);
+    expect(screen.queryByText(/Correct an existing return/)).toBeNull();
+  });
+
   it("keeps the actions off a read-only view", () => {
     mocks.rows = [savedReturn];
     render(<ProductionRunReturns runId={RUN_ID} facilityId={FACILITY_ID} feedstockWetMassKg={200} readOnly />);
