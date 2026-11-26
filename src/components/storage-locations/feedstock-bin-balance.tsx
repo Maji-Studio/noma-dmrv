@@ -122,10 +122,19 @@ export function FeedstockBinBalance({ storageLocationId, facilityId, capacityKg,
   const estimatedMoisturePercent = currentWetKg > 0 && estimatedDryKg !== null ? Math.max(0, (currentWetKg - estimatedDryKg) / currentWetKg * PERCENT) : null;
   const waterKg = estimatedDryKg === null ? null : Math.max(currentWetKg - estimatedDryKg, 0);
   const pileBatches = (stock.data?.batches ?? []).filter((batch) => batch.wetKg > 0);
+  // Two returns on one facility day need the time to tell them apart.
+  const returnsPerDay = new Map<string, number>();
+  for (const batch of pileBatches) {
+    if (batch.kind !== "failed_run_return") continue;
+    const day = formatFacilityDay(batch.receivedAt, zone);
+    returnsPerDay.set(day, (returnsPerDay.get(day) ?? 0) + 1);
+  }
   const bands: PileBand[] = pileBatches.map((batch) => {
     // A return reads in return words; intake words would say the bin received a delivery.
     const returned = batch.kind === "failed_run_return";
-    return { label: returned ? `Returned ${formatFacilityDay(batch.receivedAt, zone)}` : batch.code, kg: estimatedDryKg === null ? batch.wetKg : batch.dryKg ?? 0, details: [
+    const returnDay = returned ? formatFacilityDay(batch.receivedAt, zone) : "";
+    const returnWhen = (returnsPerDay.get(returnDay) ?? 0) > 1 ? formatFacilityDateTime(batch.receivedAt, zone) : returnDay;
+    return { label: returned ? `Returned ${returnWhen}` : batch.code, kg: estimatedDryKg === null ? batch.wetKg : batch.dryKg ?? 0, details: [
       { label: "In the pile now", value: `${formatMassKg(batch.wetKg)} wet mass` },
       // A share is derived, so an empty pile leaves the row out.
       ...(currentWetKg > 0 ? [{ label: "Share of the pile", value: `${Math.round((batch.wetKg / currentWetKg) * PERCENT)}%` }] : []),

@@ -84,7 +84,8 @@ describe("Leftover material section", () => {
   it("shows the figures, the returns and the action on an eligible run", () => {
     mocks.rows = [savedReturn];
     render(<ProductionRunReturns runId={RUN_ID} facilityId={FACILITY_ID} feedstockWetMassKg={200} />);
-    expect(screen.getByText("Can still return")).toBeTruthy();
+    expect(screen.getByText("Fed into the run")).toBeTruthy();
+    expect(screen.queryByText("Can still return")).toBeNull();
     expect(screen.getByRole("link", { name: "Return bin" }).getAttribute("href")).toContain(BIN_ID);
     expect(screen.getByText(/50 kg wet mass/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Return to storage" })).toBeTruthy();
@@ -107,6 +108,13 @@ describe("Leftover material section", () => {
     render(<ProductionRunReturns runId={RUN_ID} facilityId={FACILITY_ID} feedstockWetMassKg={200} />);
     expect(screen.getByText("Nothing has gone back to storage yet.")).toBeTruthy();
     expect(screen.getByText(/material balance could not be loaded/)).toBeTruthy();
+  });
+
+  it("shows no allowance figure at rest when the run is blocked", () => {
+    mocks.eligibility = { ...eligible, eligible: false, code: "ineligible", blocker: "This run is in use.", remainingDryKg: 105 };
+    render(<ProductionRunReturns runId={RUN_ID} facilityId={FACILITY_ID} feedstockWetMassKg={200} />);
+    expect(screen.getByText("Conversion loss")).toBeTruthy();
+    expect(screen.queryByText("Can still return")).toBeNull();
   });
 
   it("keeps only the next step for a fully returned run", () => {
@@ -175,6 +183,13 @@ describe("Return to storage form", () => {
     expect(screen.getByText("Enter the moisture")).toBeTruthy();
     fill(/Returned moisture/, "10");
     expect(screen.getByText("Over by 80 kg")).toBeTruthy();
+  });
+
+  it("shows a sub-kilogram excess at storage precision", () => {
+    form();
+    fill(/Returned wet mass/, "100.001");
+    fill(/Returned moisture/, "0");
+    expect(screen.getByText("Over by 0.001 kg")).toBeTruthy();
   });
 
   it("saves a valid return with a request key", async () => {

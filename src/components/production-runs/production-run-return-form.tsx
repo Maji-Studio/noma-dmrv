@@ -16,6 +16,7 @@ import { useCorrectProductionRunReturn, useRecordProductionRunReturn } from "@/h
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { ConflictError } from "@/lib/conflict-ref";
 import { formatMassKg } from "@/lib/format-utils";
+import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import { parseWatchedNumber } from "@/lib/mass-moisture";
 import { RETURN_GRAMS_PER_KG, RETURN_OVER_CAP_MESSAGE } from "@/lib/production-run-returns/mass";
 import type { ProductionRunReturnRow } from "@/data-access/production-run-returns/view";
@@ -26,6 +27,7 @@ import {
 } from "./production-run-return-copy";
 
 const CORRECTION_SUBMIT_LABEL = "Save correction";
+const massKg = (kg: number) => formatMassKg(kg, { digits: MASS_KG_STORAGE_DECIMALS });
 
 export interface ProductionRunReturnFormProps {
   runId: string;
@@ -111,8 +113,8 @@ export function ProductionRunReturnForm({ runId, facilityId, feedstockTypeId, re
 
   const afterKg = returnDryKg === null || overAllowance ? null : allowanceKg - returnDryKg;
   // Name the gap: over the allowance, a missing moisture, or no mass yet.
-  const afterFigure = afterKg !== null ? formatMassKg(afterKg)
-    : returnDryKg !== null ? `Over by ${formatMassKg(returnDryKg - allowanceKg)}`
+  const afterFigure = afterKg !== null ? massKg(afterKg)
+    : returnDryKg !== null ? `Over by ${massKg(returnDryKg - allowanceKg)}`
       : wetKg !== null && wetKg > 0 ? AFTER_NEEDS_MOISTURE : AFTER_NEEDS_MASS;
   return (
     <form id={formId} onSubmit={onSubmit} className="space-y-20">
@@ -129,8 +131,8 @@ export function ProductionRunReturnForm({ runId, facilityId, feedstockTypeId, re
         moisture={{ id: "moisturePercent", required: true, error: errors.moisturePercent?.message, disabled: pending, placeholder: "e.g. 30",
           helperText: RETURN_MOISTURE_HELPER, registration: register("moisturePercent") }}
       />
-      <div role="group" aria-label={`${ALLOWANCE_CAPTION_BEFORE} ${formatMassKg(allowanceKg)} dry solids`} className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-8">
-        <ChangeBlock label={ALLOWANCE_CAPTION_BEFORE} figure={formatMassKg(allowanceKg)} caption={RETURN_DRY_CAPTION} />
+      <div role="group" aria-label={`${ALLOWANCE_CAPTION_BEFORE} ${massKg(allowanceKg)} dry solids`} className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-8">
+        <ChangeBlock label={ALLOWANCE_CAPTION_BEFORE} figure={massKg(allowanceKg)} caption={RETURN_DRY_CAPTION} />
         <ArrowRightIcon size={16} aria-hidden="true" className="self-center text-[var(--color-icon-secondary)]" />
         <ChangeBlock label={ALLOWANCE_CAPTION_AFTER} figure={afterFigure} caption={RETURN_DRY_CAPTION} muted={afterKg === null} />
       </div>

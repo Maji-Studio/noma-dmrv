@@ -118,10 +118,9 @@ export function ProductionRunReturns({ runId, facilityId, feedstockWetMassKg, re
   return (
     <div className="flex flex-col gap-16">
       {balance.error ? <Notice tone="error">{BALANCE_FAILED}</Notice> : figures && (
-        <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
           <ChangeBlock label={RETURN_FIGURE_LABELS.fedIn} figure={massKg(feedstockWetMassKg)} caption={`wet mass${DRY_CAPTION_SEPARATOR}${massKg(figures.consumedDryKg)} dry`} />
           <ChangeBlock label={RETURN_FIGURE_LABELS.returned} figure={massKg(returnedWetKg)} caption={`wet mass${DRY_CAPTION_SEPARATOR}${massKg(figures.activeReturnedDryKg)} dry`} />
-          <ChangeBlock label={RETURN_FIGURE_LABELS.remaining} figure={massKg(figures.consumedDryKg - figures.activeReturnedDryKg)} caption={RETURN_DRY_CAPTION.toLowerCase()} />
           <ChangeBlock label={CONVERSION_LOSS_LABEL} figure={massKg(figures.conversionLossDryKg)} caption={RETURN_DRY_CAPTION.toLowerCase()}
             labelAddon={<ExplanationInfo title={CONVERSION_LOSS_LABEL} hint={CONVERSION_LOSS_HINT} />} />
         </div>
