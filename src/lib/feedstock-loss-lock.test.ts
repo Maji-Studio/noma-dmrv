@@ -9,7 +9,7 @@
 import { describe, expect, it } from "vitest";
 import {
   findFeedstockLossBlocker, findFeedstockLossCrossing,
-  formatFeedstockLossCrossingMessage, formatFeedstockLossLockReason,
+  formatFeedstockLossCrossingMessage, formatFeedstockLossLockReason, formatReturnCrossingMessage,
 } from "@/lib/feedstock-loss-lock";
 import { formatFacilityDateTime } from "@/lib/format-utils";
 import { ALREADY_CORRECTED_MESSAGE, ALREADY_DELETED_MESSAGE } from "@/lib/loss-correction-messages";
@@ -215,5 +215,18 @@ describe("feedstock Lost mass crossing guidance", () => {
     );
     expect(message).not.toMatch(/[\u2013\u2014]/);
     expect(message).not.toBe(formatFeedstockLossCrossingMessage(blocker, "UTC"));
+  });
+});
+
+describe("failed-run return crossing guidance", () => {
+  it("words the refusal for a return, not a loss", () => {
+    const blocker = entry({ kind: "count", code: null, occurredAt: LATE, recordedAt: EARLY });
+    const message = formatReturnCrossingMessage(blocker, TIME_ZONE);
+    expect(message).toBe(
+      `The return was not changed. The new time is before the stock count ${blocker.reason}` +
+      ` (${formatFacilityDateTime(LATE, TIME_ZONE)}).` +
+      " Choose a time after it, or reverse this return and record a new one.",
+    );
+    expect(message).not.toMatch(/Lost mass|[–—]/);
   });
 });

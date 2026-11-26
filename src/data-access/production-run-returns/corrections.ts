@@ -6,7 +6,7 @@ import type { OrgContext } from '@/lib/auth/server';
 import { retryTransaction } from '@/lib/db/transaction-retry';
 import { DomainError } from '@/lib/domain-errors';
 import { SafeError } from '@/lib/errors';
-import { findFeedstockLossBlocker, findFeedstockLossCrossing, formatFeedstockLossCrossingMessage } from '@/lib/feedstock-loss-lock';
+import { findFeedstockLossBlocker, findFeedstockLossCrossing, formatReturnCrossingMessage } from '@/lib/feedstock-loss-lock';
 import { reverseReturnMass, RETURN_SNAPSHOT_VERSION } from '@/lib/production-run-returns/mass';
 import { correctProductionRunReturnSchema, type CorrectProductionRunReturnInput } from '@/schemas/production-run-returns';
 import { findMovementRequest, lockMovementRequest, requestFingerprint } from '../bin-movement-requests';
@@ -43,7 +43,7 @@ export async function correctProductionRunReturnInTransaction(ctx: OrgContext, t
     const crossing = findFeedstockLossCrossing(stock.entries, original.id, input.replacement.occurredAt);
     if (crossing) {
       const timeZone = await getOutputStockFacilityTimezone(ctx, source.run.facilityId, tx);
-      const message = formatFeedstockLossCrossingMessage(crossing, timeZone);
+      const message = formatReturnCrossingMessage(crossing, timeZone);
       throw new DomainError('validation_failed', message, {
         issues: [{ path: ['replacement', 'occurredAt'], code: 'validation_failed', message }],
       });

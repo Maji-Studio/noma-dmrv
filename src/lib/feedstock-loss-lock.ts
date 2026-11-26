@@ -60,9 +60,18 @@ export function formatFeedstockLossLockReason(blocker: FeedstockLedgerEntry, tim
   );
 }
 
-export function formatFeedstockLossCrossingMessage(blocker: FeedstockLedgerEntry, timeZone: string): string {
+function crossingTimeSentence(blocker: FeedstockLedgerEntry, timeZone: string): string {
   const label = feedstockDependencyLabel(blocker);
-  return `Lost mass was not changed. The new time is before the ${label} ${blocker.code ?? blocker.reason}` +
-    ` (${formatFacilityDateTime(blocker.occurredAt, timeZone)}).` +
+  return `The new time is before the ${label} ${blocker.code ?? blocker.reason}` +
+    ` (${formatFacilityDateTime(blocker.occurredAt, timeZone)}).`;
+}
+
+export function formatFeedstockLossCrossingMessage(blocker: FeedstockLedgerEntry, timeZone: string): string {
+  return `Lost mass was not changed. ${crossingTimeSentence(blocker, timeZone)}` +
     ' Choose a time after it, or delete this entry and record a new loss.';
+}
+
+export function formatReturnCrossingMessage(blocker: FeedstockLedgerEntry, timeZone: string): string {
+  return `The return was not changed. ${crossingTimeSentence(blocker, timeZone)}` +
+    ' Choose a time after it, or reverse this return and record a new one.';
 }
