@@ -124,7 +124,7 @@ export function ProductionRunReturns({ runId, facilityId, feedstockWetMassKg, re
           <ChangeBlock label={RETURN_FIGURE_LABELS.fedIn} figure={massKg(feedstockWetMassKg)} caption={`wet mass${DRY_CAPTION_SEPARATOR}${massKg(figures.consumedDryKg)} dry`} />
           <ChangeBlock label={RETURN_FIGURE_LABELS.returned} figure={massKg(returnedWetKg)} caption={`wet mass${DRY_CAPTION_SEPARATOR}${massKg(figures.activeReturnedDryKg)} dry`} />
           <ChangeBlock label={CONVERSION_LOSS_LABEL} figure={massKg(figures.conversionLossDryKg)} caption={RETURN_DRY_CAPTION.toLowerCase()}
-            labelAddon={<ExplanationInfo title={CONVERSION_LOSS_LABEL} hint={CONVERSION_LOSS_HINT} />} />
+            labelAddon={<ExplanationInfo title={CONVERSION_LOSS_LABEL} hint={CONVERSION_LOSS_HINT} className="-my-4" />} />
         </div>
       )}
       {!check.eligible && check.blocker && (canWrite || !fullyReturned) && (

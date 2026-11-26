@@ -184,6 +184,17 @@ it("says when and by whom a deleted Lost mass was deleted", async () => {
   await act(async () => renderer.unmount());
 });
 
+it("charts a returns-only feedstock bin from its first failed-run return", async () => {
+  const base = { recordedAt: INSTANT, actorName: null, code: null, reason: "", countedWetKg: null, moisturePercent: null, sourceId: null };
+  state.feedstock = { currentWetKg: 50, batches: [], entries: [
+    { ...base, id: "return", kind: "failed_run_return", occurredAt: INSTANT, wetDeltaKg: 50, beforeWetKg: 0, afterWetKg: 50, estimatedDryKg: 40 },
+  ] };
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<FeedstockBinBalance storageLocationId={BIN_ID} facilityId={FACILITY_ID} capacityKg={100} />); });
+  expect(renderer.root.findAllByType(StockLevelChart)).toHaveLength(1);
+  await act(async () => renderer.unmount());
+});
+
 it("charts feedstock after its first intake when a run was dated earlier without claiming missing intake mass", async () => {
   const base = { recordedAt: INSTANT, actorName: null, code: null, reason: "", countedWetKg: null, moisturePercent: null, sourceId: null };
   state.feedstock = { currentWetKg: 40, batches: [], entries: [

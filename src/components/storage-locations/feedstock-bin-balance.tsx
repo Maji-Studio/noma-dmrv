@@ -40,8 +40,9 @@ const HISTORY_HINT = "Every entry that moved feedstock in or out of this bin, wi
 
 /** The bin's level after each entry: estimated dry solids, with the rest of the wet stock as water. */
 function feedstockStockPoints(entries: readonly FeedstockLedgerEntry[]): StockLevelPoint[] {
-  const firstIntake = entries.findIndex(entry => entry.kind === "intake");
-  const stocked = firstIntake < 0 ? [] : entries.slice(firstIntake);
+  // An uncarbonized bin never takes intake; its stock arrives as failed-run returns.
+  const firstStock = entries.findIndex(entry => entry.kind === "intake" || entry.kind === "failed_run_return");
+  const stocked = firstStock < 0 ? [] : entries.slice(firstStock);
   if (stocked.some(entry => entry.estimatedDryKg === null)) return [];
   return stocked.map((entry) => ({
     t: Date.parse(entry.occurredAt),
