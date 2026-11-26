@@ -220,7 +220,7 @@ async function updateVehicleOnce(
     const emissionSources = await loadRunEmissionContributors(ctx, linkedRuns.map(run => run.id), tx, { includeArchived: true });
     const failedBatchIds = emissionSources.filter(run => run.kind === "failed" && run.creditBatchId).map(run => run.creditBatchId!);
     const targets = [...new Set(failedBatchIds)].map(entityId => ({ entityType: "creditBatch" as const, entityId }));
-    const keys = await lockFailedEmissionBatchArtifacts(ctx, tx, failedBatchIds,
+    const keys = await lockFailedEmissionBatchArtifacts(ctx, tx, failedBatchIds, "vehicle",
       () => new DomainError("conflict", VEHICLE_REFERENCES_CHANGED, { retryable: true }), targets);
     for (const target of targets) lineage.push(...await getLineageUnderLockedArtifacts(ctx, tx, keys, target));
     submitted = lineage.filter(isSubmittedLineageRow);

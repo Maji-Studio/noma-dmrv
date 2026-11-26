@@ -48,7 +48,7 @@ export async function prepareFailedFeedstockEmissionWrite(
       // policy. Reservation synchronization does not add a new Sent refusal.
       const contributors = await loadRunEmissionContributors(ctx, runs.map(run => run.id), tx, { includeArchived: true });
       const batchIds = [...new Set(contributors.filter(run => run.kind === "failed" && run.creditBatchId).map(run => run.creditBatchId!))];
-      await lockFailedEmissionBatchArtifacts(ctx, tx, batchIds, changed);
+      await lockFailedEmissionBatchArtifacts(ctx, tx, batchIds, "feedstock", changed);
       return async () => {};
     }
     // Capture ownership before the intake mutation; the returned finish step
@@ -59,7 +59,7 @@ export async function prepareFailedFeedstockEmissionWrite(
     const finish: (() => Promise<void>)[] = [];
     for (const run of runs) finish.push(await prepareFailedRunEmissionWrite(ctx, tx, run.id, {
       feedstockTypeIds: prospectiveTypeId ? [prospectiveTypeId] : [],
-    }));
+    }, "feedstock"));
     return async () => freeze(async () => { for (const check of finish) await check(); });
   };
 }

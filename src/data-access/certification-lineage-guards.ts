@@ -40,7 +40,7 @@ import { readRecordDependents } from "./record-lock-dependents";
 
 export type CertifiedLineageEntityType = Exclude<
   CertificationLineageLockEntityType,
-  "transportLeg" | "vehicle"
+  "transportLeg" | "vehicle" | "facility" | "feedstockType"
 >;
 
 export interface CertifiedLineageTarget {

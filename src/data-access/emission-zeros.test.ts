@@ -147,7 +147,7 @@ it("accepts the same empty line as the read when a value awaits a future applica
   mocks.available.mockResolvedValue([{ creditBatchId, applicationDate: new Date("2026-04-01") }]);
   expect(await recordEmissionZeros(ctx, input)).toEqual({ entryIds: ["zero"] });
   const tx = mocks.batch.mock.calls[0][1];
-  expect(mocks.automatic).toHaveBeenCalledWith(ctx, [creditBatchId], {}, tx);
+  expect(mocks.automatic).toHaveBeenCalledWith(ctx, [creditBatchId], { removalId: input.removalId }, tx);
   expect(mocks.available).toHaveBeenCalledWith(ctx, [creditBatchId], tx);
 });
 it("refuses undo with a stale Removal review token", async () => {

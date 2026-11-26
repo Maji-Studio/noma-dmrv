@@ -122,7 +122,7 @@ export async function deleteProductionRunInTransaction(
   const eventTie = earliestFeedstockEventTie(previousDraws);
   await snapshotStock?.(tx, [...lockedFeedstockStorageLocationIds, locked.biocharStorageLocationId]);
 
-  const finishFailedEmissionWrite = await prepareFailedRunEmissionWrite(ctx, tx, productionRunId);
+  const finishFailedEmissionWrite = await prepareFailedRunEmissionWrite(ctx, tx, productionRunId, {}, "productionRun", "delete");
   const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
     await getTransportFreezeFeedstockIds(ctx, tx, { runIds: [productionRunId], binIds: lockedFeedstockStorageLocationIds }),
     { mutation: "delete", subject: "production run" });

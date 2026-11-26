@@ -87,7 +87,7 @@ it("authorizes and delegates with comments enabled", async () => {
   vi.mocked(getLatestTemplateObservations).mockResolvedValue([{
     id: "current", externalTemplateId: "template", definition: { groups: [] }, enrichment: {}, lineSources: {},
   }] as never);
-  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ batch: { lineageFacts: { runs: [], runForwards: {} } } } as never);
+  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ batch: { batch: { id: "batch", productionEmissionsClaimedByRemovalId: null }, lineageFacts: { runs: [], runForwards: {} } } } as never);
   vi.mocked(getTransportLegsForEntities).mockResolvedValue([]);
   vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([]);
   vi.mocked(getEmissionAutomaticMasses).mockResolvedValue({ runs: {}, legs: {} });
@@ -118,7 +118,7 @@ it("loads saved template order and group names without registry access", async (
     enrichment: {}, lineSources: withTemplateOrder(fixture as GhgEntryTemplate, resolveLineSources({ definition })),
   }] as never);
   vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([]);
-  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ batch: { lineageFacts: { runs: [], runForwards: {} } } } as never);
+  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ batch: { batch: { id: "batch", productionEmissionsClaimedByRemovalId: null }, lineageFacts: { runs: [], runForwards: {} } } } as never);
   vi.mocked(getTransportLegsForEntities).mockResolvedValue([]);
   vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([]);
   vi.mocked(getEmissionAutomaticMasses).mockResolvedValue({ runs: {}, legs: {} });
@@ -137,6 +137,7 @@ it("shows the lines when a delivery has no load mass, leaving delivery transport
   vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([]);
   vi.mocked(loadCreditBatchRollups).mockResolvedValue({
     batch: {
+      batch: { id: "batch", productionEmissionsClaimedByRemovalId: null },
       lineageFacts: {
         runs: [],
         runForwards: {
@@ -202,7 +203,7 @@ it("returns typed entry details and retains removed lines for re-entry", async (
   vi.mocked(getLatestTemplateObservations).mockResolvedValue([current] as never);
   vi.mocked(getTemplateObservationsByIds).mockResolvedValue([{ ...current, id: "previous" }] as never);
   vi.mocked(loadCreditBatchRollups).mockResolvedValue({
-    batch: { lineageFacts: { runs: [], runForwards: {} } },
+    batch: { batch: { id: "batch", productionEmissionsClaimedByRemovalId: null }, lineageFacts: { runs: [], runForwards: {} } },
   } as never);
   vi.mocked(getTransportLegsForEntities).mockResolvedValue([]);
   vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([]);
@@ -285,7 +286,7 @@ it("shows re-entry for unit changes and keeps other lines healthy", async () => 
   previous.enrichment.changed.electricity_use.unit = "kWh";
   vi.mocked(getTemplateObservationsByIds).mockResolvedValue([{ ...previous, id: "confirmed" }] as never);
   vi.mocked(loadCreditBatchRollups).mockResolvedValue({
-    batch: { lineageFacts: { runs: [], runForwards: {} } },
+    batch: { batch: { id: "batch", productionEmissionsClaimedByRemovalId: null }, lineageFacts: { runs: [], runForwards: {} } },
   } as never);
   vi.mocked(getTransportLegsForEntities).mockResolvedValue([]);
   vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([]);

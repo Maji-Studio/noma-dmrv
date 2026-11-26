@@ -154,11 +154,13 @@ export async function reallocateRunsForBins(
   if (!rewrites.length) return [];
 
   const finishFailedEmissionWrites = [];
+  const subject = options.change?.subject ?? "production run";
+  const subjectEntityType = subject === "production run" ? "productionRun" : subject === "credit batch" ? "creditBatch" : subject;
   if (!options.allowSentRewrite) for (const { run } of rewrites) {
     if (run.status !== FAILED_PRODUCTION_RUN_STATUS) continue;
     finishFailedEmissionWrites.push(await prepareFailedRunEmissionWrite(ctx, tx, run.id, {
       feedstockDraws: draws.filter(draw => draw.productionRunId === run.id),
-    }));
+    }, subjectEntityType, options.change?.mutation === "delete" ? "delete" : "update"));
   }
 
   // One snapshot over every rewritten run, so a handoff between them compares

@@ -115,7 +115,7 @@ it("loads three batches once per bulk loader and matches the per-batch entry fac
   const ids = batches.map(batch => batch.id);
   expect(listEmissionEntriesForBatches).toHaveBeenCalledExactlyOnceWith(ctx, ids);
   expect(getTemplateObservationsByIds).toHaveBeenCalledExactlyOnceWith(ctx, ["previous", "missing"]);
-  expect(loadBatchesEmissionAutomaticFacts).toHaveBeenCalledExactlyOnceWith(ctx, ids);
+  expect(loadBatchesEmissionAutomaticFacts).toHaveBeenCalledExactlyOnceWith(ctx, ids, { removalId: undefined });
   expect(loadCreditBatchRollups).toHaveBeenCalledExactlyOnceWith(ctx, ids);
   expect(requireOrgFacility).toHaveBeenCalledExactlyOnceWith(ctx, "facility");
   expect(listEmissionEntries).not.toHaveBeenCalled();
@@ -135,7 +135,7 @@ it("only loads batches with a readable observation, including batches without en
     readable: { entries: [], previousObservations: new Map(), automaticFigures: {} },
   });
   expect(listEmissionEntriesForBatches).toHaveBeenCalledExactlyOnceWith(ctx, ["readable"]);
-  expect(loadBatchesEmissionAutomaticFacts).toHaveBeenCalledExactlyOnceWith(ctx, ["readable"]);
+  expect(loadBatchesEmissionAutomaticFacts).toHaveBeenCalledExactlyOnceWith(ctx, ["readable"], { removalId: undefined });
   expect(loadCreditBatchRollups).toHaveBeenCalledExactlyOnceWith(ctx, ["readable"]);
   vi.clearAllMocks();
   expect(await loadBatchEmissionContext(ctx, "facility", batches.slice(1), facilityFacts)).toEqual({ batchFacts: {} });
@@ -347,6 +347,7 @@ it("shares discovery across different Removals but reads each Removal's retained
   const removalIds = ["first", "second", "third"];
   const loaded = await Promise.all(removalIds.map(ownedRemovalId => loadBatchEmissionContext(ctx, "facility",
     [{ id: "one", removalTemplateId: "template" }], facilityFacts, { carryReads: cache, ownedRemovalId })));
+  for (const removalId of removalIds) expect(loadBatchesEmissionAutomaticFacts).toHaveBeenCalledWith(ctx, ["one"], { removalId });
   const calls = vi.mocked(loadFacilityEmissionEntryCarry).mock.calls;
   expect(calls.filter(call => !call[5])).toHaveLength(1);
   expect(calls.filter(call => call[5]).map(call => call[4]?.ownedRemovalId).sort()).toEqual([...removalIds].sort());

@@ -1,3 +1,4 @@
+import { loadCountedFailedTransportOwners } from "./production-source-manifest";
 import { loadRunEmissionContributors } from "./credit-batch-emission-contributors";
 import { getFeedstockTransportOwners } from "./feedstock-transport-ownership";
 import { loadFacilityEmissionEntryFlows } from "./emission-entry-energy";
@@ -143,6 +144,7 @@ export async function getRecordedEnergyInputs(
       .where(facilityRuns),
     reader
       .select({
+        productionEmissionsClaimedByRemovalId: creditBatches.productionEmissionsClaimedByRemovalId,
         id: creditBatches.id,
         code: creditBatches.code,
         startDate: creditBatches.startDate,
@@ -273,6 +275,13 @@ export async function getRecordedEnergyInputs(
     getFeedstockTransportOwners(ctx, feedstockRows.map((row) => row.id), reader),
     loadRunEmissionContributors(ctx, runRows.map(run => run.id), reader),
   ]);
+  const failed = contributors.filter(run => run.kind === "failed" && run.creditBatchId !== null);
+  const countedFailedOwners = await loadCountedFailedTransportOwners(ctx, failed, reader,
+    new Map(batchRows.map(batch => [batch.id, batch.productionEmissionsClaimedByRemovalId])));
+  const failedRunIds = new Set(failed.map(run => run.runId));
+  for (const [id, runId] of transportOwners) {
+    if (failedRunIds.has(runId) && !countedFailedOwners.has(id)) transportOwners.delete(id);
+  }
   const batchByRun = new Map(contributors.map(run => [run.runId, run.creditBatchId]));
 
   const legsByFeedstock = new Map<string, EnergyFeedstockInput["legs"]>();

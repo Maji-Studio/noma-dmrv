@@ -28,6 +28,8 @@ interface EvidenceRemovalScope {
   removalId: string | null;
   memberBatches: { id: string }[];
   lineages: ChainOfCustodyData[];
+  /** Counted material and failed-owned intakes from the production-claim scope. */
+  transportFeedstockIds?: readonly string[];
 }
 
 type MirrorCandidateDocument = DocumentRow & {
@@ -95,8 +97,12 @@ export async function loadEvidenceMirrorSummaryForScope(
       `Delivery ${lineage.delivery.code}`,
     );
     for (const feedstock of lineage.feedstocks) {
+      if (scope.transportFeedstockIds && !scope.transportFeedstockIds.includes(feedstock.id)) continue;
       add("feedstock", feedstock.id, `Feedstock ${feedstock.code}`);
     }
+  }
+  for (const id of scope.transportFeedstockIds ?? []) {
+    if (!entityIds.get("feedstock")?.has(id)) add("feedstock", id, `Feedstock ${id}`);
   }
   for (const batch of scope.memberBatches) {
     add("credit_batch", batch.id, `Credit batch ${batch.id}`);

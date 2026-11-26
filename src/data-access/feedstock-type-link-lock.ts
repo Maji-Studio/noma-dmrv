@@ -124,7 +124,7 @@ export async function getLockedFeedstockTypeLinkLock(
   const targets = batchIds.sort().map(entityId => ({ entityType: "creditBatch" as const, entityId }));
   // The caller holds the feedstock-type row. Newly discovered failed-source
   // artifacts cannot be waited on behind that row lock.
-  const keys = await lockFailedEmissionBatchArtifacts(ctx, tx, contributors.filter(run => run.kind === "failed" && run.creditBatchId).map(run => run.creditBatchId!),
+  const keys = await lockFailedEmissionBatchArtifacts(ctx, tx, contributors.filter(run => run.kind === "failed" && run.creditBatchId).map(run => run.creditBatchId!), "feedstockType",
     () => new DomainError("conflict", "Certification inputs changed while saving the feedstock type. Refresh and retry.", { retryable: true }), targets);
   const lineage = (await Promise.all(targets.map(target => getLineageUnderLockedArtifacts(ctx, tx, keys, target)))).flat();
   const removals = new Set<string>();

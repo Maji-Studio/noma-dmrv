@@ -896,7 +896,7 @@ export async function getDashboardAttentionItems(
       ...capOrGroup(removalRows.rejected, removalRows.rejected.length, () =>
         groupedRow("removal-rejected", "Removals", REMOVAL_REJECTED_ATTENTION_TITLE, removalRows.rejected.length, removalsList, removalRows.rejected)),
       ...capOrGroup(failedEmissionRows, failedEmissionRows.length, (): DashboardAttentionItem => ({
-        ...groupedRow("failed-run-emissions", "Production runs", FAILED_RUN_EMISSION_GROUP_TITLE,
+        ...groupedRow("failed-run-emissions", "Credit batches", FAILED_RUN_EMISSION_GROUP_TITLE,
           failedEmissionRows.length, batchList, failedEmissionRows),
         scope: "facility",
       })),

@@ -28,6 +28,7 @@ beforeEach(() => {
   vi.mocked(getTransportFeedstockIdsCountedElsewhere).mockResolvedValue(new Set());
   vi.mocked(loadBatchEmissionContributors).mockResolvedValue({});
   vi.mocked(loadCreditBatchRollups).mockResolvedValue(Object.fromEntries(["a", "b"].map((id) => [id, {
+    batch: { id, productionEmissionsClaimedByRemovalId: null },
     lineageFacts: {
       runs: [{ id, feedstocks: [{ id: "feedstock", ownsTransport: true }, { id: "feedstock", ownsTransport: true }] }],
       applications: [{ id: "application" }, { id: "application" }, { id: "second-application" }],
@@ -66,7 +67,7 @@ it("counts unique records and retains batch delivery shares with a constant numb
 });
 
 it("keeps delivery counts when their figure is unknown and leaves other figures readable", async () => {
-  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ a: { lineageFacts: {
+  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ a: { batch: { id: "a", productionEmissionsClaimedByRemovalId: null }, lineageFacts: {
     runs: [{ id: "a", feedstocks: [] }], applications: [],
     runForwards: { a: [{ id: "product", deliveries: [{ id: "delivery", code: "DL-1", wetMassKg: null }] }] },
   } } } as never);
@@ -87,7 +88,7 @@ it("threads the supplied transaction to every automatic-facts reader", async () 
 });
 
 it("does not count or request earlier-run transport in a later batch", async () => {
-  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ b: { lineageFacts: {
+  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ b: { batch: { id: "b", productionEmissionsClaimedByRemovalId: null }, lineageFacts: {
     runs: [{ id: "b", feedstocks: [{ id: "earlier", ownsTransport: false }] }],
     applications: [], runForwards: {},
   } } } as never);
@@ -97,7 +98,7 @@ it("does not count or request earlier-run transport in a later batch", async () 
 });
 
 it("names the other batches that count an owned-elsewhere batch's transport", async () => {
-  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ b: { lineageFacts: {
+  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ b: { batch: { id: "b", productionEmissionsClaimedByRemovalId: null }, lineageFacts: {
     runs: [{ id: "b", feedstocks: [{ id: "f1", ownsTransport: false }, { id: "f2", ownsTransport: false }] }],
     applications: [], runForwards: {},
   } } } as never);
@@ -116,7 +117,7 @@ it("names the other batches that count an owned-elsewhere batch's transport", as
 
 it("adds failed production inputs without adding failed output to material figures", async () => {
   vi.mocked(loadBatchEmissionContributors).mockResolvedValue({ a: {
-    materialMembers: [], failedContributors: [{ runId: "failed", feedstockIds: ["failed-feedstock"] }],
+    materialMembers: [], failedContributors: [{ runId: "failed", creditBatchId: "a", feedstockIds: ["failed-feedstock"] }],
   } } as never);
   vi.mocked(getFeedstockTransportOwners).mockResolvedValue(new Map([["failed-feedstock", "failed"]]));
   vi.mocked(getProductionRunsForCertification).mockResolvedValue([
@@ -136,11 +137,11 @@ it("adds failed production inputs without adding failed output to material figur
 
 
 it("excludes failed-owned transport already counted by another Removal", async () => {
-  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ a: { lineageFacts: {
+  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ a: { batch: { id: "a", productionEmissionsClaimedByRemovalId: null }, lineageFacts: {
     runs: [], applications: [], runForwards: {},
   } } } as never);
   vi.mocked(loadBatchEmissionContributors).mockResolvedValue({ a: {
-    materialMembers: [], failedContributors: [{ runId: "failed", feedstockIds: ["failed-feedstock"] }],
+    materialMembers: [], failedContributors: [{ runId: "failed", creditBatchId: "a", feedstockIds: ["failed-feedstock"] }],
   } } as never);
   vi.mocked(getFeedstockTransportOwners).mockResolvedValue(new Map([["failed-feedstock", "failed"]]));
   vi.mocked(getTransportFeedstockIdsCountedElsewhere).mockResolvedValue(new Set(["failed-feedstock"]));
@@ -148,4 +149,19 @@ it("excludes failed-owned transport already counted by another Removal", async (
   expect(getTransportLegsForEntities).toHaveBeenCalledExactlyOnceWith(ctx, "feedstock", [], expect.anything());
   expect(facts.a.automaticFigures["feedstock-transport"]).toEqual({ magnitude: "0", unit: "km * tonne" });
   expect(facts.a.automaticRecordCounts?.["feedstock-transport"]).toBe(0);
+});
+
+
+it.each([undefined, "reviewing-removal", null])("resolves failed transport relative to the batch claim or explicit review %s", async removalId => {
+  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ a: {
+    batch: { id: "a", productionEmissionsClaimedByRemovalId: "claiming-removal" },
+    lineageFacts: { runs: [], applications: [], runForwards: {} },
+  } } as never);
+  vi.mocked(loadBatchEmissionContributors).mockResolvedValue({ a: {
+    materialMembers: [], failedContributors: [{ runId: "failed", creditBatchId: "a", feedstockIds: ["failed-feedstock"] }],
+  } } as never);
+  vi.mocked(getFeedstockTransportOwners).mockResolvedValue(new Map([["failed-feedstock", "failed"]]));
+  await loadBatchesEmissionAutomaticFacts(ctx, ["a"], { removalId });
+  expect(getTransportFeedstockIdsCountedElsewhere).toHaveBeenCalledExactlyOnceWith(ctx, ["failed-feedstock"],
+    removalId === undefined ? "claiming-removal" : removalId, expect.anything());
 });

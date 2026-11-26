@@ -23,10 +23,15 @@ import {
 } from "./utils";
 
 type Executor = DbTransaction | typeof db;
+const ADVISORY_LOCK_HASH_SEED = 0;
 const PRODUCTION_PROCESS_CURRENT_LOCK_SCOPE = "production-process-current";
 
+export function processScopeLockKey(scope: { facilityId: string; feedstockTypeId: string }): string {
+  return `${PRODUCTION_PROCESS_CURRENT_LOCK_SCOPE}:${scope.facilityId}:${scope.feedstockTypeId}`;
+}
+
 export function sortProcessScopes<T extends { facilityId: string; feedstockTypeId: string }>(scopes: T[]): T[] {
-  return scopes.sort((a, b) => `${a.facilityId}:${a.feedstockTypeId}`.localeCompare(`${b.facilityId}:${b.feedstockTypeId}`));
+  return scopes.sort((a, b) => processScopeLockKey(a).localeCompare(processScopeLockKey(b)));
 }
 
 export async function lockProductionProcessScope(
@@ -34,7 +39,7 @@ export async function lockProductionProcessScope(
   params: { facilityId: string; feedstockTypeId: string },
 ): Promise<void> {
   await executor.execute(
-    sql`select pg_advisory_xact_lock(hashtextextended(${`${PRODUCTION_PROCESS_CURRENT_LOCK_SCOPE}:${params.facilityId}:${params.feedstockTypeId}`}, 0))`,
+    sql`select pg_advisory_xact_lock(hashtextextended(${processScopeLockKey(params)}, ${ADVISORY_LOCK_HASH_SEED}))`,
   );
 }
 
@@ -44,7 +49,7 @@ export async function tryLockProductionProcessScope(
 ): Promise<boolean> {
   requireOrgScope(ctx);
   const rows = await tx.execute<{ locked: boolean }>(
-    sql`select pg_try_advisory_xact_lock(hashtextextended(${`${PRODUCTION_PROCESS_CURRENT_LOCK_SCOPE}:${params.facilityId}:${params.feedstockTypeId}`}, 0)) as locked`,
+    sql`select pg_try_advisory_xact_lock(hashtextextended(${processScopeLockKey(params)}, ${ADVISORY_LOCK_HASH_SEED})) as locked`,
   );
   return rows.rows[0]?.locked === true;
 }

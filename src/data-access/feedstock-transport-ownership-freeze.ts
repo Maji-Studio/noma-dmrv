@@ -100,8 +100,9 @@ export async function prepareFeedstockTransportOwnershipFreeze(
       ...(before.get(id) ?? []).map(owner => owner.creditBatchId),
       ...(after.get(id) ?? []).map(owner => owner.creditBatchId),
     ]).filter(id => id !== change.deletedCreditBatchId),
+    change.subject === "production run" ? "productionRun" : change.subject === "credit batch" ? "creditBatch" : change.subject,
     async () => new DomainError("conflict", `Certification records for ${await feedstockLabel(ctx, tx, changed[0])} are being changed. Save again in a moment.`, { retryable: true }),
-    [...targets, ...changed.flatMap(id => previousTargets.get(id) ?? [])]);
+    [...targets, ...changed.flatMap(id => previousTargets.get(id) ?? [])], change.mutation);
     for (const target of targets) {
       const lineage = await getLineageUnderLockedArtifacts(ctx, tx, artifacts, target);
       for (const previousTarget of previousTargets.get(target.entityId) ?? []) {

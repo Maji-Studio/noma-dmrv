@@ -1,3 +1,4 @@
+import { formatCertificationLineageLockMessage, type CertificationLineageLockEntityType, type CertificationLineageMutation } from "@/lib/certification/lineage-lock-message";
 import { FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { and, eq, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
@@ -5,7 +6,7 @@ import { certificationSubmissions, certifierRemovals, creditBatches, feedstocks,
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
 import { canTransferProductionReservation } from "@/lib/certification/production-reservation-policy";
-import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
+import { recordLocks } from "@/lib/record-lock";
 import { assertLockedLineagesAllowMutation, CertificationLineageChangedError, tryLockCertifiedLineageArtifacts } from "./certification-lineage-guards";
 import { loadRunEmissionContributors } from "./credit-batch-emission-contributors";
 import { sortProcessScopes, tryLockProductionProcessScope } from "./production-processes";
@@ -16,27 +17,29 @@ const changed = () => new DomainError("conflict", "Production emission sources c
 /** Acquire artifacts before synchronizing reservations; preserve each caller's target set. */
 export async function lockFailedEmissionBatchArtifacts(
   ctx: OrgContext, tx: DbTransaction, batchIds: readonly string[],
+  subjectEntityType: CertificationLineageLockEntityType,
   conflict: () => Error | Promise<Error> = changed,
   targets: Parameters<typeof tryLockCertifiedLineageArtifacts>[2] = [...new Set(batchIds)].sort()
     .map(entityId => ({ entityType: "creditBatch" as const, entityId })),
+  mutation: CertificationLineageMutation = "update",
 ) {
   requireOrgScope(ctx);
   const keys = await tryLockCertifiedLineageArtifacts(ctx, tx, targets);
   if (!keys) throw await conflict();
-  await synchronizeFailedEmissionBatches(ctx, tx, batchIds);
+  await synchronizeFailedEmissionBatches(ctx, tx, batchIds, subjectEntityType, mutation);
   return keys;
 }
 
 /** Late targets use try locks: callers may already hold run, stock or process locks. */
 export async function assertFailedEmissionBatchesEditable(
   ctx: OrgContext, tx: DbTransaction, batchIds: readonly string[], mutation: "update" | "delete" = "update",
-  subjectEntityType: "productionRun" | "creditBatch" = "productionRun",
+  subjectEntityType: CertificationLineageLockEntityType = "productionRun",
 ): Promise<void> {
   requireOrgScope(ctx);
   const ids = [...new Set(batchIds)].sort();
   if (!ids.length) return;
   const targets = ids.map(entityId => ({ entityType: "creditBatch" as const, entityId }));
-  const keys = await lockFailedEmissionBatchArtifacts(ctx, tx, ids);
+  const keys = await lockFailedEmissionBatchArtifacts(ctx, tx, ids, subjectEntityType, changed, targets, mutation);
   try {
     await assertLockedLineagesAllowMutation(ctx, tx, keys, targets.map(target => ({
       target, mutation, subjectEntityType,
@@ -50,6 +53,8 @@ export async function assertFailedEmissionBatchesEditable(
 /** Ownership writers also protect every old/new owner batch, across facilities. */
 export async function synchronizeFailedEmissionBatches(
   ctx: OrgContext, tx: DbTransaction, batchIds: readonly string[],
+  subjectEntityType: CertificationLineageLockEntityType,
+  mutation: CertificationLineageMutation = "update",
 ): Promise<void> {
   requireOrgScope(ctx);
   const ids = [...new Set(batchIds)].sort();
@@ -68,11 +73,13 @@ export async function synchronizeFailedEmissionBatches(
     const [removal] = owner ? await tx.select({ code: certifierRemovals.code }).from(certifierRemovals).where(and(
       eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, owner.localEntityId),
     )) : [];
-    const lock = recordLocks.productionRun({ dependents: [], removals: [{
+    const buildLock = subjectEntityType in recordLocks
+      ? recordLocks[subjectEntityType as keyof typeof recordLocks] : recordLocks.removal;
+    const lock = buildLock({ dependents: [], removals: [{
       id: owner?.localEntityId ?? batch.productionEmissionsClaimReservedBySubmissionId,
       label: removal?.code, submissions: [{ status: "draft", inFlight: true }], statements: [],
     }] });
-    throw new DomainError("certification_locked", withRecordLockGuidance("This production run cannot change while its production emissions are being sent.", lock));
+    throw new DomainError("certification_locked", formatCertificationLineageLockMessage({ lock, mutation, subjectEntityType, lineageEntityType: subjectEntityType }));
   }
 }
 
@@ -86,6 +93,8 @@ type ProspectiveRun = { facilityId?: string; status?: string; feedstockTypeIds?:
  */
 export async function prepareFailedRunEmissionWrite(
   ctx: OrgContext, tx: DbTransaction, runId: string, prospective: ProspectiveRun = {},
+  subjectEntityType: CertificationLineageLockEntityType = "productionRun",
+  mutation: "update" | "delete" = "update",
 ): Promise<() => Promise<void>> {
   requireOrgScope(ctx);
   const [run] = await tx.select({ facilityId: productionRuns.facilityId, status: productionRuns.status }).from(productionRuns).where(and(
@@ -106,7 +115,7 @@ export async function prepareFailedRunEmissionWrite(
   sortProcessScopes(scopes);
   for (const scope of scopes) if (!await tryLockProductionProcessScope(ctx, tx, scope)) throw changed();
   const oldBatchIds = old.filter(row => row.kind === "failed" && row.creditBatchId).map(row => row.creditBatchId!);
-  await assertFailedEmissionBatchesEditable(ctx, tx, oldBatchIds);
+  await assertFailedEmissionBatchesEditable(ctx, tx, oldBatchIds, mutation, subjectEntityType);
   return async () => {
     const next = await loadRunEmissionContributors(ctx, [runId], tx, { includeArchived: true });
     for (const row of next.filter(row => row.kind === "failed" && row.feedstockTypeId)) {
@@ -118,6 +127,6 @@ export async function prepareFailedRunEmissionWrite(
     }
     await assertFailedEmissionBatchesEditable(ctx, tx, [...oldBatchIds,
       ...next.filter(row => row.kind === "failed" && row.creditBatchId).map(row => row.creditBatchId!),
-    ]);
+    ], mutation, subjectEntityType);
   };
 }

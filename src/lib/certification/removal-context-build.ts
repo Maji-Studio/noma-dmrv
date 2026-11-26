@@ -1,5 +1,4 @@
-import { buildProductionSourceManifest } from "@/data-access/production-source-manifest";
-import { loadBatchEmissionContributors } from "@/data-access/credit-batch-emission-contributors";
+import { loadProductionClaimFeedstockScope } from "@/data-access/production-source-manifest";
 import type { CoveredContenders } from "@/lib/certification/covered-contenders";
 import { env } from "@/config/env";
 import { DURABILITY_MEASUREMENT_SAMPLES_ENABLED } from "./durability-measurement-samples";
@@ -149,9 +148,11 @@ export async function buildRemovalContext(
   const registryBoundaryOpened = removalMayHaveExternalMutation(
     scope.removal?.metadata ?? null,
   );
+  const { failedContributors, manifest: productionSourceManifest, feedstockIds } =
+    await loadProductionClaimFeedstockScope(orgCtx, scope.memberBatches, scope.removalId);
   const supportingDocuments = correctionRead ? { total: 0, mirrored: 0 } : await loadEvidenceMirrorSummaryForScope(
     orgCtx,
-    scope,
+    { ...scope, transportFeedstockIds: feedstockIds },
     latestSubmission,
     correctionWindowOpen,
     removalEntryContext?.lineFileEvidence,
@@ -311,15 +312,9 @@ export async function buildRemovalContext(
       ? await getProductionRunsForCertification(orgCtx, runIds)
       : [];
 
-  const emissionContributors = await loadBatchEmissionContributors(orgCtx, scope.memberBatches
-    .filter(batch => includesProductionInputs(batch.productionEmissionsClaimedByRemovalId, scope.removalId))
-    .map(batch => batch.id), undefined, { failedOnly: true });
-  const failedContributors = Object.values(emissionContributors).flatMap(batch => batch.failedContributors);
   const failedEmissionRuns = failedContributors.length
     ? await getProductionRunsForCertification(orgCtx, failedContributors.map(run => run.runId)) : [];
   const failedFeedstockIds = [...new Set(failedContributors.flatMap(run => run.feedstockIds))];
-  const productionSourceManifest = await buildProductionSourceManifest(orgCtx, failedContributors, undefined, scope.removalId);
-  const countedFailedFeedstockIds = productionSourceManifest.countedTransportFeedstockIds ?? [];
 
   // Batch-pooled Samples drive durability, transport, and readiness (ADR 0016).
   // The same durability blockers gate the submit pipeline below.
@@ -328,8 +323,7 @@ export async function buildRemovalContext(
     memberBatches: scope.memberBatches,
     lineages,
   });
-  entityIds.feedstockIds = [...new Set([...entityIds.feedstockIds,
-    ...countedFailedFeedstockIds])];
+  entityIds.feedstockIds = feedstockIds;
   entityIds.feedstockTransportOwnedElsewhere = entityIds.feedstockIds.length === 0 &&
     (entityIds.feedstockTransportOwnedElsewhere === true || failedFeedstockIds.length > 0);
   const requiredTransportCategories = collectProductionClaimAwareRequiredTransportCategories({

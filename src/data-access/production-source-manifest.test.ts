@@ -31,5 +31,5 @@ it("builds the same manifest from preloaded context contributors and batch IDs",
   expect(context.countedTransportFeedstockIds).toEqual(["own"]);
   expect(contributors.map(run => run.runId)).toEqual(["z", "a"]);
   expect(loadBatchEmissionContributors).toHaveBeenCalledExactlyOnceWith(ctx, ["batch"], reader, { failedOnly: true });
-  expect(getTransportFeedstockIdsCountedElsewhere).toHaveBeenCalledWith(ctx, ["own", "counted", "other"], "removal", reader);
+  expect(getTransportFeedstockIdsCountedElsewhere).toHaveBeenCalledWith(ctx, ["own", "counted"], "removal", reader);
 });

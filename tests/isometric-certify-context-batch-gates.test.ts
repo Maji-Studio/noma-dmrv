@@ -56,6 +56,10 @@ vi.mock("@/data-access/production-runs", () => ({
   getProductionRunsForCertification: vi.fn(),
 }));
 
+vi.mock("@/data-access/credit-batch-emission-contributors", () => ({
+  loadBatchEmissionContributors: vi.fn(async () => ({})),
+}));
+
 vi.mock("@/data-access/credit-batch-samples", () => ({
   getCreditBatchesWithSamples: vi.fn(),
 }));

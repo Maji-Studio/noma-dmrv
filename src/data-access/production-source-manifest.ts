@@ -1,3 +1,4 @@
+import { includesProductionInputs } from "@/lib/certification/production-claim-policy";
 import { getTransportFeedstockIdsCountedElsewhere } from "./certification-lineage-guards";
 import { db, type DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
@@ -35,19 +36,35 @@ export async function buildProductionSourceManifest(
   } })!;
 }
 
-/** Keep ownership attribution and already-counted transport identical on every read. */
+/** Keep ownership attribution and already-counted transport identical on every read.
+ * A Removal passes its ID; batch views pass each batch's claiming Removal ID.
+ * Missing claims exclude every other listing snapshot.
+ */
 export async function loadCountedFailedTransportOwners(
   ctx: OrgContext, contributors: readonly EmissionContributor[],
   reader: Pick<DbTransaction, "select" | "selectDistinct"> = db,
-  removalId?: string | null,
+  removalId?: string | null | ReadonlyMap<string, string | null>,
 ): Promise<Map<string, string>> {
   requireOrgScope(ctx);
   if (!contributors.length) return new Map();
-  const runIds = new Set(contributors.map(run => run.runId));
+  const runs = new Map(contributors.map(run => [run.runId, run]));
   const feedstockIds = [...new Set(contributors.flatMap(run => run.feedstockIds))];
   const owners = await getFeedstockTransportOwners(ctx, feedstockIds, reader);
-  const countedElsewhere = await getTransportFeedstockIdsCountedElsewhere(ctx, feedstockIds, removalId, reader);
-  return new Map([...owners].filter(([id, runId]) => runIds.has(runId) && !countedElsewhere.has(id)));
+  const groups = new Map<string | null, [string, string][]>();
+  for (const [id, runId] of owners) {
+    const run = runs.get(runId);
+    if (!run) continue;
+    const relativeRemovalId = typeof removalId === "object" && removalId !== null
+      ? removalId.get(run.creditBatchId ?? "") ?? null : removalId ?? null;
+    const group = groups.get(relativeRemovalId) ?? [];
+    group.push([id, runId]);
+    groups.set(relativeRemovalId, group);
+  }
+  const counted = await Promise.all([...groups].map(async ([relativeRemovalId, entries]) => {
+    const elsewhere = await getTransportFeedstockIdsCountedElsewhere(ctx, entries.map(([id]) => id), relativeRemovalId, reader);
+    return entries.filter(([id]) => !elsewhere.has(id));
+  }));
+  return new Map(counted.flat());
 }
 
 /** No additional locks here: acquiring runs after batch rows would invert writer order. */
@@ -63,4 +80,24 @@ export async function assertProductionSourceManifestFresh(
   if (!productionSourceManifestsEqual(reviewed, current)) {
     throw new DomainError("conflict", "Production sources changed while preparing this Removal. Refresh the review and submit again.", { retryable: true });
   }
+}
+
+/** Shared production-claim scope for submission transport and the Sources reader. */
+export async function loadProductionClaimFeedstockScope(
+  ctx: OrgContext,
+  batches: readonly { id: string; productionEmissionsClaimedByRemovalId: string | null; productionFeedstockIds: string[] }[],
+  removalId: string | null,
+  reader: Pick<DbTransaction, "select" | "selectDistinct"> = db,
+) {
+  requireOrgScope(ctx);
+  const productionBatches = batches.filter(batch => includesProductionInputs(batch.productionEmissionsClaimedByRemovalId, removalId));
+  const contributors = await loadBatchEmissionContributors(ctx, productionBatches.map(batch => batch.id), reader, { failedOnly: true });
+  const failedContributors = Object.values(contributors).flatMap(batch => batch.failedContributors);
+  const manifest = await buildProductionSourceManifest(ctx, failedContributors, reader, removalId);
+  return {
+    failedContributors,
+    manifest,
+    feedstockIds: [...new Set([...productionBatches.flatMap(batch => batch.productionFeedstockIds),
+      ...(manifest.countedTransportFeedstockIds ?? [])])],
+  };
 }

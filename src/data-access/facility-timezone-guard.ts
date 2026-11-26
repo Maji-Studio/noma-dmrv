@@ -48,7 +48,7 @@ export async function resolveFacilityTimezoneEdit(
     )).where(eq(creditBatches.organizationId, ctx.organizationId)).orderBy(creditBatches.code);
   if (emissionBatches.length) {
     const targets = emissionBatches.map(batch => ({ entityType: "creditBatch" as const, entityId: batch.id }));
-    const keys = await lockFailedEmissionBatchArtifacts(ctx, tx, emissionBatches.map(batch => batch.id),
+    const keys = await lockFailedEmissionBatchArtifacts(ctx, tx, emissionBatches.map(batch => batch.id), "facility",
       () => new DomainError("conflict", "Certification inputs changed while saving the facility. Refresh and retry.", { retryable: true }), targets);
     await assertLockedLineagesAllowMutation(ctx, tx, keys, targets.map(target => ({ target, mutation: "update" })));
     const batch = emissionBatches[0];

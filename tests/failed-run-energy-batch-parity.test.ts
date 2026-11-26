@@ -1,8 +1,9 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { eq } from "drizzle-orm";
 import { buildCreateDatapointRequest } from "@/lib/isometric/transformers/datapoint";
 import { beforeAll, expect, it } from "vitest";
 import { db } from "@/db";
-import { creditBatchProductionRuns, feedstocks, productionRunFeedstocks, productionRuns, storageLocations, transportLegs } from "@/db/schema";
+import { certificationSubmissions, creditBatches, creditBatchProductionRuns, feedstocks, productionRunFeedstocks, productionRuns, storageLocations, transportLegs } from "@/db/schema";
 import { getRecordedEnergyInputs } from "@/data-access/energy";
 import { getEmissionAllocation } from "@/data-access/emission-allocation";
 import { loadBatchesEmissionAutomaticFacts } from "@/data-access/batch-emission-automatic-figures";
@@ -77,6 +78,39 @@ it("agrees on complete and failed batch activity and once-only transport while k
     const allocation = await getEmissionAllocation(ctx, { creditBatchId: batchId }, tx);
     expect(allocation.records.find(record => record.id === f.run.id)?.parts).toMatchObject([{ key: batchId, fraction: 1 }]);
     expect(allocation.records.find(record => record.id === exclusive.id)?.feedstock?.firstRun?.id).toBe(f.run.id);
+    throw ROLLBACK;
+  })).rejects.toBe(ROLLBACK);
+});
+
+
+it.each([
+  { status: "draft", own: true, claimed: true },
+  { status: "submitted", own: true, claimed: true },
+  { status: "draft", own: false, claimed: true },
+  { status: "submitted", own: false, claimed: true },
+  { status: "draft", own: false, claimed: false },
+] as const)("keeps Energy and batch transport relative to the claim: %j", async ({ status, own, claimed }) => {
+  await expect(db.transaction(async tx => {
+    const f = await failedRunFixture(tx);
+    const ctx = makeTestOrgContext();
+    const batchId = f.batch!.id;
+    const [claim, other] = await insertRemovalFixture(tx, [f.site, f.site]);
+    if (claimed) await tx.update(creditBatches).set({ productionEmissionsClaimedByRemovalId: claim.id })
+      .where(eq(creditBatches.id, batchId));
+    await tx.insert(transportLegs).values({ ...f.org, entityType: "feedstock", entityId: f.stock.id,
+      distanceKm: 10, loadMassKg: 1000, transportMethodType: "road" });
+    const before = (await loadBatchesEmissionAutomaticFacts(ctx, [batchId], {}, tx))[batchId];
+    await tx.insert(certificationSubmissions).values({ ...f.org, provider: "isometric", submissionType: "removal",
+      localEntityType: "removal", localEntityId: own ? claim.id : other.id, version: 1, status,
+      payloadSnapshot: { transportFeedstockIds: [f.stock.id] } });
+    const facts = (await loadBatchesEmissionAutomaticFacts(ctx, [batchId], {}, tx))[batchId];
+    const { inputs } = await getRecordedEnergyInputs(ctx, f.facility.id, tx);
+    const energy = buildEnergyBreakdown(inputs, { from: null, to: "2026-03-31" });
+    const activity = energy.records.find(record => record.scope === "batch" && record.id === batchId)!.footprint.activity;
+    expect(activity.feedstockTransport).toBe(own ? 20 : 0);
+    expect(facts.automaticFigures["feedstock-transport"]).toEqual({ magnitude: own ? "20" : "0", unit: "km * tonne" });
+    expect(facts.automaticRecordCounts?.["feedstock-transport"]).toBe(own ? 1 : 0);
+    if (own) expect(facts).toEqual(before);
     throw ROLLBACK;
   })).rejects.toBe(ROLLBACK);
 });

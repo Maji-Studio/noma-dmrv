@@ -457,7 +457,7 @@ it("groups failed-emission checks at the facility credit batches list", async ()
   const { items } = await getDashboardAttentionItems(CTX, FACILITY_ID, DAY);
   expect(items).toHaveLength(1);
   expect(items[0]).toMatchObject({
-    id: "failed-run-emissions-group", scope: "facility", stage: "production", recordKind: "productionRun",
+    id: "failed-run-emissions-group", entityCode: "Credit batches", scope: "facility", stage: "production", recordKind: "productionRun",
     title: "Failed run emissions without a credit batch", count: todos.length,
     href: `/credit-batches?facility=${FACILITY_ID}`, recordIds: todos.map(todo => todo.productionRun.id),
     recordItems: todos.map(todo => ({ id: todo.id, scope: "facility", title: "Emissions without a credit batch" })),

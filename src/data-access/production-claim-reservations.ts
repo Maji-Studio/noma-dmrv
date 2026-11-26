@@ -211,7 +211,7 @@ export async function reserveProductionEmissionsClaims(
 
     await assertProductionSourceManifestFresh(ctx, tx, productionIds, args.frozenProductionSourceManifest ?? null, args.removalId);
 
-    await assertComponentFileClaimFresh(ctx, tx, batches.filter(batch => productionIds.includes(batch.id)), args.frozenLineFileSet ?? []);
+    await assertComponentFileClaimFresh(ctx, tx, batches.filter(batch => productionIds.includes(batch.id)), args.frozenLineFileSet ?? [], args.removalId);
 
     const reservedEntries = entryIds.length ? await tx.update(emissionEntries).set({
       sendReservedBySubmissionId: args.submissionId, version: nextVersion(emissionEntries.version), updatedAt: sql`now()`,

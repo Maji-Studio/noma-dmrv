@@ -16,7 +16,7 @@ import { getFeedstockTransportOwnerBatches } from "@/data-access/feedstock-trans
 import { SafeError } from "@/lib/errors";
 
 type AutomaticFacts = Pick<BatchEmissionLineFacts, "automaticFigures" | "automaticRecordCounts" | "feedstockTransportCountedOn">;
-type AutomaticOptions = { requireDeliveryMass?: boolean };
+type AutomaticOptions = { requireDeliveryMass?: boolean; removalId?: string | null };
 const unique = (ids: string[]) => [...new Set(ids)];
 
 /** Set-based reads for all batches, including shipments not yet applied. */
@@ -29,7 +29,8 @@ export async function loadBatchesEmissionAutomaticFacts(
   const rollups = await loadCreditBatchRollups(ctx, ids, { includeRunForwards: true }, executor);
   const contributors = await loadBatchEmissionContributors(ctx, ids, executor, { failedOnly: true });
   const failedContributors = Object.values(contributors).flatMap(batch => batch.failedContributors);
-  const owners = await loadCountedFailedTransportOwners(ctx, failedContributors, executor);
+  const owners = await loadCountedFailedTransportOwners(ctx, failedContributors, executor,
+    options.removalId !== undefined ? options.removalId : new Map(Object.values(rollups).map(({ batch }) => [batch.id, batch.productionEmissionsClaimedByRemovalId])));
   const batches = ids.map((id) => {
     const lineage = rollups[id]?.lineageFacts;
     if (!lineage) throw new SafeError("Credit batch accounting could not be loaded");
