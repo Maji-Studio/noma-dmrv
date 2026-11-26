@@ -1,5 +1,5 @@
 import { FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
-import { synchronizeFailedEmissionBatches } from "./failed-run-emission-write-guard";
+import { lockFailedEmissionBatchArtifacts } from "./failed-run-emission-write-guard";
 import { loadRunEmissionContributors } from "./credit-batch-emission-contributors";
 import type { DbTransaction } from "@/db";
 import { certifierRemovals, creditBatchProductionRuns, feedstocks, feedstockTypes, productionRunFeedstocks, productionRuns } from "@/db/schema";
@@ -9,7 +9,6 @@ import { SafeError } from "@/lib/errors";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   getLineageUnderLockedArtifacts,
-  tryLockCertifiedLineageArtifacts,
   getRecordLocks,
   isSubmittedLineageRow,
 } from "./certification-lineage-guards";
@@ -125,9 +124,8 @@ export async function getLockedFeedstockTypeLinkLock(
   const targets = batchIds.sort().map(entityId => ({ entityType: "creditBatch" as const, entityId }));
   // The caller holds the feedstock-type row. Newly discovered failed-source
   // artifacts cannot be waited on behind that row lock.
-  const keys = await tryLockCertifiedLineageArtifacts(ctx, tx, targets);
-  if (!keys) throw new DomainError("conflict", "Certification inputs changed while saving the feedstock type. Refresh and retry.", { retryable: true });
-  await synchronizeFailedEmissionBatches(ctx, tx, contributors.filter(run => run.kind === "failed" && run.creditBatchId).map(run => run.creditBatchId!));
+  const keys = await lockFailedEmissionBatchArtifacts(ctx, tx, contributors.filter(run => run.kind === "failed" && run.creditBatchId).map(run => run.creditBatchId!),
+    () => new DomainError("conflict", "Certification inputs changed while saving the feedstock type. Refresh and retry.", { retryable: true }), targets);
   const lineage = (await Promise.all(targets.map(target => getLineageUnderLockedArtifacts(ctx, tx, keys, target)))).flat();
   const removals = new Set<string>();
   for (const row of lineage.filter(isSubmittedLineageRow)) {

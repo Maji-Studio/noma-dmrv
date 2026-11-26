@@ -1,5 +1,6 @@
-import { COMPLETED_PRODUCTION_RUN_STATUS, EMISSION_SOURCE_RUN_STATUSES, FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
-import { and, eq, inArray, isNull, exists, gte, lte, or } from "drizzle-orm";
+import { failedRunEmissionBatchCondition } from "./failed-run-emission-predicate";
+import { COMPLETED_PRODUCTION_RUN_STATUS, EMISSION_SOURCE_RUN_STATUSES } from "@/lib/production-runs/lifecycle";
+import { and, eq, inArray, isNull, exists, or } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { creditBatchProductionRuns, creditBatches, feedstocks, productionRunFeedstocks, productionRuns } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -33,7 +34,7 @@ export async function loadRunEmissionContributors(
   requireOrgScope(ctx);
   if (!runIds.length) return [];
   const runs = await reader.select({
-    id: productionRuns.id, version: productionRuns.version, facilityId: productionRuns.facilityId,
+    id: productionRuns.id, code: productionRuns.code, version: productionRuns.version, facilityId: productionRuns.facilityId,
     status: productionRuns.status, endDay: productionRunMembershipDateExpr(ctx.organizationId),
   }).from(productionRuns).where(and(
     eq(productionRuns.organizationId, ctx.organizationId), inArray(productionRuns.id, [...new Set(runIds)]),
@@ -48,9 +49,11 @@ export async function loadRunEmissionContributors(
       .where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId), inArray(productionRunFeedstocks.productionRunId, ids))),
     runs.some(run => run.status === COMPLETED_PRODUCTION_RUN_STATUS) ? reader.select({ runId: creditBatchProductionRuns.productionRunId, batchId: creditBatchProductionRuns.creditBatchId })
       .from(creditBatchProductionRuns).where(and(eq(creditBatchProductionRuns.organizationId, ctx.organizationId), inArray(creditBatchProductionRuns.productionRunId, ids))) : Promise.resolve([]),
-    reader.select({ id: creditBatches.id, code: creditBatches.code, facilityId: creditBatches.facilityId,
+    reader.select({ failedRunId: productionRuns.id, id: creditBatches.id, code: creditBatches.code, facilityId: creditBatches.facilityId,
       typeId: creditBatches.feedstockTypeId, startDate: creditBatches.startDate, endDate: creditBatches.endDate })
-      .from(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId),
+      .from(creditBatches).leftJoin(productionRuns, and(
+        failedRunEmissionBatchCondition(ctx), inArray(productionRuns.id, ids),
+      )).where(and(eq(creditBatches.organizationId, ctx.organizationId),
         inArray(creditBatches.facilityId, [...new Set(runs.map(run => run.facilityId))]),
         options.includeArchived ? undefined : isNull(creditBatches.archivedAt))),
   ]);
@@ -58,11 +61,10 @@ export async function loadRunEmissionContributors(
     const linked = draws.filter(draw => draw.runId === run.id);
     const types = new Set(linked.map(draw => draw.typeId));
     const typeId = types.size === 1 ? [...types][0] : null;
-    const matches = run.status === COMPLETED_PRODUCTION_RUN_STATUS
-      ? batches.filter(batch => memberships.some(member => member.runId === run.id && member.batchId === batch.id))
-      : batches.filter(batch => typeId && batch.typeId === typeId && batch.facilityId === run.facilityId &&
-        run.endDay && batch.startDate <= run.endDay && batch.endDate >= run.endDay);
-    if (matches.length > 1) throw new SafeError(`Production run ${run.id} matches multiple credit batches. Review overlapping batch windows before assigning emissions.`);
+    const matches = [...new Map(batches.filter(batch => run.status === COMPLETED_PRODUCTION_RUN_STATUS
+      ? memberships.some(member => member.runId === run.id && member.batchId === batch.id)
+      : batch.failedRunId === run.id).map(batch => [batch.id, batch])).values()];
+    if (matches.length > 1) throw new SafeError(`Production run ${run.code} matches credit batches ${matches.map(batch => batch.code).sort().join(", ")}. Review their overlapping windows.`);
     if (run.status === COMPLETED_PRODUCTION_RUN_STATUS && !matches.length) return [];
     const match = matches[0];
     return [{ runId: run.id, version: run.version, facilityId: run.facilityId, endDay: run.endDay,
@@ -84,7 +86,6 @@ export async function loadBatchEmissionContributors(
     .where(and(eq(creditBatches.organizationId, ctx.organizationId), inArray(creditBatches.id, ids),
       options.includeArchived ? undefined : isNull(creditBatches.archivedAt)));
   if (!batches.length) return {};
-  const endDay = productionRunMembershipDateExpr(ctx.organizationId);
   const runs = await reader.select({ id: productionRuns.id }).from(productionRuns)
     .where(and(eq(productionRuns.organizationId, ctx.organizationId),
       options.includeArchived ? undefined : isNull(productionRuns.archivedAt),
@@ -95,14 +96,11 @@ export async function loadBatchEmissionContributors(
             eq(creditBatchProductionRuns.productionRunId, productionRuns.id),
             inArray(creditBatchProductionRuns.creditBatchId, batches.map(batch => batch.id)),
           )))),
-        and(eq(productionRuns.status, FAILED_PRODUCTION_RUN_STATUS), or(...batches.map(batch => and(
-          eq(productionRuns.facilityId, batch.facilityId), gte(endDay, batch.startDate), lte(endDay, batch.endDate),
-          exists(reader.select({ id: productionRunFeedstocks.productionRunId }).from(productionRunFeedstocks)
-            .innerJoin(feedstocks, and(eq(feedstocks.id, productionRunFeedstocks.feedstockId),
-              eq(feedstocks.organizationId, ctx.organizationId)))
-            .where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId),
-              eq(productionRunFeedstocks.productionRunId, productionRuns.id), eq(feedstocks.feedstockTypeId, batch.feedstockTypeId)))),
-        )))),
+        exists(reader.select({ id: creditBatches.id }).from(creditBatches).where(and(
+          eq(creditBatches.organizationId, ctx.organizationId),
+          inArray(creditBatches.id, batches.map(batch => batch.id)),
+          failedRunEmissionBatchCondition(ctx),
+        ))),
       )));
   const contributors = await loadRunEmissionContributors(ctx, runs.map(run => run.id), reader, options);
   return Object.fromEntries(batches.map(batch => [batch.id, {

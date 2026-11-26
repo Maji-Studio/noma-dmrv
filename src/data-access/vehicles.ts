@@ -1,4 +1,4 @@
-import { synchronizeFailedEmissionBatches } from "./failed-run-emission-write-guard";
+import { lockFailedEmissionBatchArtifacts } from "./failed-run-emission-write-guard";
 /**
  * Vehicles Data Access Layer: list, read, edit and delete.
  *
@@ -26,7 +26,6 @@ import { formatFleetDeleteBlocker } from "@/lib/fleet/messages";
 import {
   getLockedCertifiedLineageForTargetSet,
   getLineageUnderLockedArtifacts,
-  tryLockCertifiedLineageArtifacts,
   isSubmittedLineageRow,
   type LockedCertifiedLineageRow,
 } from "./certification-lineage-guards";
@@ -221,9 +220,8 @@ async function updateVehicleOnce(
     const emissionSources = await loadRunEmissionContributors(ctx, linkedRuns.map(run => run.id), tx, { includeArchived: true });
     const failedBatchIds = emissionSources.filter(run => run.kind === "failed" && run.creditBatchId).map(run => run.creditBatchId!);
     const targets = [...new Set(failedBatchIds)].map(entityId => ({ entityType: "creditBatch" as const, entityId }));
-    const keys = await tryLockCertifiedLineageArtifacts(ctx, tx, targets);
-    if (!keys) throw new DomainError("conflict", VEHICLE_REFERENCES_CHANGED, { retryable: true });
-    await synchronizeFailedEmissionBatches(ctx, tx, failedBatchIds);
+    const keys = await lockFailedEmissionBatchArtifacts(ctx, tx, failedBatchIds,
+      () => new DomainError("conflict", VEHICLE_REFERENCES_CHANGED, { retryable: true }), targets);
     for (const target of targets) lineage.push(...await getLineageUnderLockedArtifacts(ctx, tx, keys, target));
     submitted = lineage.filter(isSubmittedLineageRow);
   }

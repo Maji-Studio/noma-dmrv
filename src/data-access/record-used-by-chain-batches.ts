@@ -16,6 +16,7 @@ export async function readUsedByBatches(ctx: OrgContext, self: RecordUsedByNode,
   const org = ctx.organizationId;
   const idsOf = (nodes: RecordUsedByNode[], kind: RecordUsedByNode["kind"]) => [...new Set(nodes.filter(node => node.kind === kind).map(node => node.id))];
   const batchIds = new Set(self.kind === "creditBatch" ? [self.id] : []);
+  const emissionBatchIds = new Set<string>();
   const runIds = new Set(self.kind === "productionRun" ? [self.id]
     : self.kind === "feedstock" ? idsOf(downstream, "productionRun")
     : self.kind === "biocharProduct" ? idsOf(upstream, "productionRun") : []);
@@ -35,7 +36,7 @@ export async function readUsedByBatches(ctx: OrgContext, self: RecordUsedByNode,
     for (const row of rows) batchIds.add(row.id);
     if (self.kind === "productionRun" || self.kind === "feedstock") {
       for (const run of await loadRunEmissionContributors(ctx, [...runIds])) {
-        if (run.kind === "failed" && run.creditBatchId) batchIds.add(run.creditBatchId);
+        if (run.kind === "failed" && run.creditBatchId) emissionBatchIds.add(run.creditBatchId);
       }
     }
   }
@@ -54,9 +55,12 @@ export async function readUsedByBatches(ctx: OrgContext, self: RecordUsedByNode,
       )));
     for (const row of rows) batchIds.add(row.id);
   }
+  const materialBatchIds = new Set(batchIds);
+  for (const id of emissionBatchIds) batchIds.add(id);
   if (!batchIds.size) return [];
   const rows = await db.select({ id: creditBatches.id, code: creditBatches.code, name: creditBatches.name, facilityId: creditBatches.facilityId,
     startDate: creditBatches.startDate, endDate: creditBatches.endDate })
     .from(creditBatches).where(and(eq(creditBatches.organizationId, org), inArray(creditBatches.id, [...batchIds])));
-  return rows.sort((a, b) => a.startDate.localeCompare(b.startDate) || a.code.localeCompare(b.code) || a.id.localeCompare(b.id));
+  return rows.map(row => ({ ...row, ...(emissionBatchIds.has(row.id) && !materialBatchIds.has(row.id)
+    ? { dependency: "production-emissions" as const } : {}) })).sort((a, b) => a.startDate.localeCompare(b.startDate) || a.code.localeCompare(b.code) || a.id.localeCompare(b.id));
 }

@@ -24,6 +24,8 @@ export interface RecordUsedByEdge {
 }
 
 export interface RecordUsedByBatch {
+  /** Present only when no material membership reaches this batch. */
+  dependency?: "production-emissions";
   id: string;
   code: string;
   name: string | null;

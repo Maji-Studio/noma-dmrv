@@ -88,10 +88,10 @@ it("fails closed on ambiguous active or archived-inclusive matches", async () =>
   await expect(db.transaction(async tx => {
     const fixture = await failedRunFixture(tx);
     const [overlap] = await tx.insert(creditBatches).values({ ...fixture.batchValues, code: `FR-OVERLAP-${crypto.randomUUID()}` }).returning();
-    await expect(loadBatchEmissionContributors(ctx, [fixture.batch!.id], tx)).rejects.toThrow("matches multiple credit batches");
+    await expect(loadBatchEmissionContributors(ctx, [fixture.batch!.id], tx)).rejects.toThrow(`Production run ${fixture.run.code} matches credit batches ${[fixture.batch!.code, overlap.code].sort().join(", ")}. Review their overlapping windows.`);
     await tx.update(creditBatches).set({ archivedAt: new Date("2026-04-01") }).where(eq(creditBatches.id, overlap.id));
     expect((await loadRunEmissionContributors(ctx, [fixture.run.id], tx))[0].creditBatchId).toBe(fixture.batch!.id);
-    await expect(loadRunEmissionContributors(ctx, [fixture.run.id], tx, { includeArchived: true })).rejects.toThrow("matches multiple credit batches");
+    await expect(loadRunEmissionContributors(ctx, [fixture.run.id], tx, { includeArchived: true })).rejects.toThrow(`Production run ${fixture.run.code} matches credit batches ${[fixture.batch!.code, overlap.code].sort().join(", ")}. Review their overlapping windows.`);
     throw ROLLBACK;
   })).rejects.toBe(ROLLBACK);
 });

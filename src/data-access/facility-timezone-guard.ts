@@ -1,4 +1,4 @@
-import { synchronizeFailedEmissionBatches } from "./failed-run-emission-write-guard";
+import { lockFailedEmissionBatchArtifacts } from "./failed-run-emission-write-guard";
 import { and, asc, eq, exists, or, sql } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { creditBatchProductionRuns, creditBatches, productionRuns, samples } from "@/db/schema";
@@ -8,7 +8,7 @@ import { formatTimezoneLabel } from "@/lib/date-utils";
 import { DomainError } from "@/lib/domain-errors";
 import { findTimezoneEntry } from "@/lib/timezones";
 import { failedRunEmissionBatchCondition } from "./failed-run-emission-predicate";
-import { assertLockedLineagesAllowMutation, tryLockCertifiedLineageArtifacts } from "./certification-lineage-guards";
+import { assertLockedLineagesAllowMutation } from "./certification-lineage-guards";
 import { requireOrgScope } from "./utils";
 
 const FIRST_BLOCKER_LIMIT = 1;
@@ -48,9 +48,8 @@ export async function resolveFacilityTimezoneEdit(
     )).where(eq(creditBatches.organizationId, ctx.organizationId)).orderBy(creditBatches.code);
   if (emissionBatches.length) {
     const targets = emissionBatches.map(batch => ({ entityType: "creditBatch" as const, entityId: batch.id }));
-    const keys = await tryLockCertifiedLineageArtifacts(ctx, tx, targets);
-    if (!keys) throw new DomainError("conflict", "Certification inputs changed while saving the facility. Refresh and retry.", { retryable: true });
-    await synchronizeFailedEmissionBatches(ctx, tx, emissionBatches.map(batch => batch.id));
+    const keys = await lockFailedEmissionBatchArtifacts(ctx, tx, emissionBatches.map(batch => batch.id),
+      () => new DomainError("conflict", "Certification inputs changed while saving the facility. Refresh and retry.", { retryable: true }), targets);
     await assertLockedLineagesAllowMutation(ctx, tx, keys, targets.map(target => ({ target, mutation: "update" })));
     const batch = emissionBatches[0];
     throw new DomainError("conflict", facilityTimezoneChangeMessage(facility.code, batch.code, facility.timezone), {

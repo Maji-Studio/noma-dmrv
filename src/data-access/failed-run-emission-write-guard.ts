@@ -8,10 +8,24 @@ import { canTransferProductionReservation } from "@/lib/certification/production
 import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
 import { assertLockedLineagesAllowMutation, CertificationLineageChangedError, tryLockCertifiedLineageArtifacts } from "./certification-lineage-guards";
 import { loadRunEmissionContributors } from "./credit-batch-emission-contributors";
-import { tryLockProductionProcessScope } from "./production-processes";
+import { sortProcessScopes, tryLockProductionProcessScope } from "./production-processes";
 import { requireOrgScope } from "./utils";
 
 const changed = () => new DomainError("conflict", "Production emission sources changed while this record was being saved. Refresh and retry.", { retryable: true });
+
+/** Acquire artifacts before synchronizing reservations; preserve each caller's target set. */
+export async function lockFailedEmissionBatchArtifacts(
+  ctx: OrgContext, tx: DbTransaction, batchIds: readonly string[],
+  conflict: () => Error | Promise<Error> = changed,
+  targets: Parameters<typeof tryLockCertifiedLineageArtifacts>[2] = [...new Set(batchIds)].sort()
+    .map(entityId => ({ entityType: "creditBatch" as const, entityId })),
+) {
+  requireOrgScope(ctx);
+  const keys = await tryLockCertifiedLineageArtifacts(ctx, tx, targets);
+  if (!keys) throw await conflict();
+  await synchronizeFailedEmissionBatches(ctx, tx, batchIds);
+  return keys;
+}
 
 /** Late targets use try locks: callers may already hold run, stock or process locks. */
 export async function assertFailedEmissionBatchesEditable(
@@ -22,9 +36,7 @@ export async function assertFailedEmissionBatchesEditable(
   const ids = [...new Set(batchIds)].sort();
   if (!ids.length) return;
   const targets = ids.map(entityId => ({ entityType: "creditBatch" as const, entityId }));
-  const keys = await tryLockCertifiedLineageArtifacts(ctx, tx, targets);
-  if (!keys) throw changed();
-  await synchronizeFailedEmissionBatches(ctx, tx, ids);
+  const keys = await lockFailedEmissionBatchArtifacts(ctx, tx, ids);
   try {
     await assertLockedLineagesAllowMutation(ctx, tx, keys, targets.map(target => ({
       target, mutation, subjectEntityType,
@@ -91,7 +103,7 @@ export async function prepareFailedRunEmissionWrite(
   const scopes = [...new Set([run.facilityId, prospective.facilityId ?? run.facilityId])].flatMap(facilityId =>
     [...new Set([...types, ...bins, ...(prospective.feedstockTypeIds ?? []).map(id => ({ id }))].map(type => type.id).filter((id): id is string => id !== null))]
       .map(feedstockTypeId => ({ facilityId, feedstockTypeId })));
-  scopes.sort((a, b) => `${a.facilityId}:${a.feedstockTypeId}`.localeCompare(`${b.facilityId}:${b.feedstockTypeId}`));
+  sortProcessScopes(scopes);
   for (const scope of scopes) if (!await tryLockProductionProcessScope(ctx, tx, scope)) throw changed();
   const oldBatchIds = old.filter(row => row.kind === "failed" && row.creditBatchId).map(row => row.creditBatchId!);
   await assertFailedEmissionBatchesEditable(ctx, tx, oldBatchIds);

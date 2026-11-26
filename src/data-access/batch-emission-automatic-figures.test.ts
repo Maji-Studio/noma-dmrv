@@ -1,3 +1,5 @@
+import { getTransportFeedstockIdsCountedElsewhere } from "./certification-lineage-guards";
+vi.mock("./certification-lineage-guards", () => ({ getTransportFeedstockIdsCountedElsewhere: vi.fn() }));
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
 vi.mock("@/data-access/utils", () => ({ requireOrgScope: vi.fn(), requireOrgFacility: vi.fn() }));
@@ -23,6 +25,7 @@ import { loadBatchesEmissionAutomaticFacts } from "./batch-emission-automatic-fi
 const ctx = makeTestOrgContext();
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(getTransportFeedstockIdsCountedElsewhere).mockResolvedValue(new Set());
   vi.mocked(loadBatchEmissionContributors).mockResolvedValue({});
   vi.mocked(loadCreditBatchRollups).mockResolvedValue(Object.fromEntries(["a", "b"].map((id) => [id, {
     lineageFacts: {
@@ -129,4 +132,20 @@ it("adds failed production inputs without adding failed output to material figur
   expect(facts.a.automaticFigures["biochar-dry-mass"]?.magnitude).toBe("3");
   expect(facts.a.automaticRecordCounts?.["run-electricity"]).toBe(2);
   expect(getTransportLegsForEntities).toHaveBeenCalledExactlyOnceWith(ctx, "feedstock", ["feedstock", "failed-feedstock"], expect.anything());
+});
+
+
+it("excludes failed-owned transport already counted by another Removal", async () => {
+  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ a: { lineageFacts: {
+    runs: [], applications: [], runForwards: {},
+  } } } as never);
+  vi.mocked(loadBatchEmissionContributors).mockResolvedValue({ a: {
+    materialMembers: [], failedContributors: [{ runId: "failed", feedstockIds: ["failed-feedstock"] }],
+  } } as never);
+  vi.mocked(getFeedstockTransportOwners).mockResolvedValue(new Map([["failed-feedstock", "failed"]]));
+  vi.mocked(getTransportFeedstockIdsCountedElsewhere).mockResolvedValue(new Set(["failed-feedstock"]));
+  const facts = await loadBatchesEmissionAutomaticFacts(ctx, ["a"]);
+  expect(getTransportLegsForEntities).toHaveBeenCalledExactlyOnceWith(ctx, "feedstock", [], expect.anything());
+  expect(facts.a.automaticFigures["feedstock-transport"]).toEqual({ magnitude: "0", unit: "km * tonne" });
+  expect(facts.a.automaticRecordCounts?.["feedstock-transport"]).toBe(0);
 });

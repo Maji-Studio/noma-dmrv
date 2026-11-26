@@ -1,3 +1,5 @@
+import { withLineageFixture } from "./helpers/certification-lineage-fixture";
+import { updateFeedstockInTransaction } from "@/data-access/feedstocks";
 import { createCreditBatchInTransaction } from "@/data-access/credit-batches";
 import { withFailedRunLineage, FAILED_END } from "./helpers/failed-run-lineage-fixture";
 import { openOperationBarrier, waitForBlockedOperations } from "./helpers/operation-barrier";
@@ -268,4 +270,25 @@ it("batch declaration discovers a newly failed source after waiting for its proc
     }
     await f.cleanup();
   }
+}, TEST_TIMEOUT_MS);
+
+
+it("allows a note-only intake edit while its complete-only run is locked", async () => {
+  await withLineageFixture(async f => {
+    await db.update(productionRuns).set({ status: "complete", endTime: new Date("2026-06-13T12:00:00Z"),
+      outputPostedAt: new Date("2026-06-13T12:00:00Z") }).where(eq(productionRuns.id, f.productionRunId));
+    const [stock] = await db.select().from(feedstocks).where(eq(feedstocks.id, f.feedstockId));
+    const hold = await openOperationBarrier(db.$client);
+    try {
+      await hold.tx.select().from(productionRuns).where(eq(productionRuns.id, f.productionRunId)).for("update");
+      await db.transaction(async tx => {
+        await tx.execute(sql`set local lock_timeout = '2s'`);
+        const saved = await updateFeedstockInTransaction(ctx, tx, stock.id, {
+          expectedVersion: stock.version, notes: "Updated intake note",
+        });
+        expect(saved.notes).toBe("Updated intake note");
+        throw ROLLBACK;
+      }).catch(error => { if (error !== ROLLBACK) throw error; });
+    } finally { await hold.rollback(); }
+  }, "none");
 }, TEST_TIMEOUT_MS);

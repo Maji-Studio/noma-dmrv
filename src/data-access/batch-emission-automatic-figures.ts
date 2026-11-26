@@ -11,7 +11,7 @@ import { getProductionRunsForCertification } from "@/data-access/production-runs
 import { getTransportLegsForEntities } from "@/data-access/transport-legs";
 import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
 import { loadBatchEmissionContributors } from "./credit-batch-emission-contributors";
-import { getFeedstockTransportOwners } from "./feedstock-transport-ownership";
+import { loadCountedFailedTransportOwners } from "./production-source-manifest";
 import { getFeedstockTransportOwnerBatches } from "@/data-access/feedstock-transport-ownership";
 import { SafeError } from "@/lib/errors";
 
@@ -29,9 +29,7 @@ export async function loadBatchesEmissionAutomaticFacts(
   const rollups = await loadCreditBatchRollups(ctx, ids, { includeRunForwards: true }, executor);
   const contributors = await loadBatchEmissionContributors(ctx, ids, executor, { failedOnly: true });
   const failedContributors = Object.values(contributors).flatMap(batch => batch.failedContributors);
-  const owners = failedContributors.length
-    ? await getFeedstockTransportOwners(ctx, unique(failedContributors.flatMap(run => run.feedstockIds)), executor)
-    : new Map<string, string>();
+  const owners = await loadCountedFailedTransportOwners(ctx, failedContributors, executor);
   const batches = ids.map((id) => {
     const lineage = rollups[id]?.lineageFacts;
     if (!lineage) throw new SafeError("Credit batch accounting could not be loaded");

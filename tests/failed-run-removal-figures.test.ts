@@ -82,6 +82,11 @@ it.each(["submitted", "draft", "rejected"] as const)("excludes failed-owned tran
     await tx.insert(certificationSubmissions).values({ ...f.org, provider: "isometric", submissionType: "removal",
       localEntityType: "removal", localEntityId: holder.id, version: 1, status,
       metadata: { externalMutation: "none" }, payloadSnapshot: { transportFeedstockIds: [f.stock.id] } });
+    await tx.insert(transportLegs).values({ ...f.org, entityType: "feedstock", entityId: f.stock.id,
+      distanceKm: 10, loadMassKg: 1000, transportMethodType: "road" });
+    const facts = (await loadBatchesEmissionAutomaticFacts(ctx, [f.batch!.id], {}, tx))[f.batch!.id];
+    expect(facts.automaticFigures["feedstock-transport"]).toEqual({ magnitude: status === "rejected" ? "20" : "0", unit: "km * tonne" });
+    expect(facts.automaticRecordCounts?.["feedstock-transport"]).toBe(status === "rejected" ? 1 : 0);
     const manifest = await loadProductionSourceManifest(ctx, [f.batch!.id], tx, current.id);
     expect(manifest.failedContributors.map(run => run.runId)).toEqual([f.run.id]);
     expect(manifest.countedTransportFeedstockIds).toEqual(status === "rejected" ? [f.stock.id] : []);

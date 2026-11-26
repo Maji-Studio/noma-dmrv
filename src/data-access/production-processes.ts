@@ -25,6 +25,10 @@ import {
 type Executor = DbTransaction | typeof db;
 const PRODUCTION_PROCESS_CURRENT_LOCK_SCOPE = "production-process-current";
 
+export function sortProcessScopes<T extends { facilityId: string; feedstockTypeId: string }>(scopes: T[]): T[] {
+  return scopes.sort((a, b) => `${a.facilityId}:${a.feedstockTypeId}`.localeCompare(`${b.facilityId}:${b.feedstockTypeId}`));
+}
+
 export async function lockProductionProcessScope(
   executor: Executor,
   params: { facilityId: string; feedstockTypeId: string },

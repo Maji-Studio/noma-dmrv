@@ -1,11 +1,9 @@
-import { FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
-import { and, eq, gte, isNull, lte } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
-import { feedstocks, productionRunFeedstocks, productionRuns } from "@/db/schema";
+import { productionRuns } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { formatUtcDate } from "@/lib/date-utils";
-import { filterSingleFeedstockTypeRuns } from "./credit-batch-run-fit";
-import { productionRunMembershipDateExpr } from "./production-runs/date-expr";
+import { failedRunEmissionBatchCondition } from "./failed-run-emission-predicate";
 import { requireOrgScope } from "./utils";
 
 export type FailedEmissionCohort = {
@@ -22,21 +20,13 @@ export async function findFailedEmissionCohortRunIds(
   cohort: FailedEmissionCohort,
 ): Promise<string[]> {
   requireOrgScope(ctx);
-  const endDay = productionRunMembershipDateExpr(ctx.organizationId);
-  const rows = await tx.selectDistinct({
-    productionRunId: productionRuns.id,
-    feedstockTypeId: feedstocks.feedstockTypeId,
-  }).from(productionRuns)
-    .innerJoin(productionRunFeedstocks, and(
-      eq(productionRunFeedstocks.productionRunId, productionRuns.id),
-      eq(productionRunFeedstocks.organizationId, ctx.organizationId),
-    ))
-    .innerJoin(feedstocks, and(eq(feedstocks.id, productionRunFeedstocks.feedstockId),
-      eq(feedstocks.organizationId, ctx.organizationId)))
+  // Creation and window edits inspect a prospective cohort without a saved row.
+  const rows = await tx.select({ productionRunId: productionRuns.id }).from(productionRuns)
     .where(and(eq(productionRuns.organizationId, ctx.organizationId),
-      eq(productionRuns.facilityId, cohort.facilityId), eq(productionRuns.status, FAILED_PRODUCTION_RUN_STATUS),
-      isNull(productionRuns.archivedAt), gte(endDay, typeof cohort.startDate === "string" ? cohort.startDate : formatUtcDate(cohort.startDate)),
-      lte(endDay, typeof cohort.endDate === "string" ? cohort.endDate : formatUtcDate(cohort.endDate))));
-  return filterSingleFeedstockTypeRuns(rows, () => cohort.feedstockTypeId)
-    .map(row => row.productionRunId).sort();
+      isNull(productionRuns.archivedAt), failedRunEmissionBatchCondition(ctx, undefined, {
+        ...cohort,
+        startDate: typeof cohort.startDate === "string" ? cohort.startDate : formatUtcDate(cohort.startDate),
+        endDate: typeof cohort.endDate === "string" ? cohort.endDate : formatUtcDate(cohort.endDate),
+      })));
+  return rows.map(row => row.productionRunId).sort();
 }

@@ -1,3 +1,4 @@
+import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { sampleDocumentWarnings } from "@/lib/certification/sample-document-warnings";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import type {
@@ -93,7 +94,7 @@ export function buildEntityReadinessResult(
   for (const run of [...runs, ...failedEmissionRuns]) {
     const emissionsOnly = failedEmissionRuns.includes(run);
     // Evaluate field descriptors without the material lifecycle gate.
-    const readiness = deriveEntityCertifyReadiness("productionRun", run, emissionsOnly ? "complete" : undefined);
+    const readiness = deriveEntityCertifyReadiness("productionRun", run, emissionsOnly ? COMPLETED_PRODUCTION_RUN_STATUS : undefined);
     if (emissionsOnly) {
       readiness.gaps = readiness.gaps.filter(gap => FAILED_EMISSION_READINESS_KEYS.has(gap.key));
       readiness.warnings = readiness.warnings.filter(warning => FAILED_EMISSION_READINESS_KEYS.has(warning.key));

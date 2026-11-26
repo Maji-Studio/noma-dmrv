@@ -12,7 +12,13 @@ Status: accepted (2026-07-03) · Issue #349 · Partially supersedes
 > does not change yield, sampling or the material-member production span.
 >
 > The first Removal claiming the batch's production emissions includes these
-> inputs. Later Removals do not repeat them. An unmatched failed run can be saved;
+> inputs. Counted failed contributors extend the Removal's reporting start date
+> (`startedOn`) to include their start times. A failed run ending after the last
+> application still counts, with no warning (Kenji, 2026-11-26, answer page
+> `7d3JwsgrBD4sQ7NNSEEVdy`, round 4 q8). The protocol basis is operating emissions
+> in the reporting period under Biochar protocol 1.1, pinned in
+> [`versions.json`](../isometric/versions.json).
+> Later Removals do not repeat them. An unmatched failed run can be saved;
 > its live note and facility to-do resolve when a matching batch exists.
 >
 > Attached failed contributors may own feedstock transport alongside complete

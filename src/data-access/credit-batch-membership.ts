@@ -1,3 +1,4 @@
+import { sortProcessScopes } from "./production-processes";
 import { assertFailedEmissionBatchesEditable } from "./failed-run-emission-write-guard";
 import { findFailedEmissionCohortRunIds } from "./credit-batch-failed-cohort";
 import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze, type TransportOwnershipFreezeScope } from "./feedstock-transport-ownership-freeze";
@@ -170,8 +171,7 @@ export async function lockCreditBatchDeclarationRuns(
     ...(params.currentFailedRunIds ?? []),
   ]);
 
-  const scopes = [params, ...(params.previousScope ? [params.previousScope] : [])]
-    .sort((a, b) => `${a.facilityId}:${a.feedstockTypeId}`.localeCompare(`${b.facilityId}:${b.feedstockTypeId}`));
+  const scopes = sortProcessScopes([params, ...(params.previousScope ? [params.previousScope] : [])]);
   for (const scope of scopes) await lockProductionProcessScope(tx, scope);
   const failedAfterLock = await findFailedEmissionCohortRunIds(ctx, tx, params);
   const requestedIds = new Set(params.requestedProductionRunIds);

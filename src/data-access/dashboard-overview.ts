@@ -709,8 +709,8 @@ export async function getDashboardAttentionItems(
       code: productionRuns.code,
       dateDay: noDay,
       dateMs: noInstant,
-      ord: sql<number>`1`,
-      total: sql<number>`1`,
+      ord: sql<number>`1::bigint`.mapWith(Number),
+      total: sql<number>`1::bigint`.mapWith(Number),
       allIds: sql<string[]>`'{}'::text[]`,
     }).from(productionRuns).where(and(
       eq(productionRuns.organizationId, orgId), eq(productionRuns.facilityId, facilityId),

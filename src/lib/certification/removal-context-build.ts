@@ -1,7 +1,5 @@
-import { getTransportFeedstockIdsCountedElsewhere } from "@/data-access/certification-lineage-guards";
-import { PRODUCTION_SOURCE_MANIFEST_VERSION, readProductionSourceManifest } from "./production-source-manifest";
+import { buildProductionSourceManifest } from "@/data-access/production-source-manifest";
 import { loadBatchEmissionContributors } from "@/data-access/credit-batch-emission-contributors";
-import { getFeedstockTransportOwners } from "@/data-access/feedstock-transport-ownership";
 import type { CoveredContenders } from "@/lib/certification/covered-contenders";
 import { env } from "@/config/env";
 import { DURABILITY_MEASUREMENT_SAMPLES_ENABLED } from "./durability-measurement-samples";
@@ -320,10 +318,8 @@ export async function buildRemovalContext(
   const failedEmissionRuns = failedContributors.length
     ? await getProductionRunsForCertification(orgCtx, failedContributors.map(run => run.runId)) : [];
   const failedFeedstockIds = [...new Set(failedContributors.flatMap(run => run.feedstockIds))];
-  const failedOwners = await getFeedstockTransportOwners(orgCtx, failedFeedstockIds);
-  const failedRunIds = new Set(failedEmissionRuns.map(run => run.id));
-  const countedElsewhere = await getTransportFeedstockIdsCountedElsewhere(orgCtx, failedFeedstockIds, scope.removalId);
-  const countedFailedFeedstockIds = failedFeedstockIds.filter(id => failedRunIds.has(failedOwners.get(id) ?? "") && !countedElsewhere.has(id));
+  const productionSourceManifest = await buildProductionSourceManifest(orgCtx, failedContributors, undefined, scope.removalId);
+  const countedFailedFeedstockIds = productionSourceManifest.countedTransportFeedstockIds ?? [];
 
   // Batch-pooled Samples drive durability, transport, and readiness (ADR 0016).
   // The same durability blockers gate the submit pipeline below.
@@ -444,7 +440,7 @@ export async function buildRemovalContext(
     lineages,
     runs,
     failedEmissionRuns,
-    productionSourceManifest: readProductionSourceManifest({ productionSourceManifest: { version: PRODUCTION_SOURCE_MANIFEST_VERSION, countedTransportFeedstockIds: countedFailedFeedstockIds.sort(), failedContributors: failedContributors.sort((a, b) => a.runId.localeCompare(b.runId)) } })!,
+    productionSourceManifest,
     batchesWithSamples,
     attributionByRunId,
     memberBatchClaims,
