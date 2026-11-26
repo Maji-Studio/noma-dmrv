@@ -6,7 +6,8 @@
  * narrows the facility overview to it: the stage counts and labels, the KPIs
  * with hints that name the scope, only the To do rows that represent its records,
  * its scoped activity, and each stage's open-items bubble. Grouped rows keep
- * their in-scope records; structural gaps are facility setup and stay out
+ * their in-scope records; facility-scoped rows stay only under all batches.
+ * Structural gaps are facility setup and stay out
  * (Kenji, Q13: To do follows the filter).
  */
 import type {
@@ -59,10 +60,15 @@ function scopedKpis(base: DashboardKpi[], scope: DashboardBatchScopeView): Dashb
   return base.map((kpi) => ({ ...kpi, hint: hints[kpi.key], value: values[kpi.key], deltaPercent: null, detail: "" }));
 }
 
-/** Keep represented records in scope, preserving the existing grouped count and link rules. */
-export function scopeAttentionItems(items: readonly DashboardAttentionItem[], recordIds: readonly string[]): DashboardAttentionItem[] {
+/** Keep facility rows only under all batches; otherwise scope represented records as before. */
+export function scopeAttentionItems(
+  items: readonly DashboardAttentionItem[],
+  recordIds: readonly string[],
+  allBatches = false,
+): DashboardAttentionItem[] {
   const scopedIds = new Set(recordIds);
   return items.flatMap((item): DashboardAttentionItem[] => {
+    if (item.scope === "facility") return allBatches ? [item] : [];
     if (item.count == null) return item.recordIds.some((id) => scopedIds.has(id)) ? [item] : [];
     const ids = item.recordIds.filter((id) => scopedIds.has(id));
     if (ids.length === 0) return [];
@@ -73,8 +79,8 @@ export function scopeAttentionItems(items: readonly DashboardAttentionItem[], re
   });
 }
 
-export function applyBatchScope(overview: DashboardOverview, scope: DashboardBatchScopeView): DashboardOverview {
-  const attention = scopeAttentionItems(overview.attention, scope.recordIds);
+export function applyBatchScope(overview: DashboardOverview, scope: DashboardBatchScopeView, allBatches = false): DashboardOverview {
+  const attention = scopeAttentionItems(overview.attention, scope.recordIds, allBatches);
   const stations = overview.stations.map((station) => {
     const own = attention.filter((item) => item.stage === station.key);
     const reasons = own.map((item) => ({

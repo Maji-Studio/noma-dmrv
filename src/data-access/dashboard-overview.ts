@@ -164,6 +164,8 @@ export interface DashboardAttentionItem {
   /** The traceability stage whose attention bubble includes this row. */
   stage: DashboardStationKey;
   recordKind: RecordKind;
+  /** Belongs to no credit batch; shown only when all credit batches are in scope. */
+  scope?: "facility";
   /**
    * Entity code shown in the mono column, e.g. "PR-26-0042"; on a grouped row
    * the list it links to, e.g. "Production runs".
@@ -798,6 +800,7 @@ export async function getDashboardAttentionItems(
     ? await loadFacilityFailedEmissionTodos(ctx, facilityId) : [];
   const failedEmissionRows = failedEmissionTodos.map((todo): DashboardAttentionItem => ({
     id: todo.id, stage: "production", recordKind: "productionRun", entityCode: todo.productionRun.code,
+    scope: "facility",
     recordIds: [todo.productionRun.id], date: todo.emissionAttachment.endDay,
     title: todo.title, href: todo.target.href,
   }));
@@ -893,6 +896,7 @@ export async function getDashboardAttentionItems(
         groupedRow("removal-rejected", "Removals", REMOVAL_REJECTED_ATTENTION_TITLE, removalRows.rejected.length, removalsList, removalRows.rejected)),
       ...capOrGroup(failedEmissionRows, failedEmissionRows.length, (): DashboardAttentionItem => ({
         id: "failed-run-emissions-group", stage: "production", recordKind: "productionRun",
+        scope: "facility",
         entityCode: "Production runs", count: failedEmissionRows.length,
         recordIds: failedEmissionRows.flatMap(row => row.recordIds), recordItems: failedEmissionRows,
         date: null, title: "Failed runs with unresolved emissions",
