@@ -1,3 +1,4 @@
+import { FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze } from "./feedstock-transport-ownership-freeze";
 import { and, eq, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
@@ -53,7 +54,7 @@ export async function prepareFailedFeedstockEmissionWrite(
     // Capture ownership before the intake mutation; the returned finish step
     // checks it after the write, within the same rollback boundary.
     const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
-      await getTransportFreezeFeedstockIds(ctx, tx, { runIds: runs.filter(run => run.status === "failed").map(run => run.id) }),
+      await getTransportFreezeFeedstockIds(ctx, tx, { runIds: runs.filter(run => run.status === FAILED_PRODUCTION_RUN_STATUS).map(run => run.id) }),
       { mutation: "update", subject: "feedstock" });
     const finish: (() => Promise<void>)[] = [];
     for (const run of runs) finish.push(await prepareFailedRunEmissionWrite(ctx, tx, run.id, {

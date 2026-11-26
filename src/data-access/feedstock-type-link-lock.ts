@@ -1,3 +1,4 @@
+import { FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { synchronizeFailedEmissionBatches } from "./failed-run-emission-write-guard";
 import { loadRunEmissionContributors } from "./credit-batch-emission-contributors";
 import type { DbTransaction } from "@/db";
@@ -117,7 +118,7 @@ export async function getLockedFeedstockTypeLinkLock(
       eq(feedstocks.id, productionRunFeedstocks.feedstockId), eq(feedstocks.organizationId, ctx.organizationId),
     )).innerJoin(productionRuns, and(
       eq(productionRuns.id, productionRunFeedstocks.productionRunId),
-      eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.status, "failed"),
+      eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.status, FAILED_PRODUCTION_RUN_STATUS),
     )).where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId), eq(feedstocks.feedstockTypeId, feedstockTypeId)));
   const contributors = await loadRunEmissionContributors(ctx, failedRuns.map(run => run.id), tx, { includeArchived: true });
   const batchIds = [...new Set([...batches.map(batch => batch.id), ...contributors.flatMap(run => run.creditBatchId ? [run.creditBatchId] : [])])];

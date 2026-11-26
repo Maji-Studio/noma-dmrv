@@ -7,8 +7,8 @@
  */
 import { MissingRunLinks } from "./credit-batch-missing-runs-notice";
 import { Notice } from "@/components/ui/notice";
-import { describeFailedRunEmissionTodo, failedRunEmissionTodoTitle } from "@/components/production-runs/failed-run-emission-copy";
-import { useFacilityCreditBatchTodos } from "@/hooks/use-facility-credit-batch-todos";
+import { describeFailedRunEmissionTodo, failedRunEmissionTodoTitle } from "@/lib/production-runs/failed-run-emission-copy";
+import { useFacilityFailedRunEmissionTodos } from "@/hooks/use-facility-failed-run-emission-todos";
 import type { FailedRunEmissionGuidance } from "@/types/failed-run-emission-guidance";
 
 export function FailedRunEmissionTodosView({ items, facilityId }: { items: readonly FailedRunEmissionGuidance[]; facilityId: string }) {
@@ -28,7 +28,7 @@ export function FailedRunEmissionTodosView({ items, facilityId }: { items: reado
 }
 
 export function FailedRunEmissionTodos({ facilityId }: { facilityId: string }) {
-  const todos = useFacilityCreditBatchTodos(facilityId);
+  const todos = useFacilityFailedRunEmissionTodos(facilityId);
   if (todos.isError || !todos.data) return null;
   return <FailedRunEmissionTodosView items={todos.data.map((todo) => todo.emissionAttachment)} facilityId={facilityId} />;
 }

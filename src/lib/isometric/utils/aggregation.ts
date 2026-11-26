@@ -1,3 +1,4 @@
+import { FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { positiveOrNull } from "@/lib/calculations/transport-leg";
 import { countedRoundTripKm } from "@/lib/calculations/round-trip";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
@@ -264,7 +265,7 @@ export function aggregateProductionRuns(
   }
 
   const warnings: string[] = [];
-  const failed = (options?.failedContributors ?? []).filter(run => run.status === "failed");
+  const failed = (options?.failedContributors ?? []).filter(run => run.status === FAILED_PRODUCTION_RUN_STATUS);
   const uniqueRuns = [...new Map([...runs, ...failed].map(run => [run.id, run])).values()];
   const sourceProductionRunIds = uniqueRuns.map(run => run.id);
 
@@ -278,7 +279,7 @@ export function aggregateProductionRuns(
   let latestEndTime: Date | null = null;
 
   for (const run of uniqueRuns) {
-    const emissionsOnly = run.status === "failed";
+    const emissionsOnly = run.status === FAILED_PRODUCTION_RUN_STATUS;
     // A run reaching aggregation must be closed — its window feeds emission
     // accounting. An open run (NULL end) is a data error
     // here; fail loudly naming the run rather than substitute a time (#259).

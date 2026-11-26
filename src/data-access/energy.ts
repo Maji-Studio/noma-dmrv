@@ -43,7 +43,7 @@ import type {
   EnergyInputs,
   EnergyRunShareInput,
 } from "@/lib/energy/types";
-import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { CANCELLED_PRODUCTION_RUN_STATUS, FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { requireOrgScope } from "./utils";
 
@@ -295,7 +295,7 @@ export async function getRecordedEnergyInputs(
         dieselGensetLiters: run.dieselGensetLiters,
         preprocessingFuelLiters: run.preprocessingFuelLiters,
         electricityKwh: run.electricityKwh,
-        biocharDryMassKg: run.status === "failed" ? null : run.biocharDryMassKg,
+        biocharDryMassKg: run.status === FAILED_PRODUCTION_RUN_STATUS ? null : run.biocharDryMassKg,
       })),
       feedstocks: feedstockRows.map((feedstock) => ({
         id: feedstock.id,

@@ -1,3 +1,4 @@
+import { FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { z } from "zod";
 import { SafeError } from "@/lib/errors";
 import type { RemovalSubmissionContext } from "./certify-context-types";
@@ -35,7 +36,7 @@ export function claimingFailedEmissionRuns(ctx: RemovalSubmissionContext, remova
     throw new SafeError("Failed production inputs have no source manifest. Refresh the review before submitting.");
   }
   const ids = new Set(manifest?.failedContributors.filter(run => claiming.has(run.creditBatchId)).map(run => run.runId));
-  return [...new Map((ctx.failedEmissionRuns ?? []).filter(run => run.status === "failed" && ids.has(run.id))
+  return [...new Map((ctx.failedEmissionRuns ?? []).filter(run => run.status === FAILED_PRODUCTION_RUN_STATUS && ids.has(run.id))
     .map(run => [run.id, run])).values()];
 }
 

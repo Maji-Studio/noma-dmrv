@@ -1,3 +1,4 @@
+import { FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { and, eq, gte, isNull, lte } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { feedstocks, productionRunFeedstocks, productionRuns } from "@/db/schema";
@@ -33,7 +34,7 @@ export async function findFailedEmissionCohortRunIds(
     .innerJoin(feedstocks, and(eq(feedstocks.id, productionRunFeedstocks.feedstockId),
       eq(feedstocks.organizationId, ctx.organizationId)))
     .where(and(eq(productionRuns.organizationId, ctx.organizationId),
-      eq(productionRuns.facilityId, cohort.facilityId), eq(productionRuns.status, "failed"),
+      eq(productionRuns.facilityId, cohort.facilityId), eq(productionRuns.status, FAILED_PRODUCTION_RUN_STATUS),
       isNull(productionRuns.archivedAt), gte(endDay, typeof cohort.startDate === "string" ? cohort.startDate : formatUtcDate(cohort.startDate)),
       lte(endDay, typeof cohort.endDate === "string" ? cohort.endDate : formatUtcDate(cohort.endDate))));
   return filterSingleFeedstockTypeRuns(rows, () => cohort.feedstockTypeId)

@@ -6,7 +6,7 @@ import type { DbTransaction } from "@/db";
 import { productionRunFeedstockDraws, productionRunFeedstocks, productionRuns, storageLocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
-import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { CANCELLED_PRODUCTION_RUN_STATUS, FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { FeedstockReplayOverdrawError } from "@/lib/feedstock-draw-replay";
 import { replayFeedstockBinStock } from "./feedstock-bin-ledger";
 import { withProductionRunErrors } from "@/lib/production-run-domain-errors";
@@ -155,7 +155,7 @@ export async function reallocateRunsForBins(
 
   const finishFailedEmissionWrites = [];
   if (!options.allowSentRewrite) for (const { run } of rewrites) {
-    if (run.status !== "failed") continue;
+    if (run.status !== FAILED_PRODUCTION_RUN_STATUS) continue;
     finishFailedEmissionWrites.push(await prepareFailedRunEmissionWrite(ctx, tx, run.id, {
       feedstockDraws: draws.filter(draw => draw.productionRunId === run.id),
     }));

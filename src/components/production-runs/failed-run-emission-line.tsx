@@ -7,7 +7,8 @@
  */
 import { EmissionsLine } from "@/components/record-locks/record-used-by-next-step";
 import { useProductionRunCreditBatchPreview } from "@/hooks/use-production-run-credit-batch-preview";
-import { describeFailedRunEmissions } from "./failed-run-emission-copy";
+import { FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { describeFailedRunEmissions } from "@/lib/production-runs/failed-run-emission-copy";
 import type { FailedRunEmissionGuidance } from "@/types/failed-run-emission-guidance";
 
 export function FailedRunEmissionLineView({ guidance }: { guidance: FailedRunEmissionGuidance }) {
@@ -16,12 +17,12 @@ export function FailedRunEmissionLineView({ guidance }: { guidance: FailedRunEmi
 }
 
 export function FailedRunSheetEmissions({ run }: { run: { id: string; facilityId: string; status: string } | null | undefined }) {
-  const failed = run?.status === "failed";
+  const failed = run?.status === FAILED_PRODUCTION_RUN_STATUS;
   const query = useProductionRunCreditBatchPreview(failed && run ? {
     savedOnly: true,
     productionRunId: run.id,
     facilityId: run.facilityId,
-    status: "failed",
+    status: FAILED_PRODUCTION_RUN_STATUS,
     startTime: null,
     endTime: null,
     feedstockStorageLocationIds: [],

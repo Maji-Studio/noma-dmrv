@@ -714,7 +714,7 @@ before allowing confirmation to convert stored entry values to the new unit.
 Where should emissions from a period that only had failed runs and never
 reaches an Application eventually be reported? For now, keep a visible to-do
 and do not move emissions to another period or feedstock automatically.
-`src/data-access/failed-run-emission-guidance.ts:loadFacilityFailedEmissionTodos`
+`src/data-access/failed-run-emission-guidance.ts:loadFacilityFailedRunEmissionTodos`
 keeps unmatched runs visible; `loadRunEmissionContributors` in
 `src/data-access/credit-batch-emission-contributors.ts` resolves only an exact
 facility, type and end-day batch match. A matched batch still needs real applied

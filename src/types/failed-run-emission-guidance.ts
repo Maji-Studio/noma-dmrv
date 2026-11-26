@@ -8,6 +8,5 @@ export interface FailedRunEmissionGuidance {
   feedstockTypeName: string | null;
   state: "attached" | "no-match" | "mixed-feedstock" | "empty-feedstock";
   batch: { id: string; code: string } | null;
-  message: string;
   href: string;
 }

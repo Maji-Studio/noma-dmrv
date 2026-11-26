@@ -1,4 +1,4 @@
-import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { COMPLETED_PRODUCTION_RUN_STATUS, FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 
 export interface FeedstockTransportDraw {
   feedstockId: string;
@@ -13,7 +13,7 @@ export interface FeedstockTransportDraw {
 export function feedstockTransportOwners(draws: readonly FeedstockTransportDraw[]): Map<string, string> {
   const firstDraws = new Map<string, FeedstockTransportDraw>();
   for (const draw of draws) {
-    if (draw.status !== COMPLETED_PRODUCTION_RUN_STATUS && !(draw.status === "failed" && draw.failedEmissionAttached)) continue;
+    if (draw.status !== COMPLETED_PRODUCTION_RUN_STATUS && !(draw.status === FAILED_PRODUCTION_RUN_STATUS && draw.failedEmissionAttached)) continue;
     const previous = firstDraws.get(draw.feedstockId);
     if (!previous || draw.startTime.getTime() < previous.startTime.getTime() ||
       (draw.startTime.getTime() === previous.startTime.getTime() && draw.runId < previous.runId)) {

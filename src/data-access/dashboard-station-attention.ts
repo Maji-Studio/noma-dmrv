@@ -16,6 +16,7 @@
  *
  * Pure, so the mapping is unit-tested without a database.
  */
+import { failedRunEmissionTodoTitle } from "@/lib/production-runs/failed-run-emission-copy";
 import { facilityListHref, plural } from "@/lib/dashboard-links";
 import { RECORD_LINKS } from "@/lib/record-links";
 import type {
@@ -44,8 +45,8 @@ function batchReasons(counts: DashboardBatchAttentionCounts, facilityId: string)
   return [
     ...((counts.failedEmissions ?? 0) > 0 ? [{
       state: "warning" as const,
-      text: `${plural(counts.failedEmissions!, "failed run")} with unresolved emissions`,
-      href: facilityListHref(RECORD_LINKS.productionRun.path, facilityId),
+      text: failedRunEmissionTodoTitle(counts.failedEmissions!),
+      href: facilityListHref(RECORD_LINKS.creditBatch.path, facilityId),
     }] : []),
     ...(counts.interrupted > 0
       ? [{

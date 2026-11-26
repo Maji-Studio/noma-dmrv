@@ -6,7 +6,7 @@ import { certificationSubmissions, certifierRemovals, creditBatchApplications, c
 import type { OrgContext } from "@/lib/auth/server";
 import { buildEmissionAllocation } from "@/lib/certification/emission-allocation";
 import { formatFacilityDate } from "@/lib/date-utils";
-import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { COMPLETED_PRODUCTION_RUN_STATUS, FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { SafeError } from "@/lib/errors";
 import { ISOMETRIC_PROVIDER, REMOVAL_ENTITY_TYPE, REMOVAL_SUBMISSION_TYPE } from "@/lib/isometric/utils/constants";
 import { isSubmittedAttempt } from "@/lib/record-lock";
@@ -55,7 +55,7 @@ export async function getEmissionAllocation(ctx: OrgContext, input: EmissionAllo
   }
   // Include unbatched complete and failed runs so their recorded activity has a not-yet column.
   // Members follow the exact lineage selection, including incomplete member runs.
-  const runs = runRows.filter(({ run }) => batchByRun.has(run.id) || ((run.status === COMPLETED_PRODUCTION_RUN_STATUS || run.status === "failed") && !run.archivedAt));
+  const runs = runRows.filter(({ run }) => batchByRun.has(run.id) || ((run.status === COMPLETED_PRODUCTION_RUN_STATUS || run.status === FAILED_PRODUCTION_RUN_STATUS) && !run.archivedAt));
   const removalIds = removalRows.map(row => row.id);
   const [removalLoads, appliedDeliveryIds, production] = await Promise.all([
     loadAllocationRemovalLoads(ctx, batchIds, removalRows, executor), loadAppliedDeliveryIds(ctx, batchIds, executor),

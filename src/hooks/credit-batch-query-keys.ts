@@ -14,7 +14,8 @@ export const creditBatchKeys = {
   recordPreviewPrefix: () => [...creditBatchKeys.all, "recordPreview"] as const,
   recordPreview: (input: RecordCreditBatchPreviewInput | null) =>
     [...creditBatchKeys.recordPreviewPrefix(), input] as const,
-  facilityTodos: (facilityId: string) => [...creditBatchKeys.runPreviewPrefix(), "facility-todos", facilityId] as const,
+  // Run and credit batch mutations invalidate runPreviewPrefix, refreshing these facility to-dos too.
+  failedRunEmissionTodos: (facilityId: string) => [...creditBatchKeys.runPreviewPrefix(), "failed-run-emission-todos", facilityId] as const,
   runPreviewPrefix: () => [...creditBatchKeys.all, "runPreview"] as const,
   runPreview: (input: ProductionRunCreditBatchPreviewInput | null) =>
     [...creditBatchKeys.runPreviewPrefix(), input] as const,

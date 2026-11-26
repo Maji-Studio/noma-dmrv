@@ -4,6 +4,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { deliveries, feedstocks } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { SafeError } from "@/lib/errors";
 import { DomainError } from "@/lib/domain-errors";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
 import { formatCertificationLineageLockMessage } from "@/lib/certification/lineage-lock-message";
@@ -18,38 +19,19 @@ export { getTransportDistanceDrift } from "./transport-distance-drift";
 
 const LOCKED_REFRESH_MESSAGE = "The distance was not refreshed because its transport data belongs to a locked Removal. Ask an Organization Admin to review the linked Removal.";
 
-const HOLDERS_MARKER = " Held by ";
-
-/**
- * The guard's standard Sent refusal, whichever Removals it names: same opening,
- * same how-to-free ending. An interrupted or custom refusal keeps its message.
- */
-function isStandardSentRefusal(message: string, entityType: TransportDistanceTarget["entityType"] | "biocharProduct"): boolean {
-  const standard = formatCertificationLineageLockMessage({ mutation: "update", subjectEntityType: entityType, lineageEntityType: entityType });
-  const holdersAt = standard.indexOf(HOLDERS_MARKER);
-  const opening = standard.slice(0, holdersAt);
-  const ending = standard.slice(standard.indexOf(". ", holdersAt) + 1);
-  return holdersAt > 0 && message.startsWith(`${opening}${HOLDERS_MARKER}`) && message.endsWith(ending);
-}
-
-/** Swap the guard's standard Sent refusal for the refresh's own guidance. */
-async function withRefreshErrors<T>(work: () => Promise<T>, entityType: TransportDistanceTarget["entityType"] | "biocharProduct"): Promise<T> {
-  try {
-    return await withFeedstockErrors(work, "certification_locked");
-  } catch (error) {
-    if (error instanceof DomainError && error.code === "certification_locked" && isStandardSentRefusal(error.message, entityType)) {
-      throw new DomainError("certification_locked", LOCKED_REFRESH_MESSAGE);
-    }
-    throw error;
-  }
-}
-
 async function guardRefresh(ctx: OrgContext, tx: DbTransaction, target: TransportDistanceTarget) {
   requireOrgScope(ctx);
   const targets = await distanceRefreshLineageTargets(ctx, tx, target);
   const lockedKeys = await lockCertifiedLineageArtifacts(ctx, tx, targets);
   for (const lineageTarget of targets) {
-    await withRefreshErrors(() => assertCanMutateCertifiedLineage(ctx, tx, lineageTarget, "update"), lineageTarget.entityType);
+    try {
+      await withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, lineageTarget, "update"), "certification_locked");
+    } catch (error) {
+      if (error instanceof SafeError && error.message === formatCertificationLineageLockMessage({
+        mutation: "update", subjectEntityType: lineageTarget.entityType, lineageEntityType: lineageTarget.entityType,
+      })) throw new DomainError("certification_locked", LOCKED_REFRESH_MESSAGE);
+      throw error;
+    }
   }
   return { targets, lockedKeys };
 }

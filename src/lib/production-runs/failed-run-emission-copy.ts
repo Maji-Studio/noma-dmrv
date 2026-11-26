@@ -81,9 +81,9 @@ export function describeFailedRunEmissionTodo(guidance: FailedRunEmissionGuidanc
   const feedstock = guidance.feedstockTypeName ?? "its feedstock";
   switch (guidance.state) {
     case "mixed-feedstock":
-      return "its feedstock records hold more than one feedstock type.";
+      return "review its feedstock sources so they hold one feedstock type.";
     case "empty-feedstock":
-      return "its emissions have no feedstock type.";
+      return "give its feedstock sources a feedstock type.";
     default:
       return `create a credit batch for ${feedstock} that covers ${day}.`;
   }
@@ -92,4 +92,18 @@ export function describeFailedRunEmissionTodo(guidance: FailedRunEmissionGuidanc
 /** The to-do's title: the count, then what is wrong. */
 export function failedRunEmissionTodoTitle(count: number): string {
   return count === 1 ? "1 failed run has emissions without a credit batch" : `${count} failed runs have emissions without a credit batch`;
+}
+
+export const FAILED_RUN_EMISSION_GROUP_TITLE = "Failed run emissions without a credit batch";
+
+/** The unresolved condition shared by dashboard rows. */
+export function failedRunEmissionTodoRowTitle(state: Exclude<FailedRunEmissionGuidance["state"], "attached">): string {
+  switch (state) {
+    case "no-match":
+      return "Emissions without a credit batch";
+    case "mixed-feedstock":
+      return "Emissions need one feedstock type";
+    case "empty-feedstock":
+      return "Emissions need a feedstock type";
+  }
 }

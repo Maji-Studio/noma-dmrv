@@ -1,3 +1,4 @@
+import { FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 /**
  * The words of the Production Run footer's credit batch line (#1164), one
  * entry per preview state. Pure, so every state's copy is tested without a
@@ -16,7 +17,7 @@ import {
   describeFailedRunEmissions,
   UNSAVED_FAILED_RUN_EMISSIONS,
   type FailedRunEmissionCopy,
-} from "./failed-run-emission-copy";
+} from "@/lib/production-runs/failed-run-emission-copy";
 import type {
   CreditBatchPreviewBatch,
   ProductionRunCreditBatchPreview,
@@ -139,7 +140,7 @@ export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreview
       return errorLineCopy();
     case "not-applicable":
       // A failed run adds no biochar but its emissions count in a batch, so it never reads "Not applicable".
-      if (view.status === "failed") {
+      if (view.status === FAILED_PRODUCTION_RUN_STATUS) {
         return emissionLineCopy(view.savedEmissionAttachment ? describeFailedRunEmissions(view.savedEmissionAttachment) : UNSAVED_FAILED_RUN_EMISSIONS);
       }
       return {

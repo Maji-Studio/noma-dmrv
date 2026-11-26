@@ -1,8 +1,10 @@
+import { FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { feedstockTypes, productionRuns } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { recordHref } from "@/lib/record-links";
+import { facilityListHref } from "@/lib/dashboard-links";
+import { RECORD_LINKS, recordHref } from "@/lib/record-links";
 import type { FailedRunEmissionGuidance } from "@/types/failed-run-emission-guidance";
 import { loadRunEmissionContributors } from "./credit-batch-emission-contributors";
 import { requireOrgScope } from "./utils";
@@ -16,7 +18,7 @@ export async function loadFailedRunEmissionGuidance(
   requireOrgScope(ctx);
   if ("runIds" in scope && !scope.runIds.length) return [];
   const runs = await reader.select({ id: productionRuns.id, code: productionRuns.code }).from(productionRuns)
-    .where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.status, "failed"),
+    .where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.status, FAILED_PRODUCTION_RUN_STATUS),
       isNull(productionRuns.archivedAt), "facilityId" in scope ? eq(productionRuns.facilityId, scope.facilityId)
         : inArray(productionRuns.id, [...scope.runIds]))).orderBy(productionRuns.id);
   const contributors = await loadRunEmissionContributors(ctx, runs.map(run => run.id), reader);
@@ -31,33 +33,26 @@ export async function loadFailedRunEmissionGuidance(
     const state = run.creditBatchId ? "attached" : run.unresolvedReason === "mixed-feedstock" ? "mixed-feedstock"
       : run.unresolvedReason === "empty-feedstock" ? "empty-feedstock" : "no-match";
     const batch = run.creditBatchId ? { id: run.creditBatchId, code: run.creditBatchCode! } : null;
-    const message = batch ? `Run ${runCode}'s emissions are attached to credit batch ${batch.code}.`
-      : state === "mixed-feedstock" ? `Run ${runCode} is saved. Its feedstock records contain more than one feedstock type. Review the feedstock sources to assign its emissions.`
-        : state === "empty-feedstock" ? `Run ${runCode} is saved. Its emissions have no feedstock type. Review the feedstock sources to assign its emissions.`
-          : `Run ${runCode} is saved. Its emissions have no matching credit batch. Create a credit batch for ${feedstockTypeName ?? "this feedstock type"} covering ${run.endDay ?? "the run's end day"}.`;
     const href = batch ? recordHref("creditBatch", batch.id, { facilityId: run.facilityId })
-      : state === "no-match" ? `/credit-batches?facility=${encodeURIComponent(run.facilityId)}`
+      : state === "no-match" ? facilityListHref(RECORD_LINKS.creditBatch.path, run.facilityId)
         : recordHref("productionRun", run.runId, { facilityId: run.facilityId });
     return { productionRunId: run.runId, runCode, facilityId: run.facilityId, endDay: run.endDay,
-      feedstockTypeId: run.feedstockTypeId, feedstockTypeName, state, batch, message, href };
+      feedstockTypeId: run.feedstockTypeId, feedstockTypeName, state, batch, href };
   });
 }
 
 /** Facility-level checks remain available even when there is no credit batch. */
-export async function loadFacilityFailedEmissionTodos(
+export async function loadFacilityFailedRunEmissionTodos(
   ctx: OrgContext, facilityId: string, reader: DbTransaction | typeof db = db,
 ) {
   requireOrgScope(ctx);
   const guidance = await loadFailedRunEmissionGuidance(ctx, { facilityId }, reader);
-  return guidance.filter(item => item.state !== "attached").map(item => ({
+  return guidance.flatMap(item => item.state === "attached" ? [] : [{
     id: `failed-run-emissions:${item.productionRunId}`,
-    title: item.state === "mixed-feedstock" ? "Feedstock types are mixed"
-      : item.state === "empty-feedstock" ? "Feedstock type is missing" : "No credit batch for failed run emissions",
-    detail: item.message,
     productionRun: { id: item.productionRunId, code: item.runCode },
     target: { href: item.href },
-    emissionAttachment: item,
-  }));
+    emissionAttachment: { ...item, state: item.state },
+  }]);
 }
 
-export type FacilityFailedEmissionTodo = Awaited<ReturnType<typeof loadFacilityFailedEmissionTodos>>[number];
+export type FacilityFailedRunEmissionTodo = Awaited<ReturnType<typeof loadFacilityFailedRunEmissionTodos>>[number];

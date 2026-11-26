@@ -74,6 +74,6 @@ it("counts unresolved failed emissions at the production station", () => {
     interrupted: 0, notSubmitted: 0, returned: 0, failedEmissions: 1,
   }, "facility");
   expect(result.find(station => station.key === "production")).toMatchObject({
-    attention: 1, reasons: [{ state: "warning", text: "1 failed run with unresolved emissions" }],
+    attention: 1, reasons: [{ state: "warning", text: "1 failed run has emissions without a credit batch", href: "/credit-batches?facility=facility" }],
   });
 });

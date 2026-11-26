@@ -1,3 +1,4 @@
+import { FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { and, eq, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { certificationSubmissions, certifierRemovals, creditBatches, feedstocks, productionRunFeedstocks, productionRuns, storageLocations } from "@/db/schema";
@@ -78,7 +79,7 @@ export async function prepareFailedRunEmissionWrite(
   const [run] = await tx.select({ facilityId: productionRuns.facilityId, status: productionRuns.status }).from(productionRuns).where(and(
     eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, runId),
   ));
-  if (!run || (run.status !== "failed" && prospective.status !== "failed")) return async () => {};
+  if (!run || (run.status !== FAILED_PRODUCTION_RUN_STATUS && prospective.status !== FAILED_PRODUCTION_RUN_STATUS)) return async () => {};
   const old = await loadRunEmissionContributors(ctx, [runId], tx, { includeArchived: true });
   const types = await tx.selectDistinct({ id: feedstocks.feedstockTypeId }).from(productionRunFeedstocks)
     .innerJoin(feedstocks, and(eq(feedstocks.id, productionRunFeedstocks.feedstockId), eq(feedstocks.organizationId, ctx.organizationId)))

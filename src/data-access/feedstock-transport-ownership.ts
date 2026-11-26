@@ -1,3 +1,4 @@
+import { COMPLETED_PRODUCTION_RUN_STATUS, EMISSION_SOURCE_RUN_STATUSES, FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { db, type DbTransaction } from "@/db";
 import { creditBatchProductionRuns, creditBatches, productionRunFeedstocks, productionRuns } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -25,7 +26,7 @@ async function loadEligibleDraws(
     .innerJoin(productionRuns, and(
       eq(productionRuns.id, productionRunFeedstocks.productionRunId),
       eq(productionRuns.organizationId, ctx.organizationId),
-      inArray(productionRuns.status, ["complete", "failed"]),
+      inArray(productionRuns.status, [...EMISSION_SOURCE_RUN_STATUSES]),
       options.includeArchived ? undefined : isNull(productionRuns.archivedAt),
     ))
     .leftJoin(creditBatchProductionRuns, and(
@@ -38,14 +39,14 @@ async function loadEligibleDraws(
       options.includeArchived ? undefined : isNull(creditBatches.archivedAt),
     ))
     .where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId),
-      or(eq(productionRuns.status, "failed"), isNotNull(creditBatches.id)),
+      or(eq(productionRuns.status, FAILED_PRODUCTION_RUN_STATUS), isNotNull(creditBatches.id)),
       inArray(productionRunFeedstocks.feedstockId, ids)));
-  const failedIds = [...new Set(draws.filter(draw => draw.status === "failed").map(draw => draw.runId))];
+  const failedIds = [...new Set(draws.filter(draw => draw.status === FAILED_PRODUCTION_RUN_STATUS).map(draw => draw.runId))];
   const contributors = failedIds.length
     ? await loadRunEmissionContributors(ctx, failedIds, executor, options) : [];
   const byRun = new Map(contributors.map(run => [run.runId, run]));
   return draws.flatMap(draw => {
-    if (draw.status === "complete" && draw.creditBatchId && draw.creditBatchCode)
+    if (draw.status === COMPLETED_PRODUCTION_RUN_STATUS && draw.creditBatchId && draw.creditBatchCode)
       return [{ ...draw, failedEmissionAttached: false, creditBatchId: draw.creditBatchId, creditBatchCode: draw.creditBatchCode }];
     const contributor = byRun.get(draw.runId);
     return contributor?.creditBatchId ? [{ ...draw,

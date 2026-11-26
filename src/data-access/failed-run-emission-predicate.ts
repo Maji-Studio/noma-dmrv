@@ -1,3 +1,4 @@
+import { FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { and, eq, gte, lte, sql, type SQL } from "drizzle-orm";
 import { creditBatches, productionRuns } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -15,7 +16,7 @@ export function failedRunEmissionBatchCondition(ctx: OrgContext, endDay?: SQL): 
   return and(
     eq(productionRuns.organizationId, ctx.organizationId),
     eq(creditBatches.organizationId, ctx.organizationId),
-    eq(productionRuns.status, "failed"),
+    eq(productionRuns.status, FAILED_PRODUCTION_RUN_STATUS),
     eq(productionRuns.facilityId, creditBatches.facilityId),
     gte(day, creditBatches.startDate), lte(day, creditBatches.endDate),
     // A scalar aggregate resolves repeated same-type draws but rejects both

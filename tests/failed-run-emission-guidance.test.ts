@@ -2,7 +2,7 @@ import { beforeAll, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { creditBatches, feedstocks, feedstockTypes, productionRunFeedstocks, productionRuns } from "@/db/schema";
-import { loadFacilityFailedEmissionTodos } from "@/data-access/failed-run-emission-guidance";
+import { loadFacilityFailedRunEmissionTodos } from "@/data-access/failed-run-emission-guidance";
 import { getProductionRunCreditBatchPreview } from "@/data-access/production-run-credit-batch-preview";
 import { getEmissionAllocation } from "@/data-access/emission-allocation";
 import { NOT_YET } from "@/types/emission-allocation";
@@ -21,8 +21,8 @@ it("reads a saved unresolved note, keeps activity Not yet, and resolves without 
     const preview = await getProductionRunCreditBatchPreview(ctx, input, tx);
     expect(preview.savedEmissionAttachment).toMatchObject({ state: "no-match", productionRunId: f.run.id,
       runCode: f.run.code, endDay: "2026-03-01", feedstockTypeName: f.type.name, batch: null });
-    expect(preview.savedEmissionAttachment?.message).toContain("is saved");
-    const todos = await loadFacilityFailedEmissionTodos(ctx, f.facility.id, tx);
+    expect(preview.savedEmissionAttachment).not.toHaveProperty("message");
+    const todos = await loadFacilityFailedRunEmissionTodos(ctx, f.facility.id, tx);
     expect(todos).toHaveLength(1);
     expect(todos[0].emissionAttachment).toEqual(preview.savedEmissionAttachment);
     expect(todos[0].target.href).toContain("/credit-batches?facility=");
@@ -33,9 +33,9 @@ it("reads a saved unresolved note, keeps activity Not yet, and resolves without 
     expect((await getProductionRunCreditBatchPreview(ctx, input, tx)).savedEmissionAttachment).toMatchObject({
       state: "attached", batch: { id: batch.id, code: batch.code },
     });
-    expect(await loadFacilityFailedEmissionTodos(ctx, f.facility.id, tx)).toEqual([]);
+    expect(await loadFacilityFailedRunEmissionTodos(ctx, f.facility.id, tx)).toEqual([]);
     expect((await tx.select().from(productionRuns).where(eq(productionRuns.id, f.run.id)))[0]).toEqual(f.run);
-    expect(await loadFacilityFailedEmissionTodos({ ...ctx, organizationId: "foreign-org" }, f.facility.id, tx)).toEqual([]);
+    expect(await loadFacilityFailedRunEmissionTodos({ ...ctx, organizationId: "foreign-org" }, f.facility.id, tx)).toEqual([]);
     throw ROLLBACK;
   })).rejects.toBe(ROLLBACK);
 });
@@ -47,12 +47,14 @@ it("reports mixed provenance rather than choosing a matching type, and distingui
     const [stock] = await tx.insert(feedstocks).values({ ...f.stock, id: undefined, code: `FR-MIX-${crypto.randomUUID()}`, feedstockTypeId: type.id }).returning();
     await tx.insert(productionRunFeedstocks).values({ ...f.org, productionRunId: f.run.id, feedstockId: stock.id, wetMassUsedKg: 1 });
     const ctx = makeTestOrgContext();
-    const [mixed] = await loadFacilityFailedEmissionTodos(ctx, f.facility.id, tx);
+    const [mixed] = await loadFacilityFailedRunEmissionTodos(ctx, f.facility.id, tx);
     expect(mixed.emissionAttachment.state).toBe("mixed-feedstock");
-    expect(mixed.detail).toContain("more than one feedstock type");
+    expect(mixed.emissionAttachment).toMatchObject({ feedstockTypeId: null, batch: null });
+    expect(mixed).not.toHaveProperty("title");
+    expect(mixed).not.toHaveProperty("detail");
     expect(mixed.target.href).toContain("/production-runs?");
     await tx.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, f.run.id));
-    expect((await loadFacilityFailedEmissionTodos(ctx, f.facility.id, tx))[0].emissionAttachment.state).toBe("empty-feedstock");
+    expect((await loadFacilityFailedRunEmissionTodos(ctx, f.facility.id, tx))[0].emissionAttachment.state).toBe("empty-feedstock");
     throw ROLLBACK;
   })).rejects.toBe(ROLLBACK);
 });

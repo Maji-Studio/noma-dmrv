@@ -1,4 +1,5 @@
-import { loadFacilityFailedEmissionTodos } from "./failed-run-emission-guidance";
+import { failedRunEmissionTodoRowTitle, FAILED_RUN_EMISSION_GROUP_TITLE } from "@/lib/production-runs/failed-run-emission-copy";
+import { loadFacilityFailedRunEmissionTodos } from "./failed-run-emission-guidance";
 /**
  * Dashboard overview data access — the Flow Hero dashboard's single aggregate
  * read. Period-scoped numbers (the 4-KPI band with deltas vs the previous
@@ -31,7 +32,7 @@ import { addDaysIso, formatFacilityDate, formatUtcDate, UNKNOWN_FACILITY_TIMEZON
 import { sourceBiocharMassFlowKg } from "@/lib/biochar-product-mass";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 
-import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { COMPLETED_PRODUCTION_RUN_STATUS, FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import {
   and,
   asc,
@@ -713,7 +714,7 @@ export async function getDashboardAttentionItems(
       allIds: sql<string[]>`'{}'::text[]`,
     }).from(productionRuns).where(and(
       eq(productionRuns.organizationId, orgId), eq(productionRuns.facilityId, facilityId),
-      eq(productionRuns.status, "failed"), isNull(productionRuns.archivedAt),
+      eq(productionRuns.status, FAILED_PRODUCTION_RUN_STATUS), isNull(productionRuns.archivedAt),
     )).limit(1),
     db
       .select({
@@ -797,12 +798,12 @@ export async function getDashboardAttentionItems(
   );
 
   const failedEmissionTodos = rows.some(row => row.kind === "failed-emissions")
-    ? await loadFacilityFailedEmissionTodos(ctx, facilityId) : [];
+    ? await loadFacilityFailedRunEmissionTodos(ctx, facilityId) : [];
   const failedEmissionRows = failedEmissionTodos.map((todo): DashboardAttentionItem => ({
     id: todo.id, stage: "production", recordKind: "productionRun", entityCode: todo.productionRun.code,
     scope: "facility",
     recordIds: [todo.productionRun.id], date: todo.emissionAttachment.endDay,
-    title: todo.title, href: todo.target.href,
+    title: failedRunEmissionTodoRowTitle(todo.emissionAttachment.state), href: todo.target.href,
   }));
   const batchRows = rows.filter((row) => row.kind === "batch-pending")
     .map((row) => ({ row, removals: row.removals.map(removalDisplayFromFacts) }));
@@ -895,12 +896,9 @@ export async function getDashboardAttentionItems(
       ...capOrGroup(removalRows.rejected, removalRows.rejected.length, () =>
         groupedRow("removal-rejected", "Removals", REMOVAL_REJECTED_ATTENTION_TITLE, removalRows.rejected.length, removalsList, removalRows.rejected)),
       ...capOrGroup(failedEmissionRows, failedEmissionRows.length, (): DashboardAttentionItem => ({
-        id: "failed-run-emissions-group", stage: "production", recordKind: "productionRun",
+        ...groupedRow("failed-run-emissions", "Production runs", FAILED_RUN_EMISSION_GROUP_TITLE,
+          failedEmissionRows.length, batchList, failedEmissionRows),
         scope: "facility",
-        entityCode: "Production runs", count: failedEmissionRows.length,
-        recordIds: failedEmissionRows.flatMap(row => row.recordIds), recordItems: failedEmissionRows,
-        date: null, title: "Failed runs with unresolved emissions",
-        href: `/production-runs?facility=${encodeURIComponent(facilityId)}`,
       })),
       ...flags,
       ...capOrGroup(removalRows.returned.map((row) => row.item), removalRows.returned.length, () =>

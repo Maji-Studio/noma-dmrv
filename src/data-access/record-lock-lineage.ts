@@ -62,9 +62,9 @@ export async function readRecordLockLineage(ctx: OrgContext, tx: Pick<DbTransact
     eq(certificationSubmissions.localEntityType, "ghgStatement"),
     eq(certificationSubmissions.submissionType, "ghg_statement"),
   ));
-  const labels = await tx.select({ id: certifierRemovals.id, code: certifierRemovals.code, startedOn: certifierRemovals.startedOn, completedOn: certifierRemovals.completedOn })
+  const labels = await tx.select({ id: certifierRemovals.id, startedOn: certifierRemovals.startedOn, completedOn: certifierRemovals.completedOn })
     .from(certifierRemovals).where(and(eq(certifierRemovals.organizationId, ctx.organizationId), inArray(certifierRemovals.id, ids)));
-  const labelsById = new Map(labels.map(row => [row.id, row.startedOn && row.completedOn ? `${row.code} (${row.startedOn} to ${row.completedOn})` : row.code]));
+  const labelsById = new Map(labels.map(row => [row.id, row.startedOn && row.completedOn ? `${row.startedOn} to ${row.completedOn}` : undefined]));
   const reads = (tx !== db && transactionStatementReads.get(tx)) || options.statementReads || new Map<string, Promise<GhgStatement>>();
   if (tx !== db) transactionStatementReads.set(tx, reads);
   const busyStatements = new Set(statementRows.filter(row => isLockedInFlight(row) || !isTerminalAttemptStatus(row.status)).map(row => row.localEntityId));

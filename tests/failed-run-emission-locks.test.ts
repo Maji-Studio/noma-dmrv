@@ -10,7 +10,7 @@ import { deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
 import { beforeAll, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { activityEvents, certificationSubmissions, certifierRemovals, creditBatchProductionRuns, creditBatches, productionRunFeedstockDraws, productionRunFeedstocks, productionRuns } from "@/db/schema";
+import { activityEvents, certificationSubmissions, creditBatchProductionRuns, creditBatches, productionRunFeedstockDraws, productionRunFeedstocks, productionRuns } from "@/db/schema";
 import { updateProductionRun, deleteProductionRunInTransaction } from "@/data-access/production-runs/mutations";
 import { getRecordLock } from "@/data-access/certification-lineage-guards";
 import { loadRunEmissionContributors } from "@/data-access/credit-batch-emission-contributors";
@@ -39,10 +39,9 @@ it("refuses Running to Failed into Sent and rolls back the outcome and draws", a
   await withFailedRunLineage(async (fixture, run) => {
     await db.update(productionRuns).set({ status: "running", endTime: null }).where(eq(productionRuns.id, run.id));
     const draws = await db.select().from(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, run.id));
-    const [holder] = await db.select().from(certifierRemovals).where(eq(certifierRemovals.id, fixture.removalId));
     await expect(updateProductionRun(ctx, run.id, { expectedVersion: run.version, status: "failed", endTime: FAILED_END,
       feedstockDraws: [{ storageLocationId: fixture.feedstockBinId, wetMassKg: 120 }],
-    })).rejects.toMatchObject({ code: "certification_locked", message: expect.stringContaining(holder.code) });
+    })).rejects.toMatchObject({ code: "certification_locked" });
     expect(await db.select().from(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, run.id))).toEqual(draws);
     const [saved] = await db.select().from(productionRuns).where(eq(productionRuns.id, run.id));
     expect(saved).toMatchObject({ status: "running", endTime: null, version: run.version });

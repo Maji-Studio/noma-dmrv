@@ -83,14 +83,15 @@ describe.each([
     expect(await refresh(INPUT)).toMatchObject({ success: false, code: "not_found", error: `${noun} was not found or is archived.` });
   });
 
-  it("keeps refresh guidance for a Removal holder with its code and window", async () => {
+  it("preserves the lineage refusal for a Removal holder with a window", async () => {
     const lock = recordLocks.removal({ dependents: [], removals: [{
-      id: "removal", label: "REM-001 (2026-10-01 to 2026-10-31)", submissions: [{ status: "submitted" }], statements: [],
+      id: "removal", label: "2026-10-01 to 2026-10-31", submissions: [{ status: "submitted" }], statements: [],
     }] });
-    mocks.guard.mockRejectedValue(new DomainError("certification_locked", formatCertificationLineageLockMessage({
+    const message = formatCertificationLineageLockMessage({
       mutation: "update", subjectEntityType: entityType, lineageEntityType: entityType, lock,
-    })));
-    expect(await refresh(INPUT)).toMatchObject({ success: false, code: "certification_locked", error: LOCKED_MESSAGE });
+    });
+    mocks.guard.mockRejectedValue(new DomainError("certification_locked", message));
+    expect(await refresh(INPUT)).toMatchObject({ success: false, code: "certification_locked", error: message });
     expect(mocks.update).not.toHaveBeenCalled();
     expect(mocks.sync).not.toHaveBeenCalled();
   });

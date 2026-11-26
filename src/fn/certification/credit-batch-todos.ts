@@ -6,7 +6,7 @@ import { SafeError } from "@/lib/errors";
 import { uuidSchema } from "@/schemas/helpers";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
-import { loadFacilityCreditBatchTodos, loadCreditBatchTodos, type CreditBatchTodos } from "./credit-batch-todos-core";
+import { loadCreditBatchTodos, type CreditBatchTodos } from "./credit-batch-todos-core";
 
 export async function loadCreditBatchTodosFn(
   facilityId: string,
@@ -25,14 +25,5 @@ export async function loadCreditBatchTodosFn(
     const batchTodos = todos.get(validBatchId);
     if (!batchTodos) throw new SafeError("Credit batch was not found.");
     return batchTodos;
-  });
-}
-
-/** Checks that can exist before the first credit batch is declared. */
-export async function loadFacilityCreditBatchTodosFn(facilityId: string) {
-  return withAction(async ctx => {
-    const validFacilityId = uuidSchema().parse(facilityId);
-    await requireOrgFacility(ctx, validFacilityId);
-    return loadFacilityCreditBatchTodos(ctx, validFacilityId);
   });
 }

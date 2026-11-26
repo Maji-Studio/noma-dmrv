@@ -10,7 +10,7 @@ afterEach(cleanup);
 const BASE: FailedRunEmissionGuidance = {
   productionRunId: "run-1", runCode: "PR-26-001", facilityId: "fac-1", endDay: "2026-10-02",
   feedstockTypeId: "ft-1", feedstockTypeName: "Forestry waste", state: "attached",
-  batch: { id: "b-oct", code: "CB-26-010-A" }, message: "", href: "/x",
+  batch: { id: "b-oct", code: "CB-26-010-A" }, href: "/x",
 };
 const NO_MATCH = { ...BASE, state: "no-match" as const, batch: null, href: "/credit-batches?facility=fac-1" };
 const MIXED = { ...BASE, productionRunId: "run-2", runCode: "PR-26-002", state: "mixed-feedstock" as const, batch: null, feedstockTypeName: null, href: "/production-runs/run-2" };
@@ -41,7 +41,7 @@ describe("facility to-do", () => {
     expect(screen.getByText("2 failed runs have emissions without a credit batch")).toBeTruthy();
     expect(screen.getByRole("link", { name: /PR-26-001/ })).toBeTruthy();
     expect(screen.getByText(/create a credit batch for Forestry waste that covers Oct 2, 2026/)).toBeTruthy();
-    expect(screen.getByText(/more than one feedstock type/)).toBeTruthy();
+    expect(screen.getByText(/review its feedstock sources so they hold one feedstock type/)).toBeTruthy();
   });
 
   it("renders nothing when every failed run has its batch or there are none", () => {

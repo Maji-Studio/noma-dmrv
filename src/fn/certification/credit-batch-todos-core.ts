@@ -91,7 +91,3 @@ export async function loadCreditBatchTodos(
     }];
   }));
 }
-
-/** Facility checks have no batch key: an unresolved run may have no batch yet. */
-export { loadFacilityFailedEmissionTodos as loadFacilityCreditBatchTodos } from "@/data-access/failed-run-emission-guidance";
-export type { FacilityFailedEmissionTodo as FacilityCreditBatchTodo } from "@/data-access/failed-run-emission-guidance";

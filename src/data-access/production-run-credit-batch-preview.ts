@@ -1,3 +1,4 @@
+import { FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { loadFailedRunEmissionGuidance } from "./failed-run-emission-guidance";
 /**
  * Mirrors attachProductionRunToMatchingCreditBatch through shared helpers.
@@ -23,7 +24,7 @@ export async function getProductionRunCreditBatchPreview(
   const [savedEmissionAttachment] = input.productionRunId
     ? await loadFailedRunEmissionGuidance(ctx, { runIds: [input.productionRunId] }, reader) : [];
   if (input.savedOnly && savedEmissionAttachment) {
-    return { state: "not-applicable", status: "failed", contributionKind: "emissions", savedEmissionAttachment };
+    return { state: "not-applicable", status: FAILED_PRODUCTION_RUN_STATUS, contributionKind: "emissions", savedEmissionAttachment };
   }
   const preview = await readDraftPreview(ctx, input, reader);
   return { ...preview, ...(savedEmissionAttachment ? { contributionKind: "emissions" as const, savedEmissionAttachment } : {}) };
