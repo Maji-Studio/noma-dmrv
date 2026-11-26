@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useId, useState } from "react";
-import { ArrowRightIcon, CertificateIcon, StackIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRightIcon, CertificateIcon, StackIcon } from "@phosphor-icons/react/dist/ssr";
 import { RECORD_CODE_LINK, RECORD_NAME_LINK } from "@/components/ui/record-code-link";
 import { INLINE_HIT_AREA } from "@/components/ui/touch-target";
 import { recordHref } from "@/lib/record-links";
@@ -194,30 +194,21 @@ function BatchLine({ batches, removals }: { batches: RecordUsedByBatch[]; remova
   );
 }
 
-/** The warning icon's colour: the token the form footer's warning Notice uses. */
-const WARNING_ICON_CLASS = "shrink-0 text-[var(--st-wait)]";
-
 /**
- * A Failed run's emissions caption on its sheet (#1714), in the credit batch
- * caption's frame: what is missing, and where the link navigates, one link to
- * fix it. A counted run is listed in Used by as "CB-26-003, emissions only"
- * instead, so this caption never names an attached batch. `warning` takes the
- * form footer's icon and colour.
+ * A Failed run's quiet emissions caption on its sheet (#1714), in the credit
+ * batch caption's frame: no credit batch matches yet, and one link goes to the
+ * credit batches. Warnings and failed reads are a `Notice` instead; a counted
+ * run is listed in Used by as "CB-26-003, emissions only".
  */
-export function EmissionsLine({ lead, action, tone = "neutral", children }: {
+export function EmissionsLine({ lead, action }: {
   lead: string;
   action?: { label: string; href: string } | null;
-  tone?: "neutral" | "warning";
-  /** A control after the text, such as Try again. */
-  children?: React.ReactNode;
 }) {
-  const LeadIcon = tone === "warning" ? WarningIcon : CertificateIcon;
   return (
-    <p className="flex flex-wrap items-center gap-x-6 gap-y-4 body-caption text-[var(--color-text-secondary)]" data-tone={tone}>
-      <LeadIcon size={LINE_ICON} weight={tone === "warning" ? "fill" : undefined} aria-hidden className={tone === "warning" ? WARNING_ICON_CLASS : "shrink-0"} />
+    <p className="flex flex-wrap items-center gap-x-6 gap-y-4 body-caption text-[var(--color-text-secondary)]">
+      <CertificateIcon size={LINE_ICON} aria-hidden className="shrink-0" />
       <span>{lead}</span>
       {action && <Link href={action.href} className={cn("underline underline-offset-4", INLINE_HIT_AREA)}>{action.label}</Link>}
-      {children}
     </p>
   );
 }

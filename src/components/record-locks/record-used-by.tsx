@@ -4,10 +4,12 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { SectionLabel } from "@/components/forms/section-label";
 import { DetailSection } from "@/components/ui/detail-panel";
+import { Button } from "@/components/ui";
+import { Notice } from "@/components/ui/notice";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useFacilityClock } from "@/hooks/use-facility-context";
 import { useRecordUsedByChain } from "@/hooks/use-record-used-by-chain";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { MISSING_VALUE, TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import type { RecordLockLink, RecordLockView } from "@/lib/record-lock-view";
 import type { RecordUsedByKind } from "@/lib/record-used-by-chain";
 import { recordLockLinkHref, recordLockLinkTitle } from "./record-lock-labels";
@@ -26,6 +28,7 @@ export interface UsedByRecord {
  * sections' content (24px rail + 12px gap) so the reading line holds.
  */
 const DIVIDED_AFTER_NUMBERED = "[div:has(>section)+&]:pl-36 pt-24 pb-16";
+export const USED_BY_CHAIN_ERROR_MESSAGE = "Couldn't check what uses this record.";
 const PENDING_HEIGHT = "h-96";
 
 /**
@@ -58,6 +61,18 @@ export function RecordUsedBy({ lock, record, closing, readsChain = false, holdsN
   const none = holdsNone ? null : <UsedByNone />;
   if (lock.usedBy.length === 0 && !readsChain) body = none;
   else if (wantsChain && chain.isPending) body = <div role="status" aria-busy="true" aria-label="Loading records"><Skeleton className={`${PENDING_HEIGHT} w-full`} /></div>;
+  // A forced chain read (a Failed run) that fails must not read as "None": say so and offer Try again.
+  else if (wantsChain && chain.isError && lock.usedBy.length === 0) {
+    body = (
+      <Notice
+        tone="warning"
+        data-testid="used-by-chain-error"
+        action={<Button variant="weak" size="small" busy={chain.isFetching} onClick={() => void chain.refetch()}>{TRY_AGAIN_LABEL}</Button>}
+      >
+        {USED_BY_CHAIN_ERROR_MESSAGE}
+      </Notice>
+    );
+  }
   // A failed read, or a record the chain read cannot find, keeps the plain list.
   else if (!graph) body = lock.usedBy.length === 0 ? none : <UsedByLinks usedBy={lock.usedBy} />;
   else if (lock.usedBy.length === 0 && usedByGraphIsEmpty(graph)) body = none;

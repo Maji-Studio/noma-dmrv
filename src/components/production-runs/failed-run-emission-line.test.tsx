@@ -24,16 +24,17 @@ describe("read sheet emissions line", () => {
   it("says no credit batch yet with one link", () => {
     render(<FailedRunEmissionLineView guidance={NO_MATCH} />);
     expect(screen.getByText("No credit batch for its emissions yet")).toBeTruthy();
+    expect(screen.queryByRole("status")).toBeNull();
     expect(screen.getByRole("link", { name: "Open credit batches" }).getAttribute("href")).toBe("/credit-batches?facility=fac-1");
   });
 
   it("warns on mixed and empty feedstock with no link to the sheet it is on", () => {
     const { container, rerender } = render(<FailedRunEmissionLineView guidance={MIXED} />);
-    expect(screen.getByText("Its feedstock records hold more than one feedstock type.")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("Its feedstock records hold more than one feedstock type.");
     expect(container.querySelector('[data-tone="warning"]')).toBeTruthy();
     expect(screen.queryByRole("link")).toBeNull();
     rerender(<FailedRunEmissionLineView guidance={{ ...MIXED, state: "empty-feedstock" }} />);
-    expect(screen.getByText("Its emissions have no feedstock type.")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("Its emissions have no feedstock type.");
     expect(container.querySelector('[data-tone="warning"]')).toBeTruthy();
     expect(screen.queryByRole("link")).toBeNull();
   });
@@ -41,7 +42,7 @@ describe("read sheet emissions line", () => {
   it("names a failed check with Try again that re-reads", () => {
     const onRetry = vi.fn();
     render(<FailedRunSheetEmissionsView guidance={undefined} isError isFetching={false} onRetry={onRetry} />);
-    expect(screen.getByText("Couldn't check where its emissions count.")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("Couldn't check where its emissions count.");
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
