@@ -252,3 +252,43 @@ describe("ProductionRunForm Add source with several source bins switched off", (
     expect(screen.getAllByRole("button", { name: "Remove source" })).toHaveLength(1);
   });
 });
+
+describe("ProductionRunForm output section by status", () => {
+  const outputInputs = () => document.querySelectorAll('input[name="biocharOutputKg"], input[name="biocharMoisturePercent"]');
+
+  it("shows the Output section and requires it for Complete", () => {
+    render(<ProductionRunForm onSubmit={vi.fn()} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Complete" }));
+    expect(outputInputs()).toHaveLength(2);
+    expect(screen.getByText("Output")).toBeTruthy();
+  });
+
+  it("hides the Output section for Failed on create and keeps typed values for a switch back to Complete", async () => {
+    const onSubmit = vi.fn();
+    render(<ProductionRunForm onSubmit={onSubmit} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Complete" }));
+    fireEvent.change(document.querySelector('input[name="biocharOutputKg"]')!, { target: { value: "50" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Failed" }));
+    expect(outputInputs()).toHaveLength(0);
+    fireEvent.click(screen.getByRole("radio", { name: "Complete" }));
+    expect((document.querySelector('input[name="biocharOutputKg"]') as HTMLInputElement).value).toBe("50");
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("omits output from the payload for a saved run edited to Failed, or already Failed, even above dry input", async () => {
+    for (const from of ["running", "failed"] as const) {
+      const onSubmit = vi.fn();
+      // 100 kg wet at 20% is 80 kg dry; 500 kg of stored output would block a Complete save.
+      render(<ProductionRunForm productionRun={{ ...savedRun, status: from, biocharOutputKg: 500, biocharMoisturePercent: 0 }} onSubmit={onSubmit} lock={OPEN_LOCK} />);
+      if (from === "running") fireEvent.click(screen.getByRole("radio", { name: "Failed" }));
+      expect(outputInputs()).toHaveLength(0);
+      fireEvent.click(screen.getByRole("button", { name: "Update production run" }));
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      const sent = onSubmit.mock.calls[0][0] as Record<string, unknown>;
+      expect(sent.status).toBe("failed");
+      for (const key of ["biocharOutputKg", "biocharMoisturePercent"]) expect(key in sent).toBe(false);
+      expect(sent.biocharStorageLocationId).toBeNull();
+      cleanup();
+    }
+  });
+});

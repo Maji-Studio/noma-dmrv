@@ -25,6 +25,12 @@ const run = {
 } as unknown as ProductionRunWithRelations;
 
 describe("productionRunSheetSections", () => {
+  it("leaves the Output section out for a Failed run, as the form does", () => {
+    const titles = (status: string) => productionRunSheetSections({ ...run, status } as unknown as ProductionRunWithRelations, []).map((s) => s.title);
+    expect(titles("failed")).not.toContain("Output");
+    expect(titles("complete")).toContain("Output");
+  });
+
   it("orders Run setup like the form: status, reason, reactor, operator", () => {
     const labels = productionRunSheetSections(run, [])[0].fields.map((f) => f.label);
     expect(labels.slice(0, 4)).toEqual(["Status", "Cancellation reason", "Reactor", "Operator"]);

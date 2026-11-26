@@ -588,7 +588,7 @@ test.describe("Production Run lifecycle (#254)", () => {
     await waitForSideSheet(page);
 
     const options = page.locator('[role="dialog"] label:has(input[name="status"])');
-    await expect(options).toHaveText(["Running", "Complete"]);
+    await expect(options).toHaveText(["Running", "Complete", "Failed"]);
     for (const option of await options.all()) await expect(option).toBeVisible();
     await expect(page.locator('[role="dialog"] input[name="status"][value="running"]')).toBeChecked();
   });

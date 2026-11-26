@@ -35,7 +35,7 @@ const describedFields = {
 export const createProductionRunInput = z.strictObject({
   ...describedFields,
   facilityId: uuidSchema().describe("Owning facility UUID."), reactorId: uuidSchema().describe("Reactor UUID in the facility."),
-  status: z.enum(PRODUCTION_RUN_CREATE_STATUSES, { error: PRODUCTION_RUN_CREATE_STATUS_MESSAGE }).default("running").describe("Initial run state: running or complete."),
+  status: z.enum(PRODUCTION_RUN_CREATE_STATUSES, { error: PRODUCTION_RUN_CREATE_STATUS_MESSAGE }).default("running").describe("Initial run state: running, complete or failed."),
   startTime: productionRunInstantSchema,
   endTime: productionRunInstantSchema.nullable().optional().describe("End instant or facility-local date/time; null leaves the run open."),
 });
