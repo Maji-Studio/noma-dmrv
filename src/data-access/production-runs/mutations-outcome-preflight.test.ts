@@ -91,7 +91,7 @@ it("reports the missing source field even when terminal output exceeds an empty 
   expect(state.insert).not.toHaveBeenCalled();
 });
 
-it.each(["failed", "cancelled"] as const)("refuses API-shaped %s creation before writing with a status pointer", async (status) => {
+it.each(["cancelled"] as const)("refuses API-shaped %s creation before writing with a status pointer", async (status) => {
   const state = preflightTransaction([[{ id: "facility", archivedAt: null }], [{ id: "reactor", facilityId: "facility" }]]);
   await expect(createProductionRunInTransaction(ctx, state.tx, {
     code: "PR-26-001", facilityId: "facility", reactorId: "reactor", status, startTime: START, endTime: END, cancellationReason: "Recorded in error",
@@ -169,4 +169,37 @@ it("refuses a multi-bin update that adds a bin before any write while off", asyn
     feedstockDraws: [{ storageLocationId: BIN_ID, wetMassKg: 1 }, { storageLocationId: "22222222-2222-4222-8222-222222222222", wetMassKg: 1 }],
   }, { now: NOW })).rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["feedstockDraws"] }] });
   expect(state.update).not.toHaveBeenCalled();
+});
+
+describe("failed create prerequisites", () => {
+  const failedBase = {
+    code: "PR-26-002", facilityId: "facility", reactorId: "reactor", status: "failed" as const,
+    startTime: START, endTime: END, feedstockMoisturePercent: 20,
+    feedstockDraws: [{ storageLocationId: BIN_ID, wetMassKg: DRAW_KG }],
+  };
+  const lookups = () => [[{ id: "facility", archivedAt: null }], [{ id: "reactor", facilityId: "facility" }]];
+
+  it("refuses a failed create without an end time before writing", async () => {
+    const state = preflightTransaction(lookups());
+    await expect(createProductionRunInTransaction(ctx, state.tx, { ...failedBase, endTime: null }, { now: NOW }))
+      .rejects.toThrow("A failed run needs an end time");
+    expect(state.insert).not.toHaveBeenCalled();
+  });
+
+  it("refuses a failed create without feedstock or moisture before writing", async () => {
+    const state = preflightTransaction(lookups());
+    await expect(createProductionRunInTransaction(ctx, state.tx, { ...failedBase, feedstockDraws: [], feedstockMoisturePercent: null }, { now: NOW }))
+      .rejects.toMatchObject({ code: "validation_failed", issues: [
+        { path: ["feedstockDraws"], message: "Add at least one feedstock source." },
+        { path: ["feedstockMoisturePercent"], message: "Enter feedstock moisture." },
+      ] });
+    expect(state.insert).not.toHaveBeenCalled();
+  });
+
+  it("refuses cancelled on create", async () => {
+    const state = preflightTransaction(lookups());
+    await expect(createProductionRunInTransaction(ctx, state.tx, { ...failedBase, status: "cancelled" }, { now: NOW }))
+      .rejects.toThrow("A new production run can only start as Running, Complete or Failed.");
+    expect(state.insert).not.toHaveBeenCalled();
+  });
 });
