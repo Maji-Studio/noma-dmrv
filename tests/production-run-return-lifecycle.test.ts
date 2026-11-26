@@ -77,7 +77,10 @@ function mutate(kind: typeof MUTATION_CASES[number]) {
 }
 
 describe('return source lifecycle', { timeout: TIMEOUT_MS }, () => {
-  it.each([false, true])('marks a running run failed after its emptied source is archived (resubmit draws: %s)', async resubmitDraws => {
+  it.each([
+    { status: 'failed', resubmitDraws: false }, { status: 'failed', resubmitDraws: true },
+    { status: 'complete', resubmitDraws: false }, { status: 'complete', resubmitDraws: true },
+  ] as const)('marks a running run $status after its emptied source is archived (resubmit draws: $resubmitDraws)', async ({ status, resubmitDraws }) => {
     await db.update(productionRuns).set({ status: 'running', endTime: null }).where(eq(productionRuns.id, runId));
     expect((await getFeedstockBinStock(fixture.ctx, fixture.binId)).currentWetKg).toBe(0);
     const archived = await archiveStorageLocation(fixture.ctx, fixture.binId, 1);
@@ -85,16 +88,40 @@ describe('return source lifecycle', { timeout: TIMEOUT_MS }, () => {
     const originalDraws = await db.select().from(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, runId));
     const originalAllocations = await db.select().from(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, runId));
 
-    await expect(updateProductionRun(fixture.ctx, runId, { expectedVersion: 1, status: 'failed',
+    const [outputBin] = status === 'complete' ? await db.insert(storageLocations).values({
+      organizationId: fixture.ctx.organizationId, facilityId: fixture.facilityId,
+      code: `RETURN-OUTPUT-${crypto.randomUUID()}`, name: 'Biochar output', type: 'biochar_bin',
+    }).returning() : [];
+    await expect(updateProductionRun(fixture.ctx, runId, { expectedVersion: 1, status,
       endTime: new Date('2026-01-02T10:00:00Z'),
+      ...(outputBin ? { biocharStorageLocationId: outputBin.id, biocharOutputKg: 10, biocharMoisturePercent: 20 } : {}),
       ...(resubmitDraws ? { feedstockDraws: [{ storageLocationId: fixture.binId, wetMassKg: CONSUMED_WET_KG }] } : {}),
-    })).resolves.toMatchObject({ status: 'failed', facilityId: fixture.facilityId, version: 2 });
+    })).resolves.toMatchObject({ status, facilityId: fixture.facilityId, version: 2 });
 
     const [saved] = await db.select().from(productionRuns).where(eq(productionRuns.id, runId));
-    expect(saved).toMatchObject({ status: 'failed', version: 2 });
+    expect(saved).toMatchObject({ status, version: 2 });
     expect(await db.select().from(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, runId))).toEqual(originalDraws);
     expect(await db.select().from(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, runId))).toEqual(originalAllocations);
     expect(await getProductionRunReturnHistory(fixture.ctx, runId)).toHaveLength(0);
+  });
+
+  it.each([false, true])('refuses cancelling a running run after its emptied source is archived (resubmit draws: %s)', async resubmitDraws => {
+    await db.update(productionRuns).set({ status: 'running', endTime: null }).where(eq(productionRuns.id, runId));
+    expect((await getFeedstockBinStock(fixture.ctx, fixture.binId)).currentWetKg).toBe(0);
+    await archiveStorageLocation(fixture.ctx, fixture.binId, 1);
+    const originalDraws = await db.select().from(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, runId));
+    const originalAllocations = await db.select().from(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, runId));
+
+    await expect(updateProductionRun(fixture.ctx, runId, { expectedVersion: 1, status: 'cancelled',
+      cancellationReason: 'Cancelled batch',
+      ...(resubmitDraws ? { feedstockDraws: [{ storageLocationId: fixture.binId, wetMassKg: CONSUMED_WET_KG }] } : {}),
+    })).rejects.toThrow('Storage bin was not found or is archived.');
+
+    const [saved] = await db.select().from(productionRuns).where(eq(productionRuns.id, runId));
+    expect(saved).toMatchObject({ status: 'running', endTime: null, version: 1 });
+    expect(await db.select().from(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, runId))).toEqual(originalDraws);
+    expect(await db.select().from(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, runId))).toEqual(originalAllocations);
+    expect((await getFeedstockBinStock(fixture.ctx, fixture.binId)).currentWetKg).toBe(0);
   });
 
   it('refuses moving facilities when source draws are resubmitted unchanged', async () => {

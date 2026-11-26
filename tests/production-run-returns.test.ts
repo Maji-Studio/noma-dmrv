@@ -222,6 +222,27 @@ describe('failed-run return writer and ledger', { timeout: TIMEOUT_MS }, () => {
     });
   });
 
+  it('refuses backdating a return correction across a stock count without changing its history', async () => {
+    await recordProductionRunReturn(fixture.ctx, input({ wetMassKg: 25, occurredAt: '2026-01-02T10:00:00Z' }));
+    const count = await recordStockTakeMovement(fixture.ctx, { storageLocationId: binId, lane: 'feedstock',
+      reason: 'Confirmed count', countedMassKg: 20, countedWetMassKg: 20, moistureRatioUsed: 0.2 });
+    // Counts use their recording time as the ledger event time.
+    await db.update(binMovements).set({ createdAt: new Date('2026-01-02T11:00:00Z') }).where(and(
+      eq(binMovements.organizationId, fixture.ctx.organizationId), eq(binMovements.id, count.id),
+    ));
+    const original = await recordProductionRunReturn(fixture.ctx, input());
+    const before = await getFeedstockBinStock(fixture.ctx, binId);
+    const history = await getProductionRunReturnHistory(fixture.ctx, runId);
+
+    await expect(correctProductionRunReturn(fixture.ctx, correction(original.id,
+      input({ occurredAt: '2026-01-02T10:30:00Z' })))).rejects.toMatchObject({
+      code: 'validation_failed', message: expect.stringContaining('new time is before the stock count'),
+      issues: [expect.objectContaining({ path: ['replacement', 'occurredAt'], code: 'validation_failed' })],
+    });
+    expect(await getProductionRunReturnHistory(fixture.ctx, runId)).toEqual(history);
+    expect(await getFeedstockBinStock(fixture.ctx, binId)).toEqual(before);
+  });
+
   it('refuses mixed types while allowing multiple allocations of one type', async () => {
     const [intake] = await db.select().from(feedstocks).where(eq(feedstocks.id, intakeId));
     const [second] = await db.insert(feedstocks).values({ ...intake, id: crypto.randomUUID(), code: `RETURN-SECOND-${crypto.randomUUID()}`, massWetKg: 50, massDryKg: 25 }).returning();

@@ -4,13 +4,15 @@ import { db, type DbTransaction } from '@/db';
 import { binMovements, type BinMovement } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { retryTransaction } from '@/lib/db/transaction-retry';
+import { DomainError } from '@/lib/domain-errors';
 import { SafeError } from '@/lib/errors';
-import { findFeedstockLossBlocker } from '@/lib/feedstock-loss-lock';
+import { findFeedstockLossBlocker, findFeedstockLossCrossing, formatFeedstockLossCrossingMessage } from '@/lib/feedstock-loss-lock';
 import { reverseReturnMass, RETURN_SNAPSHOT_VERSION } from '@/lib/production-run-returns/mass';
 import { correctProductionRunReturnSchema, type CorrectProductionRunReturnInput } from '@/schemas/production-run-returns';
 import { findMovementRequest, lockMovementRequest, requestFingerprint } from '../bin-movement-requests';
 import { getFeedstockBinStock } from '../feedstock-bin-ledger';
 import { throwFeedstockLossLockError } from '../feedstock-loss-lock';
+import { getOutputStockFacilityTimezone } from '../output-stock-dates';
 import { requireOrgScope } from '../utils';
 import { lockReturnSource } from './locks';
 import { getProductionRunReturnAllowance } from './queries';
@@ -37,6 +39,16 @@ export async function correctProductionRunReturnInTransaction(ctx: OrgContext, t
   const stock = await getFeedstockBinStock(ctx, original.storageLocationId, tx);
   const blocker = findFeedstockLossBlocker(stock.entries, original.id);
   if (blocker) await throwFeedstockLossLockError(ctx, tx, original.storageLocationId, blocker);
+  if (input.replacement?.storageLocationId === original.storageLocationId) {
+    const crossing = findFeedstockLossCrossing(stock.entries, original.id, input.replacement.occurredAt);
+    if (crossing) {
+      const timeZone = await getOutputStockFacilityTimezone(ctx, source.run.facilityId, tx);
+      const message = formatFeedstockLossCrossingMessage(crossing, timeZone);
+      throw new DomainError('validation_failed', message, {
+        issues: [{ path: ['replacement', 'occurredAt'], code: 'validation_failed', message }],
+      });
+    }
+  }
   // A recording time after existing entries keeps equal physical times deterministic.
   // org-scope-ok: database wall clock has no tenant-owned rows.
   const { rows: [clock] } = await tx.execute<{ now: Date }>(sql`select clock_timestamp() as now`);

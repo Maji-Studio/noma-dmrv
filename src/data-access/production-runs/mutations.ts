@@ -31,6 +31,8 @@ import {
   assertProductionRunOutcome,
   assertProductionRunTransition,
   assertProductionRunCreateStatus,
+  CANCELLED_PRODUCTION_RUN_STATUS,
+  isTerminalProductionRunStatus,
   productionRunRecordsOutput,
   statusOccupiesReactor,
   type ProductionRunStatus,
@@ -559,7 +561,7 @@ export async function updateProductionRunInTransaction(
       { ...data, feedstockDraws: normalizedFeedstockDraws },
       // Finishing retains historical sources. Changed draws are validated below.
       { allowArchivedFeedstockSources: effectiveStatus !== existing.status &&
-        effectiveStatus !== "running" && targetFacilityId === existing.facilityId },
+        isTerminalProductionRunStatus(effectiveStatus) && targetFacilityId === existing.facilityId },
     );
 
     const [locked] = await tx
@@ -738,9 +740,10 @@ export async function updateProductionRunInTransaction(
           data,
         );
 
-      // Terminal outcomes retain their sources; reopening needs active bins.
+      // Complete and Failed retain their sources; reopening and cancelling need active bins.
       if (!feedstockDrawsChanged && (lockedTargetFacilityId !== locked.facilityId ||
-        lockedTargetStatus !== locked.status && lockedTargetStatus === "running")) {
+        lockedTargetStatus !== locked.status &&
+        (lockedTargetStatus === "running" || lockedTargetStatus === CANCELLED_PRODUCTION_RUN_STATUS))) {
         await validateProductionRunFeedstockDrawSources(
           ctx,
           tx,
