@@ -10,7 +10,7 @@ import { StorageLocationForm } from "./storage-location-form";
 
 const state = vi.hoisted(() => ({ options: [] as EntityOption[] }));
 vi.mock("@/hooks/use-facility-context", () => ({
-  useFacilityContext: () => ({ facilityId: "facility-one" }),
+  useFacilityContext: () => ({ facilityId: "22222222-2222-4222-8222-222222222222" }),
   useFacilityClock: () => ({ timeZone: "UTC", hint: "" }),
 }));
 vi.mock("@/hooks/use-refresh-entity-options-on-return", () => ({ useRefreshEntityOptionsOnReturn: () => () => {} }));
@@ -97,6 +97,18 @@ describe("StorageLocationForm feedstock draw method", () => {
     cleanup();
     render(<StorageLocationForm defaultType="feedstock_bin" showUncarbonized onSubmit={vi.fn()} onCancel={vi.fn()} />);
     expect(screen.getByLabelText(/holds uncarbonized material/)).toBeTruthy();
+  });
+
+  it("clears the uncarbonized tag when the type changes away from a feedstock bin", async () => {
+    state.options = [{ id: "11111111-1111-4111-8111-111111111111", code: "WC", name: "Wood chips" }];
+    const onSubmit = vi.fn();
+    render(<StorageLocationForm defaultType="feedstock_bin" showUncarbonized onSubmit={onSubmit} onCancel={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText(/holds uncarbonized material/));
+    fireEvent.click(screen.getByRole("radio", { name: /Biochar/ }));
+    fireEvent.change(screen.getByRole("textbox", { name: /^Bin name/ }), { target: { value: "Bin 9" } });
+    fireEvent.click(screen.getByRole("button", { name: /Create storage bin/ }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ type: "biochar_bin", uncarbonized: false });
   });
 
   it("hides the draw order for Mass weighted", () => {

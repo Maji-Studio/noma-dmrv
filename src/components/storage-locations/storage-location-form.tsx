@@ -128,6 +128,7 @@ export function StorageLocationForm({
     trigger,
     setValue,
     setError,
+    clearErrors,
     resetField,
     formState: { errors },
   } = useForm<StorageLocationFormValues, unknown, StorageLocationFormData>({
@@ -224,7 +225,15 @@ export function StorageLocationForm({
               disabled={isSubmitting || identityLocked}
               error={!!errors.type}
               options={storageTypeOptions}
-              {...register("type")}
+              {...register("type", {
+                // The tag's checkbox is hidden off feedstock bins, so a stale true would fail validation unseen.
+                onChange: (event) => {
+                  if (!isFeedstockBinType(event.target.value)) {
+                    setValue("uncarbonized", false);
+                    clearErrors("uncarbonized");
+                  }
+                },
+              })}
             />
           </FormField>
         )}
