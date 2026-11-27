@@ -10,7 +10,7 @@ import { preparePureOutputProductFixture, outputProductFixtureValues, deleteOutp
  * (Facility → Reactor → Production Run → Sample → Order → Delivery → Application → Credit Batch)
  * through the browser UI.
  */
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { fixtureOrgId } from "./fixture-org";
 import * as schema from "../../../src/db/schema";
 import * as crypto from "crypto";
@@ -746,15 +746,18 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
         .delete(schema.customerLocations)
         .where(eq(schema.customerLocations.id, data.customerLocation.id));
 
-      // Storage locations
+      // Storage locations, including bins a spec quick-added in this facility
       await tx
         .delete(schema.storageLocations)
         .where(
-          inArray(schema.storageLocations.id, [
-            data.feedstockStorageLocation.id,
-            data.biocharStorageLocation.id,
-            data.productStorageLocation.id,
-          ])
+          or(
+            inArray(schema.storageLocations.id, [
+              data.feedstockStorageLocation.id,
+              data.biocharStorageLocation.id,
+              data.productStorageLocation.id,
+            ]),
+            eq(schema.storageLocations.facilityId, data.facility.id),
+          )
         );
 
       // Feedstock types
