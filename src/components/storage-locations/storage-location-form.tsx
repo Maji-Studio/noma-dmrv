@@ -1,5 +1,6 @@
 "use client";
 
+import { FormError } from "@/components/forms/form-error";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { EventTimeInput } from "@/components/forms/event-time-input";
@@ -44,6 +45,8 @@ import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
  * one, which the type radios read as null. The schema still requires it.
  */
 type StorageLocationFormValues = Omit<StorageLocationFormData, "type"> & { type: StorageLocationType | null };
+
+const UNCARBONIZED_FIXED_NOTE = "This bin holds uncarbonized material. Products cannot draw from it.";
 
 const schemaResolver = zodResolver(storageLocationFormSchema);
 /** The schema reads the draft, null type included, and refuses a missing type. */
@@ -157,6 +160,7 @@ export function StorageLocationForm({
   const copy = showFeedstockType ? STOCK_MODE_FORM_COPY.feedstock : STOCK_MODE_FORM_COPY.output;
   const showFormulation = watchedType === "product_bin";
   const showUncarbonized = watchedType === "biochar_bin" && !hideUncarbonized;
+  const fixedUncarbonized = watchedType === "biochar_bin" && hideUncarbonized && defaultUncarbonized;
   // Output bins choose a stock mode; feedstock bins choose a draw method on the same fields.
   const showStockMode = showFeedstockType || isOutputBinType(watchedType);
   const watchedStockMode = useWatch({ control, name: "stockMode" });
@@ -348,6 +352,10 @@ export function StorageLocationForm({
         </div>
       )}
 
+      {fixedUncarbonized && (
+        <p className="body-caption text-[var(--color-text-secondary)]">{UNCARBONIZED_FIXED_NOTE}</p>
+      )}
+
       {showUncarbonized && (
         <div className="flex flex-col gap-4">
           <label htmlFor="uncarbonized" className={cn(LABEL_HIT_AREA, "flex items-center gap-12 cursor-pointer")}>
@@ -356,7 +364,8 @@ export function StorageLocationForm({
               id="uncarbonized"
               className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
               disabled={isSubmitting || identityLocked}
-              aria-describedby="uncarbonized-hint"
+              aria-describedby={errors.uncarbonized?.message ? "uncarbonized-hint uncarbonized-error" : "uncarbonized-hint"}
+              aria-invalid={!!errors.uncarbonized}
               {...register("uncarbonized")}
             />
             <span className="body-medium text-[var(--color-text-primary)]">This bin holds uncarbonized material</span>
@@ -364,6 +373,7 @@ export function StorageLocationForm({
           <p id="uncarbonized-hint" className="body-caption text-[var(--color-text-tertiary)]">
             {identityLocked ? "Fixed once this bin has stock or history." : "For output of failed runs. Products cannot draw from it."}
           </p>
+          <FormError id="uncarbonized-error" message={errors.uncarbonized?.message} />
         </div>
       )}
 

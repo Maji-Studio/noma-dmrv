@@ -44,7 +44,7 @@ export function facilitySheetSections(facility: FacilityWithRelations, stock?: F
   // Uncarbonized stock is its own line, and only when a failed run put something there.
   const uncarbonizedGroup = stock?.data?.uncarbonized;
   const uncarbonized = uncarbonizedGroup && !isOutputStockEmpty(uncarbonizedGroup.wetKg, uncarbonizedGroup.dryBiocharKg)
-    ? stockRow("Uncarbonized", "uncarbonized bins", uncarbonizedGroup, stock)
+    ? stockRow("Uncarbonized in bins", "uncarbonized bins", uncarbonizedGroup, stock)
     : [];
   const product = stockRow("Products in bins", "product bins", stock?.data?.product, stock);
   return [

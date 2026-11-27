@@ -26,11 +26,24 @@ const run = {
 
 describe("productionRunSheetSections", () => {
   it("shows the Output section for a Failed run like a Complete one, with an Uncarbonized bin chip", () => {
-    const output = (status: string) => productionRunSheetSections({ ...run, status, biocharStorageLocationName: "Reject bin" } as unknown as ProductionRunWithRelations, []).find((s) => s.title === "Output");
+    const output = (status: string) => productionRunSheetSections({ ...run, status, biocharStorageLocationName: "Reject bin", biocharStorageLocationUncarbonized: status === "failed" } as unknown as ProductionRunWithRelations, []).find((s) => s.title === "Output");
     expect(output("complete")).toBeDefined();
     const bin = output("failed")?.fields.find((f) => f.label === "Biochar storage")?.value;
     expect(renderToStaticMarkup(<>{bin}</>)).toContain("Uncarbonized");
     expect(output("complete")?.fields.find((f) => f.label === "Biochar storage")?.value).toBe("Reject bin");
+  });
+
+  it("shows the Uncarbonized chip from the bin's tag, not the run status", () => {
+    const bin = (uncarbonized: boolean) => productionRunSheetSections({ ...run, status: "failed", biocharStorageLocationName: "Reject bin", biocharStorageLocationUncarbonized: uncarbonized } as unknown as ProductionRunWithRelations, [])
+      .find((s) => s.title === "Output")?.fields.find((f) => f.label === "Biochar storage")?.value;
+    expect(bin(false)).toBe("Reject bin");
+    expect(renderToStaticMarkup(<>{bin(true)}</>)).toContain("Uncarbonized");
+  });
+
+  it("puts no CERT chip on a Failed run's output mass and moisture", () => {
+    const fields = (status: string) => productionRunSheetSections({ ...run, status } as unknown as ProductionRunWithRelations, []).find((s) => s.title === "Output")!.fields.filter((f) => f.label !== "Biochar storage");
+    expect(fields("complete").some((f) => f.certifyRequired)).toBe(true);
+    expect(fields("failed").some((f) => f.certifyRequired)).toBe(false);
   });
 
   it("orders Run setup like the form: status, reason, reactor, operator", () => {

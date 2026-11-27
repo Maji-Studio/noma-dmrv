@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import { expectStayedClean, renderReportingDirty } from "../../../tests/helpers/form-dialog-dirty";
 import type { StorageLocation } from "@/db/schema/facilities";
+import { ActionError } from "@/lib/action-error";
 import { StorageLocationForm } from "./storage-location-form";
 
 const state = vi.hoisted(() => ({ options: [] as EntityOption[] }));
@@ -152,10 +153,23 @@ describe("StorageLocationForm uncarbonized tag", () => {
     expect(screen.getByText("Fixed once this bin has stock or history.")).toBeTruthy();
   });
 
+  it("shows a server refusal for the tag beside the checkbox, linked to it", async () => {
+    const message = "The tag is fixed once this bin has stock.";
+    const error = new ActionError({ error: message, code: "validation_failed" as never, issues: [{ path: ["uncarbonized"], code: "validation_failed" as never, message }] });
+    const onSubmit = vi.fn((_data, onRefusal) => { onRefusal(error, "Bin was not saved. Try again."); });
+    render(<StorageLocationForm storageLocation={bin({ uncarbonized: false, facilityId: FACILITY_ID })} onSubmit={onSubmit} onCancel={vi.fn()} />);
+    fireEvent.click(tag()!);
+    fireEvent.click(screen.getByRole("button", { name: /^Update|^Save/ }));
+    const alert = await screen.findByText(message);
+    expect(alert.id).toBe("uncarbonized-error");
+    expect(tag()!.getAttribute("aria-describedby")).toContain("uncarbonized-error");
+  });
+
   it("hides the checkbox but still creates a tagged bin when the caller fixes the tag", async () => {
     const onSubmit = vi.fn();
     render(<StorageLocationForm allowedTypes={["biochar_bin"]} defaultFacilityId={FACILITY_ID} defaultUncarbonized hideUncarbonized onSubmit={onSubmit} onCancel={vi.fn()} />);
     expect(tag()).toBeNull();
+    expect(screen.getByText("This bin holds uncarbonized material. Products cannot draw from it.")).toBeTruthy();
     fireEvent.change(screen.getByRole("textbox", { name: /^Bin name/ }), { target: { value: "Reject bin" } });
     fireEvent.click(screen.getByRole("button", { name: "Create storage bin" }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());

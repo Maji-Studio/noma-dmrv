@@ -738,7 +738,7 @@ export function ProductionRunForm({
             warning: massBalanceFeedback.wetWarning,
             disabled: isSubmitting || outputLocked,
             placeholder: "e.g. 150",
-            certifyRequired: isProductionRunCertifyField("biocharOutputKg"),
+            certifyRequired: !failedRun && isProductionRunCertifyField("biocharOutputKg"),
             certifyStatus: certStatus("biocharOutputKg"),
             registration: register("biocharOutputKg", { setValueAs: nullableNumericValue }),
           }}
@@ -748,7 +748,7 @@ export function ProductionRunForm({
             error: errors.biocharMoisturePercent?.message,
             disabled: isSubmitting || outputLocked,
             placeholder: "e.g. 1.5",
-            certifyRequired: isProductionRunCertifyField("biocharMoisturePercent"),
+            certifyRequired: !failedRun && isProductionRunCertifyField("biocharMoisturePercent"),
             certifyStatus: certStatus("biocharMoisturePercent"),
             registration: register("biocharMoisturePercent", { setValueAs: nullableNumericValue }),
           }}
@@ -768,6 +768,7 @@ export function ProductionRunForm({
             biocharMoisturePercent={typeof watchedBiocharMoisture === "number" ? watchedBiocharMoisture : null}
             biocharDryKg={previewBiocharDryMass}
             destinationBinName={selectedDestBin?.name ?? null}
+            hideYield={failedRun}
           />
         )}
       </FormSection>

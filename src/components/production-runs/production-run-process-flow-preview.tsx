@@ -52,6 +52,8 @@ interface ProcessFlowProps {
   biocharMoisturePercent: number | null;
   biocharDryKg: number | null;
   destinationBinName: string | null;
+  /** A failed run's output is not biochar and changes no yield, so the headline is left out. */
+  hideYield?: boolean;
 }
 
 /** One basis for the whole equation: dry whenever both dry masses resolve. */
@@ -188,11 +190,11 @@ export function ProcessFlowPreview(props: ProcessFlowProps) {
     <CompositionCard
       title="Process flow"
       hint={PROCESS_FLOW_HINT}
-      headline={<DerivedHeadline
+      headline={props.hideYield ? undefined : <DerivedHeadline
         label={yieldLabel}
         value={basis.yieldPercent === null ? null : formatPercent(basis.yieldPercent, { digits: YIELD_DIGITS })}
       />}
-      explanation={basis.yieldPercent !== null ? <YieldCalculation basis={basis} label={yieldLabel} /> : undefined}
+      explanation={basis.yieldPercent !== null && !props.hideYield ? <YieldCalculation basis={basis} label={yieldLabel} /> : undefined}
     >
       {diagram ? (
         <MassFlowSankey diagram={diagram} />
