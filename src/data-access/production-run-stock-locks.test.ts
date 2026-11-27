@@ -56,3 +56,31 @@ it("locks all bins in sorted order and keeps biochar archive checks on a start e
     [ctx, tx, "z-feedstock", { allowArchived: true }],
   ]);
 });
+
+it.each([undefined, "biochar"])("allows an archived historical output reference on metadata edits: %s", async biocharStorageLocationId => {
+  vi.mocked(lockBinStock).mockClear();
+  const tx = {} as DbTransaction;
+  await lockProductionRunUpdateStock(ctx, tx,
+    { feedstockStorageLocationIds: ["feedstock"], biocharStorageLocationId: "biochar" },
+    { biocharStorageLocationId });
+  expect(lockBinStock).toHaveBeenCalledExactlyOnceWith(ctx, tx, "biochar", { allowArchived: true });
+});
+
+it.each([
+  { biocharStorageLocationId: "other" },
+  { biocharOutputKg: 100 },
+  { biocharMoisturePercent: 20 },
+  { endTime: new Date("2026-03-20T10:00:00Z") },
+  { status: "complete" },
+  { facilityId: "facility" },
+  { feedstockDraws: [{ storageLocationId: "feedstock" }] },
+])("requires active output bins for stock or reference changes: %j", async change => {
+  vi.mocked(lockBinStock).mockClear();
+  const tx = {} as DbTransaction;
+  await lockProductionRunUpdateStock(ctx, tx,
+    { feedstockStorageLocationIds: ["feedstock"], biocharStorageLocationId: "biochar" }, change);
+  expect(lockBinStock).toHaveBeenCalledWith(ctx, tx, "biochar", { allowArchived: false });
+  if (change.biocharStorageLocationId) {
+    expect(lockBinStock).toHaveBeenCalledWith(ctx, tx, "other", { allowArchived: false });
+  }
+});

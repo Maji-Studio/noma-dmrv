@@ -1,4 +1,4 @@
-/** Real Postgres regression coverage. The implementation sandbox does not execute this file. */
+/** Real Postgres integration tests. */
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
@@ -14,7 +14,7 @@ import { getFacilityOutputStock } from "@/data-access/facility-output-stock";
 import { previewProductStock } from "@/data-access/product-stock-preview";
 import { outputReceiptMarker } from "@/data-access/output-stock-edit-lock";
 import { getProductionRunById, getProductionRuns, getProductionRunStats } from "@/data-access/production-runs/queries";
-import { updateStorageLocation, deleteStorageLocation } from "@/data-access/storage-locations";
+import { archiveStorageLocation, updateStorageLocation, deleteStorageLocation } from "@/data-access/storage-locations";
 import { storageLocations } from "@/db/schema";
 import { readRecordDependents } from "@/data-access/record-lock-dependents";
 import { runOperation } from "@/lib/operations/runner";
@@ -172,6 +172,47 @@ describe("Failed output in Uncarbonized bins", { timeout: TIMEOUT_MS }, () => {
     await expect(edit(run.id, { expectedVersion: await version(run.id), biocharOutputKg: OUTPUT_KG + 1 })).rejects.toThrow();
     await edit(run.id, { expectedVersion: await version(run.id), electricityKwh: 3 });
     expect(await stored(run.id)).toMatchObject({ biocharStorageLocationId: failedBinId, electricityKwh: 3, biocharOutputKg: OUTPUT_KG });
+  });
+
+  it.each(["complete", "failed"] as const)("allows metadata edits on %s output in an archived bin", async status => {
+    if (status === "complete") failedBinId = await createProductionRunOutputBin(f.ctx.organizationId, f.facility.id);
+    const run = await createProductionRun(f.ctx, { ...input(), status });
+    const original = await stored(run.id);
+    await stockMovement("count", 0);
+    const [bin] = await db.select().from(storageLocations).where(and(
+      eq(storageLocations.organizationId, f.ctx.organizationId), eq(storageLocations.id, failedBinId),
+    ));
+    const archived = await archiveStorageLocation(f.ctx, failedBinId, bin.version);
+    expect(archived.archivedAt).toBeInstanceOf(Date);
+
+    await edit(run.id, { expectedVersion: await version(run.id), electricityKwh: 1 });
+    // Explicitly retaining the same bin is also a metadata-only edit.
+    await edit(run.id, { expectedVersion: await version(run.id), electricityKwh: 2, biocharStorageLocationId: failedBinId });
+    expect(await stored(run.id)).toMatchObject({ electricityKwh: 2, biocharStorageLocationId: failedBinId,
+      biocharOutputKg: OUTPUT_KG, outputPostedAt: original.outputPostedAt });
+
+    // Supplying a facility invokes the full active-reference check even for the same bin.
+    await expect(edit(run.id, { expectedVersion: await version(run.id), facilityId: f.facility.id }))
+      .rejects.toThrow("Storage bin was not found or is archived.");
+    const activeBinId = await createProductionRunOutputBin(f.ctx.organizationId, f.facility.id, status === "failed");
+    await expect(createProductionRun(f.ctx, { ...input(), status, startTime: NEXT_START, endTime: NEXT_END }))
+      .rejects.toThrow("Storage bin was not found or is archived.");
+    const next = await createProductionRun(f.ctx, { ...input(), status, startTime: NEXT_START, endTime: NEXT_END,
+      biocharStorageLocationId: activeBinId });
+    await expect(edit(next.id, { expectedVersion: await version(next.id), biocharStorageLocationId: failedBinId }))
+      .rejects.toThrow("Storage bin was not found or is archived.");
+    expect((await stored(next.id)).biocharStorageLocationId).toBe(activeBinId);
+  });
+
+  it("leaves older Failed rows readable but requires their output on the next save", async () => {
+    const run = await createProductionRun(f.ctx, input());
+    await db.update(productionRuns).set({ biocharOutputKg: null, biocharMoisturePercent: null, biocharDryMassKg: null,
+      biocharStorageLocationId: null, outputPostedAt: null }).where(and(eq(productionRuns.organizationId, f.ctx.organizationId), eq(productionRuns.id, run.id)));
+    expect(await getProductionRunById(f.ctx, run.id)).toMatchObject({ status: "failed", biocharOutputKg: null });
+    await expect(edit(run.id, { expectedVersion: await version(run.id), electricityKwh: 1 })).rejects.toMatchObject(validation("biocharOutputKg"));
+    await edit(run.id, { expectedVersion: await version(run.id), biocharOutputKg: OUTPUT_KG,
+      biocharMoisturePercent: MOISTURE_PERCENT, biocharStorageLocationId: failedBinId });
+    expect(await stored(run.id)).toMatchObject({ biocharOutputKg: OUTPUT_KG, outputPostedAt: expect.any(Date) });
   });
 
   it("refuses a Failed addition timed before a later switch back to split", async () => {

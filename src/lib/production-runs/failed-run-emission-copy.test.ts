@@ -16,7 +16,7 @@ describe("failed run emissions copy", () => {
     const copy = describeFailedRunEmissions(BASE);
     expect(copy).toMatchObject({ lead: "Emissions count in credit batch ", batch: { code: "CB-26-010-A" }, tone: "neutral", action: null });
     expect(copy.info).toContain("Oct 2, 2026");
-    expect(copy.info).toContain("output stays in its uncarbonized bin");
+    expect(copy.info).toContain("adds no biochar to a credit batch");
   });
 
   it("says no credit batch yet and points to the credit batches", () => {

@@ -107,6 +107,7 @@ async function validateBiocharStorageLocation(
   locationId: string,
   facilityId: string,
   status: ProductionRunStatus,
+  options: { allowArchived?: boolean } = {},
 ) {
   requireOrgScope(ctx);
   const [loc] = await tx
@@ -116,7 +117,7 @@ async function validateBiocharStorageLocation(
       and(
         eq(storageLocations.id, locationId),
         eq(storageLocations.organizationId, ctx.organizationId),
-        isNull(storageLocations.archivedAt),
+        options.allowArchived ? undefined : isNull(storageLocations.archivedAt),
       ),
     );
 
@@ -718,7 +719,11 @@ export async function updateProductionRunInTransaction(
         effectiveBiocharStorageId &&
         (isTerminalProductionRunStatus(lockedTargetStatus) || data.biocharStorageLocationId !== undefined || data.facilityId !== undefined)
       ) {
-        await validateBiocharStorageLocation(ctx, tx, effectiveBiocharStorageId, lockedTargetFacilityId, lockedTargetStatus);
+        await validateBiocharStorageLocation(ctx, tx, effectiveBiocharStorageId, lockedTargetFacilityId, lockedTargetStatus, {
+          // Retaining a historical reference still requires the correct type and tag.
+          allowArchived: data.facilityId === undefined &&
+            (data.biocharStorageLocationId === undefined || data.biocharStorageLocationId === locked.biocharStorageLocationId),
+        });
       }
       const biocharStockState =
         await deriveProductionRunUpdateBiocharStockState(

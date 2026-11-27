@@ -1,3 +1,4 @@
+import type { ProductionRunStatus } from '@/lib/production-runs/lifecycle';
 import { productionRunAddsStock } from '@/lib/storage-location-material';
 import { stockAdjustmentsEnabled } from "@/lib/feature-switches";
 import { randomUUID } from 'node:crypto';
@@ -111,7 +112,7 @@ export async function assertAdditionAfterSplit(ctx: OrgContext, tx: DbTransactio
   throw new SafeError(`This bin was switched to split at ${when}, after this time. Record the addition at or after ${when}.`);
 }
 
-type RunPlacement = { status: string; biocharStorageLocationId: string | null; facilityId: string; endTime: Date | null };
+type RunPlacement = { status: ProductionRunStatus; biocharStorageLocationId: string | null; facilityId: string; endTime: Date | null };
 
 /**
  * A terminal run adds its output to the matching bin, or again

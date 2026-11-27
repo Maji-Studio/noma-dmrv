@@ -6,6 +6,7 @@ import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-conte
 import { EventTimeInput } from "@/components/forms/event-time-input";
 
 import { useId } from "react";
+import { Notice } from "@/components/ui/notice";
 import { LABEL_HIT_AREA } from "@/components/ui/touch-target";
 import { cn } from "@/lib/utils";
 import { useForm, useWatch, type Resolver } from "react-hook-form";
@@ -353,7 +354,7 @@ export function StorageLocationForm({
       )}
 
       {fixedUncarbonized && (
-        <p className="body-caption text-[var(--color-text-secondary)]">{UNCARBONIZED_FIXED_NOTE}</p>
+        <Notice tone="info">{UNCARBONIZED_FIXED_NOTE}</Notice>
       )}
 
       {showUncarbonized && (

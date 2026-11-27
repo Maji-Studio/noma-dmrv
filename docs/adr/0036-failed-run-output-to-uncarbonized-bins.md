@@ -9,12 +9,17 @@ remains available on create.
 
 Both outcomes set `output_posted_at` and add stock layers in the matching bin.
 Failed output appears in stock history and supports lost mass and stock counts.
-Output edits follow the same dependency locks as Complete runs. The CHECKs
-`production_runs_complete_has_output` and
-`production_runs_complete_has_output_posted_at` cover both Complete and Failed.
-Migration `0180_failed_run_output_checks` adds them as `NOT VALID` so an older
-Failed row without output does not block migration. Every insert and update is
-checked; that older row must get output and a posting time on its next save.
+Output edits follow the same dependency locks as Complete runs.
+
+The Complete CHECKs `production_runs_complete_has_output` and
+`production_runs_complete_has_output_posted_at` stay unchanged and apply only to
+Complete runs. Failed output (wet output above 0 kg, output moisture, an
+Uncarbonized biochar bin and `output_posted_at`) is enforced by the application
+(lifecycle and data access) on every save, like the bin-tag pairing. Staging
+holds Failed runs recorded before this rule. An older Failed run without
+output stays readable and must get output on its next save.
+Keeping Failed validation in the application also preserves facility archive
+and restore cascades on those older rows.
 
 ## Rejected alternative
 

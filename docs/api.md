@@ -328,11 +328,13 @@ Failed uses a bin tagged Uncarbonized. Wrong bin/tag pairings return
 Both outcomes post output stock in their bins. Failed output never
 counts as biochar or supplies products, credit batches, removals, certification
 or Sankey. Its energy readings remain included in facility energy activity.
-The DB CHECKs `production_runs_complete_has_output` and
-`production_runs_complete_has_output_posted_at` also cover Failed. Migration
-`0180_failed_run_output_checks` adds them as `NOT VALID`: an older Failed row
-without output stays readable, but every insert and update is checked, so its
-next save must supply output and a posting time.
+The Complete CHECKs `production_runs_complete_has_output` and
+`production_runs_complete_has_output_posted_at` stay unchanged and apply only to
+Complete runs. Failed output (wet output above 0 kg, output moisture, an
+Uncarbonized biochar bin and `output_posted_at`) is enforced by the application
+(lifecycle and data access) on every save, like the bin-tag pairing. Staging
+holds Failed runs recorded before this rule. An older Failed run without
+output stays readable and must get output on its next save.
 
 The `audit` run option supplies request and credential IDs for API writes only.
 Audited operations must implement `describe`.

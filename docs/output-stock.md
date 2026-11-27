@@ -215,11 +215,13 @@ unknown (`src/lib/output-stock/stock-replay.ts`). A run intake's recording time 
 moved when either terminal run's posted output changes (wet mass, moisture, dry
 mass, bin or end time), cleared when the run leaves a terminal status, and
 untouched by other edits. A terminal save also repairs a missing receipt marker.
-The CHECKs `production_runs_complete_has_output` and
-`production_runs_complete_has_output_posted_at` cover both Complete and Failed.
-Migration `0180_failed_run_output_checks` adds them as `NOT VALID`, allowing an
-older Failed row without output to remain until its next save. Every insert and
-update is checked, so that save must supply output and a posting time.
+The Complete CHECKs `production_runs_complete_has_output` and
+`production_runs_complete_has_output_posted_at` stay unchanged and apply only to
+Complete runs. Failed output (wet output above 0 kg, output moisture, an
+Uncarbonized biochar bin and `output_posted_at`) is enforced by the application
+(lifecycle and data access) on every save, like the bin-tag pairing. Staging
+holds Failed runs recorded before this rule. An older Failed run without
+output stays readable and must get output on its next save.
 
 Bay, pile-band and chart point details open on hover, keyboard focus or tap. A product bin's bays and
 pile bands name their parts as the product composition does (dry biochar,

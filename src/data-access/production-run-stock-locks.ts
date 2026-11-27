@@ -59,12 +59,18 @@ export async function lockProductionRunUpdateStock(
     snapshot.biocharStorageLocationId,
     data.biocharStorageLocationId ?? snapshot.biocharStorageLocationId,
   ];
-  // Keep one globally sorted lock batch, allowing archives only for historical
-  // feedstock sources. Biochar sources retain their active-bin guard.
+  const retainsOutputReference = data.facilityId === undefined &&
+    (data.biocharStorageLocationId === undefined || data.biocharStorageLocationId === snapshot.biocharStorageLocationId);
+  const metadataOnlyOutputEdit = retainsOutputReference && !feedstockStockChanged &&
+    data.startTime === undefined && data.endTime === undefined &&
+    data.biocharOutputKg === undefined && data.biocharMoisturePercent === undefined;
+  // Keep one globally sorted lock batch. Historical output references may be
+  // archived on metadata edits; stock changes still require active bins.
   const sortedIds = [...new Set(binIds.filter((id): id is string => id != null))].sort();
   for (const binId of sortedIds) {
     await lockBinStock(ctx, tx, binId, {
-      allowArchived: startOnlyFeedstockChange && !biocharBinIds.includes(binId),
+      allowArchived: (startOnlyFeedstockChange && !biocharBinIds.includes(binId)) ||
+        (metadataOnlyOutputEdit && binId === snapshot.biocharStorageLocationId),
     });
   }
 }

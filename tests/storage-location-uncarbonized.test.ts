@@ -1,4 +1,4 @@
-/** Real Postgres contracts. Run after applying migration 0179; never executed by the implementation agent. */
+/** Real Postgres integration tests. */
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";

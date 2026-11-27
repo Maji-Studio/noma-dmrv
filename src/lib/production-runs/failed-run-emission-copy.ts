@@ -26,7 +26,7 @@ export interface FailedRunEmissionCopy {
 
 export const EMISSION_LEAD = "Emissions count in credit batch ";
 
-const WHAT_COUNTS = "A failed run's output stays in its uncarbonized bin. Its diesel, electricity and feedstock transport count in the credit batch that covers its end day";
+const WHAT_COUNTS = "A failed run adds no biochar to a credit batch. Its diesel, electricity and feedstock transport count in the credit batch that covers its end day";
 
 /** A failed run that is not saved yet: no batch can be named before the run exists. */
 export const UNSAVED_FAILED_RUN_EMISSIONS: FailedRunEmissionCopy = {

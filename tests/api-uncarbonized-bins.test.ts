@@ -1,4 +1,4 @@
-/** Real REST/MCP handlers, credentials and Postgres. For reviewer execution only. */
+/** Real Postgres integration tests. */
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST as MCP } from "@/app/api/mcp/route";
