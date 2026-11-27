@@ -1,3 +1,4 @@
+import { loadBatchProductionRelativeRemovals } from "./batch-production-relative-removals";
 import { loadCountedFailedTransportOwners } from "./production-source-manifest";
 import { loadRunEmissionContributors } from "./credit-batch-emission-contributors";
 import { getFeedstockTransportOwners } from "./feedstock-transport-ownership";
@@ -145,6 +146,7 @@ export async function getRecordedEnergyInputs(
     reader
       .select({
         productionEmissionsClaimedByRemovalId: creditBatches.productionEmissionsClaimedByRemovalId,
+        productionEmissionsClaimReservedBySubmissionId: creditBatches.productionEmissionsClaimReservedBySubmissionId,
         id: creditBatches.id,
         code: creditBatches.code,
         startDate: creditBatches.startDate,
@@ -277,7 +279,7 @@ export async function getRecordedEnergyInputs(
   ]);
   const failed = contributors.filter(run => run.kind === "failed" && run.creditBatchId !== null);
   const countedFailedOwners = await loadCountedFailedTransportOwners(ctx, failed, reader,
-    new Map(batchRows.map(batch => [batch.id, batch.productionEmissionsClaimedByRemovalId])));
+    await loadBatchProductionRelativeRemovals(ctx, batchRows, reader));
   const failedRunIds = new Set(failed.map(run => run.runId));
   for (const [id, runId] of transportOwners) {
     if (failedRunIds.has(runId) && !countedFailedOwners.has(id)) transportOwners.delete(id);

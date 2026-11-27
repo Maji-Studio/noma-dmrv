@@ -1,3 +1,4 @@
+import { alias } from "drizzle-orm/pg-core";
 import { failedRunEmissionBatchCondition } from "./failed-run-emission-predicate";
 import { db, type DbTransaction } from "@/db";
 import {
@@ -112,6 +113,29 @@ export async function getTransportFeedstockIdsCountedElsewhere(
       removalId ? sql`${certificationSubmissions.localEntityId} <> ${removalId}` : sql`true`, false),
   ));
   return new Set(rows.map(row => row.id));
+}
+
+/** One relationship read for all batches, using the same snapshot eligibility predicate. */
+export async function getTransportFeedstockCountedRemovals(
+  ctx: OrgContext, ids: readonly string[],
+  reader: Pick<DbTransaction, "select" | "selectDistinct"> = db,
+): Promise<Map<string, Set<string>>> {
+  requireOrgScope(ctx);
+  const result = new Map<string, Set<string>>();
+  if (!ids.length) return result;
+  const listing = alias(certificationSubmissions, "counted_transport_submission");
+  const rows = await reader.selectDistinct({ id: feedstocks.id, removalId: listing.localEntityId })
+    .from(feedstocks).innerJoin(listing, and(
+      eq(listing.organizationId, ctx.organizationId),
+      countedTransportCondition(ctx, sql`${feedstocks.id}::text`,
+        eq(certificationSubmissions.id, listing.id), false),
+    )).where(and(eq(feedstocks.organizationId, ctx.organizationId), inArray(feedstocks.id, [...ids])));
+  for (const row of rows) {
+    const removals = result.get(row.id) ?? new Set<string>();
+    removals.add(row.removalId);
+    result.set(row.id, removals);
+  }
+  return result;
 }
 
 function transportTargetCondition(ctx: OrgContext, target: CertifiedLineageTarget, owner: string | undefined): SQL {

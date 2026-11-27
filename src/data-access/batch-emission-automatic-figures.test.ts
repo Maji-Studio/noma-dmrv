@@ -1,5 +1,5 @@
-import { getTransportFeedstockIdsCountedElsewhere } from "./certification-lineage-guards";
-vi.mock("./certification-lineage-guards", () => ({ getTransportFeedstockIdsCountedElsewhere: vi.fn() }));
+import { getTransportFeedstockCountedRemovals } from "./certification-lineage-guards";
+vi.mock("./certification-lineage-guards", () => ({ getTransportFeedstockCountedRemovals: vi.fn() }));
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
 vi.mock("@/data-access/utils", () => ({ requireOrgScope: vi.fn(), requireOrgFacility: vi.fn() }));
@@ -25,7 +25,7 @@ import { loadBatchesEmissionAutomaticFacts } from "./batch-emission-automatic-fi
 const ctx = makeTestOrgContext();
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(getTransportFeedstockIdsCountedElsewhere).mockResolvedValue(new Set());
+  vi.mocked(getTransportFeedstockCountedRemovals).mockResolvedValue(new Map());
   vi.mocked(loadBatchEmissionContributors).mockResolvedValue({});
   vi.mocked(loadCreditBatchRollups).mockResolvedValue(Object.fromEntries(["a", "b"].map((id) => [id, {
     batch: { id, productionEmissionsClaimedByRemovalId: null },
@@ -144,7 +144,7 @@ it("excludes failed-owned transport already counted by another Removal", async (
     materialMembers: [], failedContributors: [{ runId: "failed", creditBatchId: "a", feedstockIds: ["failed-feedstock"] }],
   } } as never);
   vi.mocked(getFeedstockTransportOwners).mockResolvedValue(new Map([["failed-feedstock", "failed"]]));
-  vi.mocked(getTransportFeedstockIdsCountedElsewhere).mockResolvedValue(new Set(["failed-feedstock"]));
+  vi.mocked(getTransportFeedstockCountedRemovals).mockResolvedValue(new Map([["failed-feedstock", new Set(["other-removal"])]]));
   const facts = await loadBatchesEmissionAutomaticFacts(ctx, ["a"]);
   expect(getTransportLegsForEntities).toHaveBeenCalledExactlyOnceWith(ctx, "feedstock", [], expect.anything());
   expect(facts.a.automaticFigures["feedstock-transport"]).toEqual({ magnitude: "0", unit: "km * tonne" });
@@ -161,7 +161,8 @@ it.each([undefined, "reviewing-removal", null])("resolves failed transport relat
     materialMembers: [], failedContributors: [{ runId: "failed", creditBatchId: "a", feedstockIds: ["failed-feedstock"] }],
   } } as never);
   vi.mocked(getFeedstockTransportOwners).mockResolvedValue(new Map([["failed-feedstock", "failed"]]));
+  vi.mocked(getTransportFeedstockCountedRemovals).mockResolvedValue(new Map([["failed-feedstock", new Set(["claiming-removal"])]]));
   await loadBatchesEmissionAutomaticFacts(ctx, ["a"], { removalId });
-  expect(getTransportFeedstockIdsCountedElsewhere).toHaveBeenCalledExactlyOnceWith(ctx, ["failed-feedstock"],
-    removalId === undefined ? "claiming-removal" : removalId, expect.anything());
+  expect(getTransportLegsForEntities).toHaveBeenCalledExactlyOnceWith(ctx, "feedstock",
+    removalId === undefined ? ["failed-feedstock"] : [], expect.anything());
 });

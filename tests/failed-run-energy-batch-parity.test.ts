@@ -1,3 +1,7 @@
+import { countQueries } from "./helpers/query-counter";
+import { loadRunEmissionContributors } from "@/data-access/credit-batch-emission-contributors";
+import { loadCountedFailedTransportOwners } from "@/data-access/production-source-manifest";
+import { getTransportFeedstockCountedRemovals } from "@/data-access/certification-lineage-guards";
 import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { eq } from "drizzle-orm";
 import { buildCreateDatapointRequest } from "@/lib/isometric/transformers/datapoint";
@@ -84,12 +88,16 @@ it("agrees on complete and failed batch activity and once-only transport while k
 
 
 it.each([
+  { status: "draft", own: true, claimed: false, reserved: true },
+  { status: "draft", own: false, claimed: false, reserved: true },
   { status: "draft", own: true, claimed: true },
   { status: "submitted", own: true, claimed: true },
   { status: "draft", own: false, claimed: true },
   { status: "submitted", own: false, claimed: true },
   { status: "draft", own: false, claimed: false },
-] as const)("keeps Energy and batch transport relative to the claim: %j", async ({ status, own, claimed }) => {
+] as const)("keeps Energy and batch transport relative to the claim: %j", async (scenario) => {
+  const { status, own, claimed } = scenario;
+  const reserved = "reserved" in scenario && scenario.reserved;
   await expect(db.transaction(async tx => {
     const f = await failedRunFixture(tx);
     const ctx = makeTestOrgContext();
@@ -100,9 +108,14 @@ it.each([
     await tx.insert(transportLegs).values({ ...f.org, entityType: "feedstock", entityId: f.stock.id,
       distanceKm: 10, loadMassKg: 1000, transportMethodType: "road" });
     const before = (await loadBatchesEmissionAutomaticFacts(ctx, [batchId], {}, tx))[batchId];
-    await tx.insert(certificationSubmissions).values({ ...f.org, provider: "isometric", submissionType: "removal",
-      localEntityType: "removal", localEntityId: own ? claim.id : other.id, version: 1, status,
+    const [reservation] = await tx.insert(certificationSubmissions).values({ ...f.org, provider: "isometric", submissionType: "removal",
+      localEntityType: "removal", localEntityId: claim.id, version: 1, status,
+      payloadSnapshot: { transportFeedstockIds: own ? [f.stock.id] : [] } }).returning();
+    if (!own) await tx.insert(certificationSubmissions).values({ ...f.org, provider: "isometric", submissionType: "removal",
+      localEntityType: "removal", localEntityId: other.id, version: 1, status,
       payloadSnapshot: { transportFeedstockIds: [f.stock.id] } });
+    if (reserved) await tx.update(creditBatches).set({ productionEmissionsClaimReservedBySubmissionId: reservation.id })
+      .where(eq(creditBatches.id, batchId));
     const facts = (await loadBatchesEmissionAutomaticFacts(ctx, [batchId], {}, tx))[batchId];
     const { inputs } = await getRecordedEnergyInputs(ctx, f.facility.id, tx);
     const energy = buildEnergyBreakdown(inputs, { from: null, to: "2026-03-31" });
@@ -111,6 +124,51 @@ it.each([
     expect(facts.automaticFigures["feedstock-transport"]).toEqual({ magnitude: own ? "20" : "0", unit: "km * tonne" });
     expect(facts.automaticRecordCounts?.["feedstock-transport"]).toBe(own ? 1 : 0);
     if (own) expect(facts).toEqual(before);
+    throw ROLLBACK;
+  })).rejects.toBe(ROLLBACK);
+});
+
+
+// Ownership resolution costs four reads; counted snapshots must always cost one.
+const FAILED_OWNER_QUERY_BUDGET = 5;
+const CLAIMED_BATCH_COUNT = 3;
+
+it("loads counted snapshots once for batches with distinct claiming Removals", async () => {
+  await expect(db.transaction(async tx => {
+    const ctx = makeTestOrgContext();
+    const fixtures: Awaited<ReturnType<typeof failedRunFixture>>[] = [];
+    const claims = new Map<string, string>();
+    for (let i = 0; i < CLAIMED_BATCH_COUNT; i++) {
+      const f = await failedRunFixture(tx);
+      fixtures.push(f);
+      const [removal] = await insertRemovalFixture(tx, [f.site]);
+      claims.set(f.batch!.id, removal.id);
+      await tx.update(creditBatches).set({ productionEmissionsClaimedByRemovalId: removal.id })
+        .where(eq(creditBatches.id, f.batch!.id));
+      await tx.insert(certificationSubmissions).values({ ...f.org, provider: "isometric",
+        submissionType: "removal", localEntityType: "removal", localEntityId: removal.id,
+        version: 1, status: "draft", payloadSnapshot: { transportFeedstockIds: [f.stock.id] } });
+    }
+    const contributors = await loadRunEmissionContributors(ctx, fixtures.map(f => f.run.id), tx);
+    const single = await countQueries(() => loadCountedFailedTransportOwners(ctx, contributors.slice(0, 1), tx, claims));
+    const many = await countQueries(() => loadCountedFailedTransportOwners(ctx, contributors, tx, claims));
+    expect(single.result.size).toBe(1);
+    expect(many.result).toEqual(new Map(fixtures.map(f => [f.stock.id, f.run.id])));
+    expect(many.queries).toBe(single.queries);
+    expect(many.queries).toBe(FAILED_OWNER_QUERY_BUDGET);
+    const relationships = await countQueries(() =>
+      getTransportFeedstockCountedRemovals(ctx, fixtures.map(f => f.stock.id), tx));
+    expect(relationships.queries).toBe(1);
+    for (const f of fixtures) {
+      expect(relationships.result.get(f.stock.id)).toEqual(new Set([claims.get(f.batch!.id)]));
+    }
+    // A second listing Removal must exclude the intake even when its own snapshot also lists it.
+    await tx.insert(certificationSubmissions).values({ ...fixtures[0].org, provider: "isometric",
+      submissionType: "removal", localEntityType: "removal", localEntityId: claims.get(fixtures[1].batch!.id)!,
+      version: 2, status: "submitted", payloadSnapshot: { transportFeedstockIds: [fixtures[0].stock.id] } });
+    const excluded = await loadCountedFailedTransportOwners(ctx, contributors, tx, claims);
+    expect(excluded.has(fixtures[0].stock.id)).toBe(false);
+    expect(excluded.size).toBe(CLAIMED_BATCH_COUNT - 1);
     throw ROLLBACK;
   })).rejects.toBe(ROLLBACK);
 });

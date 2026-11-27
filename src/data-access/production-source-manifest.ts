@@ -1,5 +1,5 @@
 import { includesProductionInputs } from "@/lib/certification/production-claim-policy";
-import { getTransportFeedstockIdsCountedElsewhere } from "./certification-lineage-guards";
+import { getTransportFeedstockCountedRemovals } from "./certification-lineage-guards";
 import { db, type DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
@@ -50,21 +50,19 @@ export async function loadCountedFailedTransportOwners(
   const runs = new Map(contributors.map(run => [run.runId, run]));
   const feedstockIds = [...new Set(contributors.flatMap(run => run.feedstockIds))];
   const owners = await getFeedstockTransportOwners(ctx, feedstockIds, reader);
-  const groups = new Map<string | null, [string, string][]>();
+  const countedRemovals = await getTransportFeedstockCountedRemovals(ctx,
+    [...owners].filter(([, runId]) => runs.has(runId)).map(([id]) => id), reader);
+  const counted = new Map<string, string>();
   for (const [id, runId] of owners) {
     const run = runs.get(runId);
     if (!run) continue;
     const relativeRemovalId = typeof removalId === "object" && removalId !== null
       ? removalId.get(run.creditBatchId ?? "") ?? null : removalId ?? null;
-    const group = groups.get(relativeRemovalId) ?? [];
-    group.push([id, runId]);
-    groups.set(relativeRemovalId, group);
+    if (![...(countedRemovals.get(id) ?? [])].some(id => id !== relativeRemovalId)) {
+      counted.set(id, runId);
+    }
   }
-  const counted = await Promise.all([...groups].map(async ([relativeRemovalId, entries]) => {
-    const elsewhere = await getTransportFeedstockIdsCountedElsewhere(ctx, entries.map(([id]) => id), relativeRemovalId, reader);
-    return entries.filter(([id]) => !elsewhere.has(id));
-  }));
-  return new Map(counted.flat());
+  return counted;
 }
 
 /** No additional locks here: acquiring runs after batch rows would invert writer order. */

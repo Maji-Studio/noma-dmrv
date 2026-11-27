@@ -4,12 +4,12 @@ import { makeTestOrgContext } from "../../tests/helpers/test-org";
 import { buildProductionSourceManifest, loadProductionSourceManifest } from "./production-source-manifest";
 import { loadBatchEmissionContributors } from "./credit-batch-emission-contributors";
 import { getFeedstockTransportOwners } from "./feedstock-transport-ownership";
-import { getTransportFeedstockIdsCountedElsewhere } from "./certification-lineage-guards";
+import { getTransportFeedstockCountedRemovals } from "./certification-lineage-guards";
 
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("./credit-batch-emission-contributors", () => ({ loadBatchEmissionContributors: vi.fn() }));
 vi.mock("./feedstock-transport-ownership", () => ({ getFeedstockTransportOwners: vi.fn() }));
-vi.mock("./certification-lineage-guards", () => ({ getTransportFeedstockIdsCountedElsewhere: vi.fn() }));
+vi.mock("./certification-lineage-guards", () => ({ getTransportFeedstockCountedRemovals: vi.fn() }));
 const ctx = makeTestOrgContext();
 const contributor = (runId: string): EmissionContributor => ({ runId, version: 1, facilityId: "facility",
   endDay: "2026-03-01", feedstockTypeId: "type", feedstockIds: ["own", "counted", "other"],
@@ -18,7 +18,7 @@ const contributor = (runId: string): EmissionContributor => ({ runId, version: 1
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(getFeedstockTransportOwners).mockResolvedValue(new Map([["own", "a"], ["counted", "z"], ["other", "material"]]));
-  vi.mocked(getTransportFeedstockIdsCountedElsewhere).mockResolvedValue(new Set(["counted"]));
+  vi.mocked(getTransportFeedstockCountedRemovals).mockResolvedValue(new Map([["counted", new Set(["other-removal"])]]));
 });
 
 it("builds the same manifest from preloaded context contributors and batch IDs", async () => {
@@ -31,5 +31,5 @@ it("builds the same manifest from preloaded context contributors and batch IDs",
   expect(context.countedTransportFeedstockIds).toEqual(["own"]);
   expect(contributors.map(run => run.runId)).toEqual(["z", "a"]);
   expect(loadBatchEmissionContributors).toHaveBeenCalledExactlyOnceWith(ctx, ["batch"], reader, { failedOnly: true });
-  expect(getTransportFeedstockIdsCountedElsewhere).toHaveBeenCalledWith(ctx, ["own", "counted"], "removal", reader);
+  expect(getTransportFeedstockCountedRemovals).toHaveBeenCalledWith(ctx, ["own", "counted"], reader);
 });

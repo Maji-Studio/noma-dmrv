@@ -1,3 +1,4 @@
+import { loadBatchProductionRelativeRemovals } from "./batch-production-relative-removals";
 import { linkedFeedstockIdsOwnedElsewhere, ownedTransportFeedstockIds } from "@/lib/certification/feedstock-transport-ownership";
 import { db, type DbTransaction } from "@/db";
 import { emissionDeliveryShares } from "@/lib/certification/emission-delivery-shares";
@@ -30,7 +31,7 @@ export async function loadBatchesEmissionAutomaticFacts(
   const contributors = await loadBatchEmissionContributors(ctx, ids, executor, { failedOnly: true });
   const failedContributors = Object.values(contributors).flatMap(batch => batch.failedContributors);
   const owners = await loadCountedFailedTransportOwners(ctx, failedContributors, executor,
-    options.removalId !== undefined ? options.removalId : new Map(Object.values(rollups).map(({ batch }) => [batch.id, batch.productionEmissionsClaimedByRemovalId])));
+    options.removalId !== undefined ? options.removalId : await loadBatchProductionRelativeRemovals(ctx, Object.values(rollups).map(({ batch }) => batch), executor));
   const batches = ids.map((id) => {
     const lineage = rollups[id]?.lineageFacts;
     if (!lineage) throw new SafeError("Credit batch accounting could not be loaded");
