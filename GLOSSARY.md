@@ -147,6 +147,11 @@ never limits a withdrawal.
 _Avoid_: feedstock dry stock, dry allocation, converting a physical count to
 dry mass before updating bin stock.
 
+**Uncarbonized bin**:
+A biochar bin tagged to hold output of **Failed** production runs. Its material
+is never drawn into **biochar products**. A bin is tagged or untagged and never
+mixes the two kinds of material. The tag is fixed once the bin has stock or history.
+
 **Ingredient bin**:
 Descriptive shorthand for a **feedstock bin** currently holding a
 blend-usage feedstock type, drawn on when a biochar product is mixed

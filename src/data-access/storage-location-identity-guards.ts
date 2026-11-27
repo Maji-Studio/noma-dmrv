@@ -3,7 +3,7 @@ import { recordLocks, withRecordLockGuidance } from '@/lib/record-lock';
 /**
  * Stocked-bin identity guard (issue #767).
  *
- * A bin's `type` and `feedstockTypeId` decide which material lane every stock
+ * A bin's `type`, `uncarbonized` and `feedstockTypeId` decide which material lane every stock
  * derivation reads for it, and its `facilityId` scopes which layers those
  * derivations count. Changing any of them on a bin that still holds
  * material, or that already carries stock history, silently re-points that
@@ -38,6 +38,7 @@ import { requireOrgScope } from "./utils";
  */
 const STORAGE_TYPE_FIELD = { label: "Storage type", key: "type" };
 const FEEDSTOCK_TYPE_FIELD = { label: "Feedstock type", key: "feedstockTypeId" };
+const UNCARBONIZED_FIELD = { label: "Uncarbonized", key: "uncarbonized" };
 const FACILITY_FIELD = { label: "Facility", key: "facilityId" };
 
 /** The control the operator changed: its label for the message, its form key for the issue path. */
@@ -52,6 +53,7 @@ function lockedIdentityError(field: IdentityField, message: string): DomainError
 /** The bin identity columns a stock derivation reads. */
 interface BinIdentity {
   type: StorageLocationType;
+  uncarbonized: boolean;
   feedstockTypeId: string | null;
   facilityId: string;
 }
@@ -89,11 +91,12 @@ function changedIdentityField(
     return FEEDSTOCK_TYPE_FIELD;
   }
   if (current.facilityId !== next.facilityId) return FACILITY_FIELD;
+  if (current.uncarbonized !== next.uncarbonized) return UNCARBONIZED_FIELD;
   return null;
 }
 
 /**
- * Refuse a `type`, `feedstockTypeId` or `facilityId` change on a bin that still holds stock
+ * Refuse a `type`, `uncarbonized`, `feedstockTypeId` or `facilityId` change on a bin that still holds stock
  * or already carries stock history. Call it under the bin's stock lock, after
  * re-reading the effective row; it returns without a query when no
  * identity column moves.

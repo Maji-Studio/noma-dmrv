@@ -7,6 +7,7 @@ export const storageLocationRepresentationSchema = z.object({
   version: lookupVersion,
   facilityId: lookupFacilityId,
   type: z.enum(["feedstock_bin", "biochar_bin", "product_bin"]).describe("Material lane: feedstock, biochar, or product bin."),
+  uncarbonized: z.boolean().describe("Biochar bin holding uncarbonized output from failed runs. Cannot supply biochar products."),
   stockMode: z.enum(OUTPUT_STOCK_MODES).describe("Split draws deliveries in order in feedstock bins and keeps sub-bins apart in output bins. Mix draws remaining stock in proportion."),
   drawOrder: z.enum(OUTPUT_DRAW_ORDERS).describe("Draw order for split bins, including feedstock deliveries. Ignored by mix bins."),
   capacityKg: z.number().nullable().describe("Storage capacity in kilograms, or null when unspecified."),

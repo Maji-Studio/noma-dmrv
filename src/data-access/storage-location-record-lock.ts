@@ -15,7 +15,7 @@ import {
 import { requireOrgScope } from './utils';
 
 /** Columns that choose the bin's material lane or scope. Only these need the authoritative Sent check. */
-const PROTECTED_STORAGE_LOCATION_FIELDS = ['type', 'feedstockTypeId', 'formulationId', 'facilityId'] as const;
+const PROTECTED_STORAGE_LOCATION_FIELDS = ['type', 'feedstockTypeId', 'formulationId', 'facilityId', 'uncarbonized'] as const;
 const STORAGE_LOCATION_LINEAGE_BUSY = 'Certification records in this storage bin are being changed. Save again in a moment.';
 
 type ProtectedField = (typeof PROTECTED_STORAGE_LOCATION_FIELDS)[number];

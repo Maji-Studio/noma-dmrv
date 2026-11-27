@@ -166,7 +166,7 @@ describe("read sheets", () => {
     storageSummary: { feedstockBinCount: 0, biocharBinCount: 0, productBinCount: 0 },
     inventorySummary: { feedstockWetKg: 1200 },
   }), stock).find(section => section.title === "Inventory snapshot")!;
-  const settled = (biochar: FacilityOutputStockGroup | null, product: FacilityOutputStockGroup | null) => ({ data: { biochar, product }, isPending: false, isError: false });
+  const settled = (biochar: FacilityOutputStockGroup | null, product: FacilityOutputStockGroup | null) => ({ data: { biochar, product, uncarbonized: { wetKg: 0, dryBiocharKg: 0 } }, isPending: false, isError: false });
 
   const wetHint = (scope: string) => `Estimated wet mass at each batch's moisture. Sum of this facility's ${scope}, archived bins included.`;
   const dryHint = (scope: string) => `A bin here has no wet estimate, so this is the dry biochar sum of this facility's ${scope}, archived bins included.`;

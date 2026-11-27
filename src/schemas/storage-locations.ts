@@ -4,6 +4,7 @@
  */
 
 import { z } from "zod";
+import { UNCARBONIZED_BIOCHAR_BIN_MESSAGE } from "@/lib/storage-location-material";
 import { OUTPUT_DRAW_ORDERS, OUTPUT_STOCK_MODES, type OutputDrawOrder, type OutputStockMode } from "@/lib/output-stock/stock-mode";
 import {
   emptyToNull,
@@ -208,6 +209,7 @@ export const storageLocationFormSchema = z.object({
   // an unassigned bin, which accepts pure biochar and is claimed by the first
   // formulation put into it (`data-access/biochar-products.ts`).
   formulationId: emptyToNull.or(z.string().uuid("Choose a valid formulation.")).nullable().optional(),
+  uncarbonized: z.boolean().optional(),
   stockMode: z.enum(outputStockModes, { message: "Choose split or mix." }).optional(),
   drawOrder: z.enum(OUTPUT_DRAW_ORDERS, { message: "Choose oldest or newest first." }).optional(),
   mergedAt: mergedAtSchema,
@@ -222,6 +224,9 @@ export const storageLocationFormSchema = z.object({
     .optional()
     .or(z.literal("")),
 }).superRefine((data, ctx) => {
+  if (data.uncarbonized && data.type && data.type !== "biochar_bin") {
+    ctx.addIssue({ code: "custom", path: ["uncarbonized"], message: UNCARBONIZED_BIOCHAR_BIN_MESSAGE });
+  }
   if (data.formulationId && data.type !== "product_bin") {
     ctx.addIssue({
       code: "custom",
@@ -267,12 +272,16 @@ export const updateStorageLocationSchema = z.object({
   capacityKg: positiveMassKgSchema().optional().nullable(),
   feedstockTypeId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   formulationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  uncarbonized: z.boolean().optional(),
   stockMode: z.enum(outputStockModes).optional(),
   drawOrder: z.enum(OUTPUT_DRAW_ORDERS).optional(),
   mergedAt: mergedAtSchema,
   storageMethod: z.string().max(255).optional().nullable(),
   storageDescription: z.string().max(1000).optional().nullable(),
 }).superRefine((data, ctx) => {
+  if (data.uncarbonized && data.type && data.type !== "biochar_bin") {
+    ctx.addIssue({ code: "custom", path: ["uncarbonized"], message: UNCARBONIZED_BIOCHAR_BIN_MESSAGE });
+  }
   if (data.formulationId && data.type && data.type !== "product_bin") {
     ctx.addIssue({
       code: "custom",
@@ -328,6 +337,8 @@ export const storageLocationFilterSchema = z.object({
 
   // Filter by storage type
   type: z.enum(storageLocationTypes).optional(),
+
+  uncarbonized: z.boolean().optional(),
 
   // false (default) = active bins only; true = archived bins only
   archived: z.boolean().default(false),

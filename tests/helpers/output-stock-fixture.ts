@@ -6,7 +6,7 @@ import { facilities, formulations, formulationIngredients, feedstockTypes, stora
 import type { OrgContext } from '@/lib/auth/server';
 
 /** Real DB parents shared by FIFO integration and browser fixtures. No auth bypass. */
-export async function seedOutputStockParents(db: typeof database, options: { organizationId?: string; userId?: string } = {}) {
+export async function seedOutputStockParents(db: typeof database, options: { organizationId?: string; userId?: string; uncarbonized?: boolean } = {}) {
   const tag = randomUUID().slice(0, 8).toUpperCase();
   const organizationId = options.organizationId ?? `e2e-fifo-org-${tag}`;
   const userId = options.userId ?? `e2e-fifo-user-${tag}`;
@@ -18,7 +18,7 @@ export async function seedOutputStockParents(db: typeof database, options: { org
   const [pure] = await db.insert(formulations).values({ organizationId, code: `E2E-FIFO-P-${tag}`, name: `E2E Pure ${tag}`, biocharRatio: 1 }).returning();
   const [ingredientType] = await db.insert(feedstockTypes).values({ organizationId, code: `E2E-FIFO-I-${tag}`, name: `E2E Ingredient ${tag}`, category: 'compost', usage: 'blend' }).returning();
   const [ingredient] = await db.insert(formulationIngredients).values({ organizationId, formulationId: recipe.id, feedstockTypeId: ingredientType.id, ratio: 0.2 }).returning();
-  const [source] = await db.insert(storageLocations).values({ organizationId, facilityId: facility.id, code: `E2E-FIFO-S-${tag}`, name: `E2E Source ${tag}`, type: 'biochar_bin' }).returning();
+  const [source] = await db.insert(storageLocations).values({ organizationId, facilityId: facility.id, code: `E2E-FIFO-S-${tag}`, name: `E2E Source ${tag}`, type: 'biochar_bin', uncarbonized: options.uncarbonized ?? false }).returning();
   const [bin] = await db.insert(storageLocations).values({ organizationId, facilityId: facility.id, formulationId: recipe.id, code: `E2E-FIFO-B-${tag}`, name: `E2E Mix bin ${tag}`, type: 'product_bin' }).returning();
   const [reactor] = await db.insert(reactors).values({ organizationId, facilityId: facility.id, code: `E2E-FIFO-R-${tag}`, identifier: `E2E Reactor ${tag}`, reactorType: 'auger' }).returning();
   const [fuelType] = await db.insert(feedstockTypes).values({ organizationId, code: `E2E-FIFO-FUEL-${tag}`, name: `E2E Fuel ${tag}`, category: 'forestry', usage: 'pyrolysis' }).returning();

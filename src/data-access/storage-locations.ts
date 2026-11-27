@@ -1,3 +1,4 @@
+import { assertUncarbonizedBinType } from "@/lib/storage-location-material";
 import { stockAdjustmentsEnabled } from "@/lib/feature-switches";
 import { applyFeedstockMethodChange } from './feedstock-bin-method';
 import { reallocateRunsForBins } from './feedstock-run-allocations';
@@ -102,6 +103,7 @@ export async function getStorageLocations(
     search,
     facilityId,
     type,
+    uncarbonized,
     archived = false,
     page = 1,
     pageSize = 20,
@@ -133,6 +135,10 @@ export async function getStorageLocations(
 
   if (type) {
     conditions.push(eq(storageLocations.type, type));
+  }
+
+  if (uncarbonized !== undefined) {
+    conditions.push(eq(storageLocations.uncarbonized, uncarbonized));
   }
 
   const whereClause = and(...conditions);
@@ -176,6 +182,7 @@ export async function getStorageLocations(
       code: storageLocations.code,
       name: storageLocations.name,
       type: storageLocations.type,
+      uncarbonized: storageLocations.uncarbonized,
       capacityKg: storageLocations.capacityKg,
       storageMethod: storageLocations.storageMethod,
       storageDescription: storageLocations.storageDescription,
@@ -274,6 +281,7 @@ export async function getStorageLocationWithFacility(
       code: storageLocations.code,
       name: storageLocations.name,
       type: storageLocations.type,
+      uncarbonized: storageLocations.uncarbonized,
       capacityKg: storageLocations.capacityKg,
       storageMethod: storageLocations.storageMethod,
       storageDescription: storageLocations.storageDescription,
@@ -336,6 +344,7 @@ export async function createStorageLocationInTransaction(
     name: string;
     type: "feedstock_bin" | "biochar_bin" | "product_bin";
     facilityId: string;
+    uncarbonized?: boolean;
     capacityKg?: number | null;
     feedstockTypeId?: string | null;
     formulationId?: string | null;
@@ -347,6 +356,7 @@ export async function createStorageLocationInTransaction(
 ): Promise<StorageLocation> {
   requireOrgScope(ctx);
 
+  assertUncarbonizedBinType(data.type, data.uncarbonized ?? false);
   await lockActiveFacilityReference(ctx, tx, data.facilityId);
 
   if (data.feedstockTypeId) {
@@ -383,6 +393,7 @@ export async function createStorageLocationInTransaction(
         code: data.code,
         name: data.name,
         type: data.type,
+        uncarbonized: data.uncarbonized ?? false,
         facilityId: data.facilityId,
         capacityKg: data.capacityKg ?? null,
         // Only meaningful on feedstock bins, like formulationId below.
@@ -449,6 +460,7 @@ export async function updateStorageLocation(
     name?: string;
     type?: "feedstock_bin" | "biochar_bin" | "product_bin";
     facilityId?: string;
+    uncarbonized?: boolean;
     capacityKg?: number | null;
     feedstockTypeId?: string | null;
     formulationId?: string | null;
@@ -531,6 +543,8 @@ export async function updateStorageLocation(
     }
 
     const effectiveType = data.type ?? existing.type;
+    const effectiveUncarbonized = data.uncarbonized ?? existing.uncarbonized;
+    assertUncarbonizedBinType(effectiveType, effectiveUncarbonized);
 
     // The Zod update schema can only see the payload. When `type` is omitted it
     // cannot tell this is a feedstock bin, so an update could clear
@@ -567,11 +581,13 @@ export async function updateStorageLocation(
       {
         id: storageLocationId,
         type: existing.type as StorageLocationType,
+        uncarbonized: existing.uncarbonized,
         feedstockTypeId: existing.feedstockTypeId,
         facilityId: existing.facilityId,
       },
       {
         type: effectiveType as StorageLocationType,
+        uncarbonized: effectiveUncarbonized,
         feedstockTypeId: normalizedFeedstockTypeId,
         facilityId: data.facilityId ?? existing.facilityId,
       },

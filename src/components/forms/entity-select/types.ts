@@ -9,6 +9,8 @@ export interface EntityOption {
   name: string;
   /** Optional subtitle for additional context (e.g., location, type) */
   subtitle?: string;
+  /** Storage bins holding output from failed runs. */
+  uncarbonized?: boolean;
   /** The stored record is archived: shown for context, read-only until restored. */
   archived?: boolean;
   /** Visible for context, but cannot be selected. */

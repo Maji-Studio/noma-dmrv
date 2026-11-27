@@ -16,6 +16,15 @@ reflect what was posted before it. A product draw saved before the ledger counts
 Dry biochar alone blocks a draw, so wet stock can still show once dried biochar
 has none left.
 
+Biochar bins tagged **Uncarbonized** segregate output from Failed runs. Only
+biochar bins can carry this tag, and it cannot change once a bin has stock or
+history. Product creation and stock previews refuse every production draw from
+a tagged bin through the shared output-stock preparation guard, including REST
+and MCP. Lost mass and stock counts stay allowed. Tagged bins retain their own
+stock figures but do not contribute to facility or board biochar totals; facility
+stock also reports an independent uncarbonized total. Posting Failed run output
+is handled by the production-run workflow.
+
 ## Physical order and mass basis
 
 Every output stock event carries a date and time (seconds stored, not shown).

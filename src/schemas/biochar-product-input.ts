@@ -40,7 +40,7 @@ const publishedCreateFields = {
   formulationId: uuidSchema().describe("Formulation UUID, including the Pure biochar formulation for an unblended product."),
   placedAt: eventInstantSchema,
   status: z.enum(biocharProductStatusValues).default("testing").describe("Product state: draft, testing, ready or sold. Defaults to testing."),
-  sourceBiocharStorageLocationId: uuidSchema().describe("Biochar bin the biochar was drawn from, UUID."),
+  sourceBiocharStorageLocationId: uuidSchema().describe("Untagged biochar bin the biochar was drawn from, UUID. Uncarbonized bins are refused."),
   storageLocationId: uuidSchema().describe("Product bin the blend was placed in, UUID. A bin with no formulation yet is claimed for this one."),
   biocharWetMassKg: biocharProductFormSchema.shape.massKg.describe("Wet biochar drawn from the source bin as weighed, in kilograms, without ingredients or added water."),
   biocharMoisturePercent: moistureSchema().nullable().optional().describe("Measured biochar moisture as percent of wet mass, below 100. Required unless sources are given."),
