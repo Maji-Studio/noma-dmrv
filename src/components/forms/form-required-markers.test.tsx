@@ -296,7 +296,7 @@ describe("required markers match what a form needs to submit", () => {
   it.each([
     ["running", ["reactorId", "startDate", "startTime", "feedstockDraws.0.storageLocationId", "feedstockDraws.0.wetMassKg"]],
     ["complete", ["reactorId", "startDate", "startTime", "endTime", "feedstockDraws.0.storageLocationId", "feedstockDraws.0.wetMassKg", "feedstockMoisturePercent", "biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"]],
-    ["failed", ["reactorId", "startDate", "startTime", "endTime", "feedstockDraws.0.storageLocationId", "feedstockDraws.0.wetMassKg", "feedstockMoisturePercent"]],
+    ["failed", ["reactorId", "startDate", "startTime", "endTime", "feedstockDraws.0.storageLocationId", "feedstockDraws.0.wetMassKg", "feedstockMoisturePercent", "biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"]],
     ["cancelled", ["reactorId", "cancellationReason", "startDate", "startTime", "feedstockDraws.0.storageLocationId", "feedstockDraws.0.wetMassKg"]],
   ] as const)("production run stars the fields a %s run needs, and no others", async (status, expected) => {
     const run = as<ProductionRunWithRelations>({ id: "run", facilityId: "facility", reactorId: "reactor", status, startTime: DAY, endTime: DAY, feedstockDraws: [{ storageLocationId: "bin", storageLocationName: "Feedstock bin", wetMassKg: 1000 }], feedstocks: [], totalFeedstockWetMassKg: 1000 });
@@ -304,7 +304,7 @@ describe("required markers match what a form needs to submit", () => {
     expect([...starred].sort()).toEqual([...expected].sort());
   });
 
-  it("production run create form with Failed picked stars the end time and feedstock, and shows no output fields", async () => {
+  it("production run create form with Failed picked stars the end time, feedstock and output", async () => {
     const result = await conditionalRequired(
       <NuqsTestingAdapter><ProductionRunForm onSubmit={noop} /></NuqsTestingAdapter>,
       root => {
@@ -312,7 +312,7 @@ describe("required markers match what a form needs to submit", () => {
         const byId = (id: string) => fields.find(node => node.props.id === id);
         const outputIds = ["biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"];
         const starred = Boolean(byId("endTime")?.props.required) && Boolean(byId("feedstockMoisturePercent")?.props.required);
-        return { starred: starred && outputIds.every(id => !byId(id)), error: undefined };
+        return { starred: starred && outputIds.every(id => Boolean(byId(id)?.props.required)), error: undefined };
       },
       async root => {
         const failed = root.findAll(node => node.type === "input" && node.props.name === "status" && node.props.value === "failed")[0]!;

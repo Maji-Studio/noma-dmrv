@@ -43,6 +43,8 @@ interface StorageLocationQuickAddDialogProps {
   lockFeedstockType?: boolean;
   /** Pre-selects the formulation the parent flow is working with */
   defaultFormulationId?: string;
+  /** Creates the bin tagged uncarbonized (a failed run's output bin); the tag is not offered as a choice. */
+  uncarbonized?: boolean;
   /** Facility ID (required for creation) */
   facilityId: string;
 }
@@ -58,6 +60,7 @@ export function StorageLocationQuickAddDialog({
   feedstockTypeUsage,
   lockFeedstockType,
   defaultFormulationId,
+  uncarbonized,
   facilityId,
 }: StorageLocationQuickAddDialogProps) {
   const { error, isSubmitting, handleSubmit, startDraft } = useQuickAddSubmit<StorageLocationFormData>({
@@ -72,6 +75,7 @@ export function StorageLocationQuickAddDialog({
         formulationId: data.formulationId ?? null,
         stockMode: data.stockMode,
         drawOrder: data.drawOrder,
+        ...(data.uncarbonized ? { uncarbonized: true } : {}),
       }, { intentKey }),
     onSuccess,
     onClose,
@@ -158,6 +162,8 @@ export function StorageLocationQuickAddDialog({
               lockFeedstockType={lockFeedstockType ?? Boolean(defaultFeedstockTypeId)}
               defaultFormulationId={defaultFormulationId}
               defaultFacilityId={facilityId}
+              defaultUncarbonized={uncarbonized}
+              hideUncarbonized
             />
           )}
         </QuickAddDialogShell>

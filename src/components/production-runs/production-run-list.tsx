@@ -4,9 +4,6 @@
  */
 "use client";
 
-// Temporary until run C updates the Failed output views.
-const productionRunRecordsOutput = (status: string) => status !== "failed";
-
 import { RECORD_LINKS, recordHref } from "@/lib/record-links";
 import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 import { useState, useEffect, useRef } from "react";
@@ -132,14 +129,14 @@ function createColumns(
       accessorKey: "biocharOutputKg",
       header: "Biochar wet mass",
       cell: ({ row }) => (
-        <span className="font-mono">{!productionRunRecordsOutput(row.original.status) ? MISSING_VALUE.notApplicable : formatMassKg(row.original.biocharOutputKg)}</span>
+        <span className="font-mono">{formatMassKg(row.original.biocharOutputKg)}</span>
       ),
     },
     {
       accessorKey: "biocharDryMassKg",
       header: "Biochar dry mass",
       cell: ({ row }) => (
-        <span className="font-mono">{!productionRunRecordsOutput(row.original.status) ? MISSING_VALUE.notApplicable : formatMassKg(row.original.biocharDryMassKg)}</span>
+        <span className="font-mono">{formatMassKg(row.original.biocharDryMassKg)}</span>
       ),
     },
     {
@@ -152,7 +149,7 @@ function createColumns(
       accessorKey: "biocharMoisturePercent",
       header: qualifyMassLabel(MASS_MOISTURE_LABELS.moisture, "Biochar"),
       cell: ({ row }) => (
-        <span className="font-mono">{!productionRunRecordsOutput(row.original.status) ? MISSING_VALUE.notApplicable : formatMoisturePercent(row.original.biocharMoisturePercent)}</span>
+        <span className="font-mono">{formatMoisturePercent(row.original.biocharMoisturePercent)}</span>
       ),
     },
     {

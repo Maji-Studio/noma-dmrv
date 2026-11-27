@@ -114,3 +114,51 @@ describe("StorageLocationForm feedstock draw method", () => {
     expect(document.body.textContent).toContain("Set a time after the bin's last recorded movement");
   });
 });
+
+const FACILITY_ID = "11111111-1111-4111-8111-111111111111";
+
+describe("StorageLocationForm uncarbonized tag", () => {
+  const render = (ui: ReactNode) => renderReportingDirty(ui, { wrapper: queryWrapper() });
+  const tag = () => screen.queryByRole("checkbox", { name: /holds uncarbonized material/ }) as HTMLInputElement | null;
+  const bin = (overrides: object) => ({ id: "bin", name: "Bin 1", type: "biochar_bin", facilityId: "facility-one", stockMode: "split", drawOrder: "oldest_first", capacityKg: null, storageMethod: null, storageDescription: null, formulationId: null, uncarbonized: true, version: 1, ...overrides }) as unknown as StorageLocation;
+
+  it("offers the tag only for biochar bins", () => {
+    render(<StorageLocationForm defaultType="feedstock_bin" onSubmit={vi.fn()} onCancel={vi.fn()} />);
+    expect(tag()).toBeNull();
+    cleanup();
+    render(<StorageLocationForm defaultType="biochar_bin" onSubmit={vi.fn()} onCancel={vi.fn()} />);
+    expect(tag()).not.toBeNull();
+    expect(screen.getByText("For output of failed runs. Products cannot draw from it.")).toBeTruthy();
+  });
+
+  it("clears the tag when the storage type moves away from biochar", async () => {
+    const onSubmit = vi.fn();
+    render(<StorageLocationForm defaultType="biochar_bin" defaultFacilityId={FACILITY_ID} onSubmit={onSubmit} onCancel={vi.fn()} />);
+    fireEvent.click(tag()!);
+    expect(tag()!.checked).toBe(true);
+    fireEvent.click(screen.getByRole("radio", { name: /Product/ }));
+    expect(tag()).toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: /^Bin name/ }), { target: { value: "Bin 9" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create storage bin" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0][0].uncarbonized).toBe(false);
+  });
+
+  it("shows the tag disabled once the bin has stock or history", () => {
+    const lock = { level: "inUse" } as unknown as import("@/lib/record-lock-view").RecordLockView;
+    render(<StorageLocationForm storageLocation={bin({})} lock={lock} onSubmit={vi.fn()} onCancel={vi.fn()} />);
+    expect(tag()!.checked).toBe(true);
+    expect(tag()!.disabled).toBe(true);
+    expect(screen.getByText("Fixed once this bin has stock or history.")).toBeTruthy();
+  });
+
+  it("hides the checkbox but still creates a tagged bin when the caller fixes the tag", async () => {
+    const onSubmit = vi.fn();
+    render(<StorageLocationForm allowedTypes={["biochar_bin"]} defaultFacilityId={FACILITY_ID} defaultUncarbonized hideUncarbonized onSubmit={onSubmit} onCancel={vi.fn()} />);
+    expect(tag()).toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: /^Bin name/ }), { target: { value: "Reject bin" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create storage bin" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0][0].uncarbonized).toBe(true);
+  });
+});

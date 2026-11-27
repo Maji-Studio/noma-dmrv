@@ -1,7 +1,5 @@
-
-// Temporary until run C updates the Failed output views.
-const productionRunRecordsOutput = (status: string) => status !== "failed";
 /** Production run side-sheet view mode: the sections config for EntitySideSheet. */
+import { UncarbonizedBadge } from "@/components/ui/uncarbonized-badge";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { resolveFacilityTimezone } from "@/lib/date-utils";
 import { formatMassKg } from "@/lib/format-utils";
@@ -33,8 +31,7 @@ export function RunStatusBadge({ status }: { status: ProductionRunStatus }) {
 
 export function productionRunSheetSections(run: ProductionRunWithRelations, facilities: readonly { id: string; timezone: string }[]): DetailPanelSection[] {
   // Feedstock in and biochar out are drawn to one mass scale, as in the form.
-  const records = productionRunRecordsOutput(run.status);
-  const scaleKg = flowScaleKg(run.totalFeedstockWetMassKg, records ? run.biocharOutputKg : null);
+  const scaleKg = flowScaleKg(run.totalFeedstockWetMassKg, run.biocharOutputKg);
   return [
     {
       title: "Run setup",
@@ -77,12 +74,15 @@ export function productionRunSheetSections(run: ProductionRunWithRelations, faci
         />
       ),
     },
-    ...(!records ? [] : [{
+    {
       title: "Output",
       fields: [
         {
           label: "Biochar storage",
-          value: run.biocharStorageLocationName,
+          // A failed run's output always sits in an uncarbonized bin.
+          value: run.status === "failed" && run.biocharStorageLocationName
+            ? <span className="inline-flex flex-wrap items-center gap-6">{run.biocharStorageLocationName}<UncarbonizedBadge /></span>
+            : run.biocharStorageLocationName,
         },
         { label: qualifyMassLabel(WET_MASS_FIELD_LABEL, "Biochar"), ...certificationDetailField("productionRun", "biocharOutputKg"), value: formatMassKg(run.biocharOutputKg) },
         { label: qualifyMassLabel(MOISTURE_FIELD_LABEL, "Biochar"), ...certificationDetailField("productionRun", "biocharMoisturePercent"), value: formatMoisturePercent(run.biocharMoisturePercent) },
@@ -96,7 +96,7 @@ export function productionRunSheetSections(run: ProductionRunWithRelations, faci
           barWidthPercent={flowBarWidthPercent(run.biocharOutputKg, scaleKg)}
         />
       ),
-    }]),
+    },
     {
       title: "Energy",
       fields: [

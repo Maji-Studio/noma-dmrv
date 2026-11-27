@@ -33,6 +33,7 @@ import { RowActionsMenu } from "@/components/ui";
 import { handleRowActivationClick } from "@/components/ui/data-table/data-table-helpers";
 import { SecondaryFigure } from "@/components/ui/secondary-figure";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { UncarbonizedBadge } from "@/components/ui/uncarbonized-badge";
 import { DRY_BIOCHAR_LABEL } from "@/components/biochar-products/product-composition-components";
 import { RecordLockOverviewChip } from "@/components/record-locks/record-lock-chip";
 import type { RecordLockView } from "@/lib/record-lock-view";
@@ -173,6 +174,7 @@ export function StorageBinTile({
           {isArchived && (
             <StatusBadge status="archived" size="small" className="shrink-0" />
           )}
+          {bin.uncarbonized && <UncarbonizedBadge className="shrink-0" />}
         </p>
 
         <div className="flex flex-col gap-2">
