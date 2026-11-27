@@ -371,7 +371,7 @@ export async function buildRemovalContext(
 
   const submissionAdvisories = buildSubmissionAdvisories({
     removalTemplate: templateFacts.removalTemplate, lineSources: templateFacts.lineSources,
-    transportLegs: recordedTransportLegs, runs, lineages,
+    transportLegs: recordedTransportLegs, runs, failedRuns: failedEmissionRuns, lineages,
   });
   const submissionWarnings = [
     ...buildSubmissionWarnings({
@@ -379,6 +379,7 @@ export async function buildRemovalContext(
       lineSources: templateFacts.lineSources,
       transportLegs: recordedTransportLegs,
       runs,
+      failedRuns: failedEmissionRuns,
       lineages,
       facilityTimezone: facilityFacts.facilityTimezone,
     }),

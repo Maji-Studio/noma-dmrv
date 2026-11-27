@@ -101,20 +101,6 @@ function countedTransportCondition(ctx: OrgContext, feedstockId: string | SQL, r
   )`;
 }
 
-export async function getTransportFeedstockIdsCountedElsewhere(
-  ctx: OrgContext, ids: readonly string[], removalId?: string | null,
-  reader: Pick<DbTransaction, "select" | "selectDistinct"> = db,
-): Promise<Set<string>> {
-  requireOrgScope(ctx);
-  if (!ids.length) return new Set();
-  const rows = await reader.select({ id: feedstocks.id }).from(feedstocks).where(and(
-    eq(feedstocks.organizationId, ctx.organizationId), inArray(feedstocks.id, [...ids]),
-    countedTransportCondition(ctx, sql`${feedstocks.id}::text`,
-      removalId ? sql`${certificationSubmissions.localEntityId} <> ${removalId}` : sql`true`, false),
-  ));
-  return new Set(rows.map(row => row.id));
-}
-
 /** One relationship read for all batches, using the same snapshot eligibility predicate. */
 export async function getTransportFeedstockCountedRemovals(
   ctx: OrgContext, ids: readonly string[],

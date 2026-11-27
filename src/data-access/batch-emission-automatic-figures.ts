@@ -28,7 +28,7 @@ export async function loadBatchesEmissionAutomaticFacts(
   const ids = unique(creditBatchIds);
   if (!ids.length) return {};
   const rollups = await loadCreditBatchRollups(ctx, ids, { includeRunForwards: true }, executor);
-  const contributors = await loadBatchEmissionContributors(ctx, ids, executor, { failedOnly: true });
+  const contributors = await loadBatchEmissionContributors(ctx, ids, executor, { failedOnly: true, includeArchived: true });
   const failedContributors = Object.values(contributors).flatMap(batch => batch.failedContributors);
   const owners = await loadCountedFailedTransportOwners(ctx, failedContributors, executor,
     options.removalId !== undefined ? options.removalId : await loadBatchProductionRelativeRemovals(ctx, Object.values(rollups).map(({ batch }) => batch), executor));

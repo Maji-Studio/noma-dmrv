@@ -21,6 +21,7 @@ import {
   type DocumentRow,
 } from "@/data-access/certification";
 import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
+import { getFeedstockCodes } from "@/data-access/feedstocks";
 import { getSamplesByCreditBatchIds } from "@/data-access/credit-batch-samples";
 import {
   getCertifierRemovalById,
@@ -130,6 +131,10 @@ async function collectLineageEntities(
   })), removalId);
   const feedstockCodes = new Map(Object.values(accountingByBatch).flatMap(({ lineageFacts }) =>
     lineageFacts.runs.flatMap(run => run.feedstocks.map(feedstock => [feedstock.id, feedstock.code] as const))));
+  const missingCodeIds = counted.feedstockIds.filter(id => !feedstockCodes.has(id));
+  if (missingCodeIds.length) {
+    for (const [id, code] of await getFeedstockCodes(orgCtx, missingCodeIds)) feedstockCodes.set(id, code);
+  }
   for (const id of counted.feedstockIds) {
     add({ entityType: "feedstock", entityId: id, entityLabel: `Feedstock ${feedstockCodes.get(id) ?? id}` });
   }

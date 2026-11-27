@@ -90,6 +90,7 @@ export function buildSubmissionAdvisories(args: {
   removalTemplate: IsometricGhgEntryTemplate | null;
   lineSources: LineSources;
   runs: ProductionRunForCertification[];
+  failedRuns?: ProductionRunForCertification[];
   lineages: { application: { applicationDate: Date } }[];
   transportLegs?: TransportLegsByCategory;
 }): RemovalAdvisory[] {
@@ -97,7 +98,7 @@ export function buildSubmissionAdvisories(args: {
   if (!removalTemplate) return [];
   const carried = carriedAutomaticSources(removalTemplate, lineSources);
   const droppedFacts = [
-    ...RECORDED_AUTOMATIC_SOURCES.filter((source) => runs.some(source.recorded) && !carried.has(source.id)),
+    ...RECORDED_AUTOMATIC_SOURCES.filter((source) => [...runs, ...(args.failedRuns ?? [])].some(source.recorded) && !carried.has(source.id)),
     ...RECORDED_TRANSPORT_SOURCES.filter((source) => {
       const legs = args.transportLegs?.[source.category] ?? [];
       // Delivery legs are derived even for an unrecorded route; their mere

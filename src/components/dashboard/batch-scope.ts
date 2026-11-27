@@ -101,7 +101,8 @@ export function applyBatchScope(overview: DashboardOverview, scope: DashboardBat
     kpis: scopedKpis(overview.kpis, scope),
     attention,
     structuralGaps: [],
-    attentionTotal: attention.length,
+    // Records, as the server counts them: a grouped row adds its count.
+    attentionTotal: attention.reduce((sum, item) => sum + (item.count ?? 1), 0),
     activity: scope.activity,
   };
 }

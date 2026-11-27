@@ -80,7 +80,7 @@ it("keeps delivery counts when their figure is unknown and leaves other figures 
 it("threads the supplied transaction to every automatic-facts reader", async () => {
   const tx = {} as Parameters<typeof loadBatchesEmissionAutomaticFacts>[3];
   await loadBatchesEmissionAutomaticFacts(ctx, ["a", "b"], {}, tx);
-  expect(loadBatchEmissionContributors).toHaveBeenCalledExactlyOnceWith(ctx, ["a", "b"], tx, { failedOnly: true });
+  expect(loadBatchEmissionContributors).toHaveBeenCalledExactlyOnceWith(ctx, ["a", "b"], tx, { failedOnly: true, includeArchived: true });
   for (const reader of [loadCreditBatchRollups, getProductionRunsForCertification, getSamplesByCreditBatchIds,
     getTransportLegsForEntities, loadBiocharDeliveryTransportLegs, getEmissionAutomaticMasses]) {
     for (const call of vi.mocked(reader).mock.calls) expect(call.at(-1)).toBe(tx);
@@ -133,6 +133,26 @@ it("adds failed production inputs without adding failed output to material figur
   expect(facts.a.automaticFigures["biochar-dry-mass"]?.magnitude).toBe("3");
   expect(facts.a.automaticRecordCounts?.["run-electricity"]).toBe(2);
   expect(getTransportLegsForEntities).toHaveBeenCalledExactlyOnceWith(ctx, "feedstock", ["feedstock", "failed-feedstock"], expect.anything());
+});
+
+it("retains failed-run electricity for an archived batch", async () => {
+  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ a: {
+    batch: { id: "a", archivedAt: new Date("2026-11-01"), productionEmissionsClaimedByRemovalId: null },
+    lineageFacts: { runs: [{ id: "a", feedstocks: [] }], applications: [], runForwards: {} },
+  } } as never);
+  vi.mocked(loadBatchEmissionContributors).mockImplementation(async (_ctx, _ids, _reader, options) =>
+    options?.includeArchived ? { a: {
+      materialMembers: [], failedContributors: [{ runId: "failed", creditBatchId: "a", feedstockIds: [] }],
+    } } as never : {});
+  vi.mocked(getFeedstockTransportOwners).mockResolvedValue(new Map());
+  vi.mocked(getProductionRunsForCertification).mockResolvedValue([
+    { id: "a", electricityKwh: 12 }, { id: "failed", electricityKwh: 5 },
+  ] as never);
+
+  const facts = await loadBatchesEmissionAutomaticFacts(ctx, ["a"]);
+
+  expect(facts.a.automaticFigures["run-electricity"]).toEqual({ magnitude: "17", unit: "kWh" });
+  expect(facts.a.automaticRecordCounts?.["run-electricity"]).toBe(2);
 });
 
 

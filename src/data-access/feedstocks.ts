@@ -394,6 +394,20 @@ export async function getFeedstocks(
   return { items: await withFeedstockTransportReadiness(ctx, items), total, page, pageSize, totalPages };
 }
 
+/** Codes for counted intakes, including those archived with their facility. */
+export async function getFeedstockCodes(
+  ctx: OrgContext,
+  ids: readonly string[],
+  reader: Pick<DbTransaction, "select"> = db,
+): Promise<Map<string, string>> {
+  requireOrgScope(ctx);
+  if (!ids.length) return new Map();
+  const rows = await reader.select({ id: feedstocks.id, code: feedstocks.code }).from(feedstocks).where(and(
+    eq(feedstocks.organizationId, ctx.organizationId), inArray(feedstocks.id, [...ids]),
+  ));
+  return new Map(rows.map(row => [row.id, row.code]));
+}
+
 export async function getFeedstockById(
   ctx: OrgContext,
   feedstockId: string,

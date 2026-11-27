@@ -3,7 +3,7 @@ import sandboxFixture from "../../../tests/fixtures/isometric/sandbox-template-2
 import productionFixture from "../../../tests/fixtures/isometric/production-template-2026-10-15.json";
 import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import { normalizeTemplateDefinition, resolveLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
-import { buildSubmissionWarnings } from "./submission-warnings";
+import { buildSubmissionAdvisories, buildSubmissionWarnings } from "./submission-warnings";
 
 const sandbox = sandboxFixture as GhgEntryTemplate;
 const production = productionFixture as GhgEntryTemplate;
@@ -35,6 +35,20 @@ describe("dropped recorded automatic sources", () => {
   });
   it("does not treat an entry-only meter as an automatic electricity source", () => {
     expect(warnings(production)).toEqual([expect.stringContaining("Electricity is recorded")]);
+  });
+  it("warns for a failed-only electricity reading without extending the material reporting window", () => {
+    const args = {
+      removalTemplate: production,
+      lineSources: resolveLineSources({ definition: normalizeTemplateDefinition(production) }),
+      runs: [{ startTime: new Date("2026-10-01") } as ProductionRunForCertification],
+      failedRuns: [{ electricityKwh: 10, startTime: new Date("2026-09-30") } as ProductionRunForCertification],
+      lineages: [{ application: { applicationDate: new Date("2026-10-02") } }],
+      facilityTimezone: "UTC",
+    };
+    expect(buildSubmissionAdvisories(args)).toEqual([{
+      code: "droppedRecordedFact", fixTarget: "templateLines", message: expect.stringContaining("Electricity is recorded"),
+    }]);
+    expect(buildSubmissionWarnings(args)).toEqual([expect.stringContaining("Electricity is recorded")]);
   });
   it("ignores zero and absent records, and preserves the month advisory", () => {
     expect(warnings(sandbox, { dieselGensetLiters: 0, preprocessingFuelLiters: 0, dieselOperationLiters: 0, electricityKwh: 0 })).toEqual([]);
