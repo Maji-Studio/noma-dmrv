@@ -8,6 +8,7 @@
 import { MissingRunLinks } from "./credit-batch-missing-runs-notice";
 import { Button } from "@/components/ui";
 import { Notice } from "@/components/ui/notice";
+import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
 import { describeFailedRunEmissionTodo, failedRunEmissionTodoTitle } from "@/lib/production-runs/failed-run-emission-copy";
 import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { useFacilityFailedRunEmissionTodos } from "@/hooks/use-facility-failed-run-emission-todos";
@@ -39,7 +40,7 @@ export function FailedRunEmissionTodos({ facilityId }: { facilityId: string }) {
       <Notice
         tone="warning"
         data-testid="failed-run-emission-todos-error"
-        action={<Button variant="weak" size="small" busy={todos.isFetching} onClick={() => void todos.refetch()}>{TRY_AGAIN_LABEL}</Button>}
+        action={<Button variant="weak" size="small" className={CENTRED_HIT_AREA} busy={todos.isFetching} onClick={() => void todos.refetch()}>{TRY_AGAIN_LABEL}</Button>}
       >
         {FAILED_RUN_TODOS_ERROR_MESSAGE}
       </Notice>

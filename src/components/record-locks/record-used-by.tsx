@@ -6,6 +6,7 @@ import { SectionLabel } from "@/components/forms/section-label";
 import { DetailSection } from "@/components/ui/detail-panel";
 import { Button } from "@/components/ui";
 import { Notice } from "@/components/ui/notice";
+import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useFacilityClock } from "@/hooks/use-facility-context";
 import { useRecordUsedByChain } from "@/hooks/use-record-used-by-chain";
@@ -67,7 +68,7 @@ export function RecordUsedBy({ lock, record, closing, readsChain = false, holdsN
       <Notice
         tone="warning"
         data-testid="used-by-chain-error"
-        action={<Button variant="weak" size="small" busy={chain.isFetching} onClick={() => void chain.refetch()}>{TRY_AGAIN_LABEL}</Button>}
+        action={<Button variant="weak" size="small" className={CENTRED_HIT_AREA} busy={chain.isFetching} onClick={() => void chain.refetch()}>{TRY_AGAIN_LABEL}</Button>}
       >
         {USED_BY_CHAIN_ERROR_MESSAGE}
       </Notice>

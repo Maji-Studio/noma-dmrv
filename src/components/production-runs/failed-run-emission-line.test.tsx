@@ -30,11 +30,11 @@ describe("read sheet emissions line", () => {
 
   it("warns on mixed and empty feedstock with no link to the sheet it is on", () => {
     const { container, rerender } = render(<FailedRunEmissionLineView guidance={MIXED} />);
-    expect(screen.getByRole("status").textContent).toContain("Its feedstock records hold more than one feedstock type.");
+    expect(screen.getByRole("status").textContent).toContain("Its feedstock records hold more than one feedstock type. Its emissions have no credit batch until they hold one. Edit the run to change its feedstock sources.");
     expect(container.querySelector('[data-tone="warning"]')).toBeTruthy();
     expect(screen.queryByRole("link")).toBeNull();
     rerender(<FailedRunEmissionLineView guidance={{ ...MIXED, state: "empty-feedstock" }} />);
-    expect(screen.getByRole("status").textContent).toContain("Its emissions have no feedstock type.");
+    expect(screen.getByRole("status").textContent).toContain("Its emissions have no feedstock type. Without one they have no credit batch. Edit the run to add its feedstock sources.");
     expect(container.querySelector('[data-tone="warning"]')).toBeTruthy();
     expect(screen.queryByRole("link")).toBeNull();
   });

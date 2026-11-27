@@ -11,6 +11,7 @@ import { RecordUsedBy } from "@/components/record-locks/record-used-by";
 import { EmissionsLine } from "@/components/record-locks/record-used-by-next-step";
 import { Button } from "@/components/ui";
 import { Notice } from "@/components/ui/notice";
+import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
 import { useProductionRunCreditBatchPreview } from "@/hooks/use-production-run-credit-batch-preview";
 import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import type { RecordLockView } from "@/lib/record-lock-view";
@@ -25,7 +26,7 @@ export function FailedRunEmissionLineView({ guidance }: { guidance: FailedRunEmi
   if (guidance.state === "attached") return null;
   const copy = describeFailedRunEmissions(guidance);
   // Mixed and empty feedstock point at this same sheet: Edit is the way to change the draws, so no link.
-  if (copy.tone === "warning") return <Notice tone="warning">{copy.lead}</Notice>;
+  if (copy.tone === "warning") return <Notice tone="warning">{copy.lead} {copy.next}</Notice>;
   return <EmissionsLine lead={copy.lead} action={guidance.state === "no-match" ? copy.action : null} />;
 }
 
@@ -42,7 +43,7 @@ export function FailedRunSheetEmissionsView({ guidance, isError, isFetching, onR
       <Notice
         tone="warning"
         data-testid="failed-run-sheet-error"
-        action={<Button variant="weak" size="small" busy={isFetching} onClick={onRetry}>{TRY_AGAIN_LABEL}</Button>}
+        action={<Button variant="weak" size="small" className={CENTRED_HIT_AREA} busy={isFetching} onClick={onRetry}>{TRY_AGAIN_LABEL}</Button>}
       >
         {FAILED_RUN_SHEET_ERROR_MESSAGE}
       </Notice>

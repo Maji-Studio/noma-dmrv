@@ -20,6 +20,8 @@ export interface FailedRunEmissionCopy {
   action: { label: string; href: string } | null;
   /** Mixed and empty feedstock need the operator's attention; the rest are quiet. */
   tone: "neutral" | "warning";
+  /** Warnings on the read sheet: the effect and the next step after the lead. */
+  next: string | null;
 }
 
 export const EMISSION_LEAD = "Emissions count in credit batch ";
@@ -33,6 +35,7 @@ export const UNSAVED_FAILED_RUN_EMISSIONS: FailedRunEmissionCopy = {
   info: `${WHAT_COUNTS}, for its feedstock. Save the run to see which one.`,
   action: null,
   tone: "neutral",
+  next: null,
 };
 
 /** The saved run's attachment, in operator words. */
@@ -47,6 +50,7 @@ export function describeFailedRunEmissions(guidance: FailedRunEmissionGuidance):
         info: `${WHAT_COUNTS}, ${day}, for ${feedstock}.`,
         action: null,
         tone: "neutral",
+        next: null,
       };
     case "no-match":
       return {
@@ -55,6 +59,7 @@ export function describeFailedRunEmissions(guidance: FailedRunEmissionGuidance):
         info: `${WHAT_COUNTS}. No credit batch for ${feedstock} covers ${day} yet. Create one and the emissions count in it. You can save the run now.`,
         action: { label: "Open credit batches", href: guidance.href },
         tone: "neutral",
+        next: null,
       };
     case "mixed-feedstock":
       return {
@@ -63,6 +68,7 @@ export function describeFailedRunEmissions(guidance: FailedRunEmissionGuidance):
         info: "A credit batch holds one feedstock type, so these emissions have no credit batch until the run's feedstock is one type.",
         action: { label: "Review feedstock sources", href: guidance.href },
         tone: "warning",
+        next: "Its emissions have no credit batch until they hold one. Edit the run to change its feedstock sources.",
       };
     case "empty-feedstock":
       return {
@@ -71,6 +77,7 @@ export function describeFailedRunEmissions(guidance: FailedRunEmissionGuidance):
         info: "Without a feedstock type, noma cannot pick a credit batch for these emissions.",
         action: { label: "Review feedstock sources", href: guidance.href },
         tone: "warning",
+        next: "Without one they have no credit batch. Edit the run to add its feedstock sources.",
       };
   }
 }
