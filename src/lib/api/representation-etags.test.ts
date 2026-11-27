@@ -24,8 +24,8 @@ it("uses revision 2 for the production run representation with reference IDs", (
   expect(productionRunEtag({ version: 7 })).toBe('"7.2"');
 });
 
-it("uses revision 4 for storage locations with a draw method", () => {
-  expect(storageLocationEtag({ version: 7 })).toBe('"7.4"');
+it("uses revision 5 for storage locations with the uncarbonized tag", () => {
+  expect(storageLocationEtag({ version: 7 })).toBe('"7.5"');
 });
 
 it("keeps order read and write tags on the same representation revision", () => {

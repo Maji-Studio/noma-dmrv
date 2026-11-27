@@ -45,8 +45,8 @@ it("requires moisture on API-shaped terminal creation before writing", async () 
 });
 
 describe("merged terminal update prerequisites", () => {
-  it("refuses a metadata-only save on a complete run without an output bin", async () => {
-    const state = preflightTransaction([[{ id: "run", facilityId: "facility", reactorId: "reactor", status: "complete",
+  it.each(["complete", "failed"] as const)("refuses a metadata-only save on a %s run without an output bin", async (status) => {
+    const state = preflightTransaction([[{ id: "run", facilityId: "facility", reactorId: "reactor", status,
       startTime: START, endTime: END, feedstockWetMassKg: DRAW_KG, feedstockMoisturePercent: 20,
       biocharOutputKg: OUTPUT_KG, biocharStorageLocationId: null, biocharMoisturePercent: 5 }], [{ storageLocationId: BIN_ID }]]);
     await expect(updateProductionRunInTransaction(ctx, state.tx, "run", {
@@ -202,4 +202,16 @@ describe("failed create prerequisites", () => {
       .rejects.toThrow("A new production run can only start as Running, Complete or Failed.");
     expect(state.insert).not.toHaveBeenCalled();
   });
+});
+
+it.each(["complete", "failed"] as const)("refuses %s creation without each output prerequisite", async status => {
+  for (const field of ["biocharOutputKg", "biocharStorageLocationId", "biocharMoisturePercent"] as const) {
+    const state = preflightTransaction([[{ id: "facility", archivedAt: null }], [{ id: "reactor", facilityId: "facility" }]]);
+    await expect(createProductionRunInTransaction(ctx, state.tx, {
+      code: "PR-26-003", facilityId: "facility", reactorId: "reactor", status, startTime: START, endTime: END,
+      feedstockMoisturePercent: 20, feedstockDraws: [{ storageLocationId: BIN_ID, wetMassKg: DRAW_KG }],
+      biocharOutputKg: OUTPUT_KG, biocharMoisturePercent: 0, biocharStorageLocationId: BIN_ID, [field]: null,
+    }, { now: NOW })).rejects.toMatchObject({ code: "validation_failed", issues: [{ path: [field] }] });
+    expect(state.insert).not.toHaveBeenCalled();
+  }
 });

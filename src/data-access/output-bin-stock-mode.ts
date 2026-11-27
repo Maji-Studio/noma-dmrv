@@ -1,7 +1,9 @@
+import type { ProductionRunStatus } from '@/lib/production-runs/lifecycle';
+import { productionRunAddsStock } from '@/lib/storage-location-material';
 import { stockAdjustmentsEnabled } from "@/lib/feature-switches";
 import { randomUUID } from 'node:crypto';
 import { db, type DbTransaction } from '@/db';
-import { binMovements, type StorageLocation } from '@/db/schema';
+import { binMovements, storageLocations, type StorageLocation } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import { formatFacilityDateTime } from '@/lib/format-utils';
@@ -110,17 +112,20 @@ export async function assertAdditionAfterSplit(ctx: OrgContext, tx: DbTransactio
   throw new SafeError(`This bin was switched to split at ${when}, after this time. Record the addition at or after ${when}.`);
 }
 
-type RunPlacement = { status: string; biocharStorageLocationId: string | null; facilityId: string; endTime: Date | null };
+type RunPlacement = { status: ProductionRunStatus; biocharStorageLocationId: string | null; facilityId: string; endTime: Date | null };
 
 /**
- * A production run adds its biochar to its bin when it completes, or again
- * when a completed run moves bin or changes its end time; that addition can't
+ * A terminal run adds its output to the matching bin, or again
+ * when it moves bin or changes its end time; that addition can't
  * be timed before a later switch to split. Requires the bin's stock lock.
  */
 export async function assertRunAdditionAfterSplit(ctx: OrgContext, tx: DbTransaction, next: RunPlacement, previous?: Omit<RunPlacement, 'facilityId'>): Promise<void> {
   requireOrgScope(ctx);
-  if (next.status !== 'complete' || !next.biocharStorageLocationId || !next.endTime) return;
-  const unchanged = previous?.status === 'complete' && previous.biocharStorageLocationId === next.biocharStorageLocationId && previous.endTime?.getTime() === next.endTime.getTime();
+  if (!next.biocharStorageLocationId || !next.endTime) return;
+  const [bin] = await tx.select({ uncarbonized: storageLocations.uncarbonized }).from(storageLocations)
+    .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, next.biocharStorageLocationId)));
+  if (!bin || !productionRunAddsStock(next.status, bin.uncarbonized)) return;
+  const unchanged = previous && productionRunAddsStock(previous.status, bin.uncarbonized) && previous.biocharStorageLocationId === next.biocharStorageLocationId && previous.endTime?.getTime() === next.endTime.getTime();
   if (!unchanged) await assertAdditionAfterSplit(ctx, tx, { id: next.biocharStorageLocationId, facilityId: next.facilityId }, next.endTime);
 }
 

@@ -30,16 +30,19 @@ date runs by the day they started on the facility's calendar.
 **Production run status**:
 New runs default to *Running*. Operators may create an already-finished run
 as *Complete* with its end time, feedstock and biochar output recorded, or as
-*Failed* with its end time, feedstock and feedstock moisture recorded (no
-biochar output). Missing fields prevent saving. *Cancelled* is an action on a
-saved run; it is not available on create.
-*Complete* — the batch finished and its core quantities (feedstock
+*Failed* with its end time, feedstock, feedstock moisture and output recorded.
+Both outcomes require wet output above zero, output moisture and a biochar bin.
+Complete uses an untagged bin; Failed uses an Uncarbonized bin. Missing fields
+prevent saving. *Cancelled* is an action on a saved run; it is not available on create.
+*Complete*: the batch finished and its core quantities (feedstock
 consumed, biochar output) are recorded. *Failed*: the run physically
-happened and consumed feedstock but produced no usable biochar. Its recorded
-operating emissions and feedstock inputs count in the matching credit batch
-for the day it ended on the facility's calendar. It adds no biochar or stored
-mass and does not change yield. If no batch matches, the run can be saved and
-a note shows what remains to be assigned. *Cancelled* — the record was created
+happened and consumed feedstock but did not produce usable biochar.
+Its output posts as stock in an **Uncarbonized bin**, where lost mass and
+counts apply. That material never counts as biochar and never reaches products,
+credit batches, removals, certification or Sankey, and it does not change yield.
+Its recorded operating emissions and feedstock inputs count in the matching credit batch
+for the day it ended on the facility's calendar. If no batch matches, the run can be saved and
+a note shows what remains to be assigned. *Cancelled*: the record was created
 in error; the event never happened and counts nowhere. Failed marks a
 real event with a bad outcome; cancelled marks a record that should
 not exist.
@@ -148,6 +151,11 @@ and certification calculations; that derived dry mass is not bin stock and
 never limits a withdrawal.
 _Avoid_: feedstock dry stock, dry allocation, converting a physical count to
 dry mass before updating bin stock.
+
+**Uncarbonized bin**:
+A biochar bin tagged to hold output of **Failed** production runs. Its material
+is never drawn into **biochar products**. A bin is tagged or untagged and never
+mixes the two kinds of material. The tag is fixed once the bin has stock or history.
 
 **Ingredient bin**:
 Descriptive shorthand for a **feedstock bin** currently holding a

@@ -1,13 +1,13 @@
 import { activeOutputMovement, deletedProductIds, liveOutputMovementPredicate } from "./output-stock-active-movements";
 import { and, eq, inArray, isNotNull, notInArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
-import { applications, biocharProductSourceAllocations, creditBatchApplications, creditBatchProductionRuns, deliveries, outputStockAllocations, productionRunFeedstocks, samples, outputStockRunAllocations, binMovements, productionRuns, biocharProducts } from "@/db/schema";
+import { applications, biocharProductSourceAllocations, creditBatchApplications, creditBatchProductionRuns, deliveries, outputStockAllocations, productionRunFeedstocks, samples, outputStockRunAllocations, binMovements, productionRuns, biocharProducts, storageLocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { RecordLockHolder } from "@/lib/record-lock";
 import type { CertifiedLineageEntityType, CertifiedLineageTarget } from "./certification-lineage-guards";
 import { isCountMovement } from "./output-stock-count";
 import { requireOrgScope } from "./utils";
-import { productionRunRecordsOutput } from "@/lib/production-runs/lifecycle";
+import { productionRunAddsStockSql } from "./production-run-output-stock";
 
 type Reader = Pick<DbTransaction, "select">;
 
@@ -49,16 +49,18 @@ export async function readRecordDependentsBatch(
           .innerJoin(outputStockAllocations, and(eq(outputStockAllocations.organizationId, org), eq(outputStockAllocations.id, outputStockRunAllocations.allocationId)))
           .innerJoin(binMovements, and(eq(binMovements.organizationId, org), eq(binMovements.id, outputStockAllocations.movementId)))
           .where(and(eq(outputStockRunAllocations.organizationId, org), inArray(outputStockRunAllocations.productionRunId, wanted), activeOutputMovement(ctx, tx))),
-        tx.select().from(productionRuns).where(and(eq(productionRuns.organizationId, org), inArray(productionRuns.id, wanted))),
+        tx.select({ run: productionRuns }).from(productionRuns)
+          .innerJoin(storageLocations, and(eq(storageLocations.id, productionRuns.biocharStorageLocationId), eq(storageLocations.organizationId, org)))
+          .where(and(eq(productionRuns.organizationId, org), inArray(productionRuns.id, wanted), productionRunAddsStockSql())),
       ]);
-      const binIds = [...new Set(runs.flatMap(run => run.biocharStorageLocationId ? [run.biocharStorageLocationId] : []))];
+      const binIds = [...new Set(runs.flatMap(({ run }) => run.biocharStorageLocationId ? [run.biocharStorageLocationId] : []))];
       const movements = binIds.length === 0 ? [] : await tx.select().from(binMovements)
         .where(and(eq(binMovements.organizationId, org), inArray(binMovements.storageLocationId, binIds)));
       for (const row of products) push(row.runId, { kind: "biocharProduct", id: row.id });
       for (const row of batches) push(row.runId, { kind: "creditBatch", id: row.id });
       for (const row of effects) push(row.runId, { kind: "stockEntry", id: row.id });
-      for (const run of runs) {
-        if (!run.biocharStorageLocationId || !productionRunRecordsOutput(run.status)) continue;
+      for (const { run } of runs) {
+        if (!run.biocharStorageLocationId) continue;
         const counts = movements.filter(movement => movement.storageLocationId === run.biocharStorageLocationId &&
           isCountMovement(movement) && run.createdAt <= movement.createdAt &&
           (!run.endTime || (movement.occurredAt && run.endTime <= movement.occurredAt)));

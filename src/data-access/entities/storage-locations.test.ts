@@ -14,6 +14,7 @@ function storageRow(
     code: "BIN-01",
     name: "North bin",
     type: "feedstock_bin",
+    uncarbonized: false,
     heldFeedstockTypeName: null,
     heldFeedstockTypeUsage: null,
     feedstockTypeName: null,

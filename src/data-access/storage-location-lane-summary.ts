@@ -46,7 +46,7 @@ export async function getStorageLocationLaneSummary(
 
   // org-scope-ok: conditions always starts with the active organization predicate.
   const bins = await db
-    .select({ id: storageLocations.id, type: storageLocations.type })
+    .select({ id: storageLocations.id, type: storageLocations.type, uncarbonized: storageLocations.uncarbonized })
     .from(storageLocations)
     .where(and(...conditions));
   const storageLocationIds = bins.map((bin) => bin.id);
@@ -76,6 +76,8 @@ export async function getStorageLocationLaneSummary(
     const stock = laneStockById.get(bin.id);
     const lane = summary[bin.type];
     lane.binCount += 1;
+    // Keep tagged bins visible in the lane count, while excluding their material from biochar totals.
+    if (bin.uncarbonized) continue;
     if (bin.type === "feedstock_bin") {
       const wetKg = stock?.feedstockStockWetKg ?? 0;
       if (!isMassEmpty(wetKg)) lane.onHandKg = (lane.onHandKg ?? 0) + wetKg;

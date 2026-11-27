@@ -1,7 +1,7 @@
 /**
  * The words about where a Failed run's emissions go (#1714), shared by the
  * form footer, the read sheet and the facility to-do so one fact reads the
- * same everywhere. A failed run adds no biochar, so these lines never say it
+ * same everywhere. A failed run adds no biochar to any batch, so these lines never say it
  * "joins" a credit batch; its diesel, electricity and feedstock transport
  * count in the batch that covers its end day. Pure, so every state is tested
  * without a server.
@@ -26,7 +26,7 @@ export interface FailedRunEmissionCopy {
 
 export const EMISSION_LEAD = "Emissions count in credit batch ";
 
-const WHAT_COUNTS = "A failed run adds no biochar. Its diesel, electricity and feedstock transport count in the credit batch that covers its end day";
+const WHAT_COUNTS = "A failed run adds no biochar to a credit batch. Its diesel, electricity and feedstock transport count in the credit batch that covers its end day";
 
 /** A failed run that is not saved yet: no batch can be named before the run exists. */
 export const UNSAVED_FAILED_RUN_EMISSIONS: FailedRunEmissionCopy = {

@@ -190,6 +190,7 @@ export async function getProductionRuns(
       operatorName: operators.name,
       biocharStorageLocationCode: biocharStorage.code,
       biocharStorageLocationName: biocharStorage.name,
+      biocharStorageLocationUncarbonized: biocharStorage.uncarbonized,
     })
     .from(productionRuns)
     .leftJoin(facilities, and(eq(productionRuns.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
@@ -283,6 +284,7 @@ export async function getProductionRuns(
       ...run,
       biocharStorageLocationCode: run.biocharStorageLocationCode ?? null,
       biocharStorageLocationName: run.biocharStorageLocationName ?? null,
+      biocharStorageLocationUncarbonized: run.biocharStorageLocationUncarbonized ?? null,
       feedstocks: runFeedstocks,
       feedstockDraws,
       totalFeedstockWetMassKg: feedstockDraws.reduce(
@@ -481,6 +483,7 @@ async function getProductionRunDetail(
             .select({
               code: storageLocations.code,
               name: storageLocations.name,
+              uncarbonized: storageLocations.uncarbonized,
             })
             .from(storageLocations)
             .where(and(eq(storageLocations.id, run.biocharStorageLocationId), eq(storageLocations.organizationId, ctx.organizationId)))
@@ -492,6 +495,7 @@ async function getProductionRunDetail(
     ...run,
     biocharStorageLocationCode: biocharStorageLocation?.code ?? null,
     biocharStorageLocationName: biocharStorageLocation?.name ?? null,
+    biocharStorageLocationUncarbonized: biocharStorageLocation?.uncarbonized ?? null,
     feedstocks: runFeedstocks,
     feedstockDraws,
     totalFeedstockWetMassKg: feedstockDraws.reduce(

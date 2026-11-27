@@ -7,7 +7,7 @@ import { SafeError } from '@/lib/errors';
 import type { OutputStockLayer } from '@/lib/output-stock';
 import { outputStockBalance, projectBiocharLayers, projectMoistureBases, projectProductLayers, preLedgerWetRemovals, UnresolvedOutputStockError, type MoistureReadingRow, type WetRemovalRow } from '@/lib/output-stock/layer-projection';
 import { estimateStock, type LayerMoistureBasis } from '@/lib/output-stock/moisture-estimate';
-import { COMPLETED_PRODUCTION_RUN_STATUS } from '@/lib/production-runs/lifecycle';
+import { productionRunAddsStockSql } from './production-run-output-stock';
 import { and, asc, eq, inArray, isNotNull, isNull, sql, notInArray } from 'drizzle-orm';
 import { isCountMovementSql } from './output-stock-count';
 import { requireOrgScope } from './utils';
@@ -50,7 +50,8 @@ async function readLayerRows(ctx: OrgContext, bins: readonly OutputBinRef[], rea
   const [runs, biocharSources, products, effects] = await Promise.all([
     biocharBinIds.length ? reader.select({ id: productionRuns.id, code: productionRuns.code, binId: productionRuns.biocharStorageLocationId, facilityId: productionRuns.facilityId, archivedAt: productionRuns.archivedAt,
       endTime: productionRuns.endTime, dryKg: sql<string | null>`${productionRuns.biocharDryMassKg}::text`, postingSequence: productionRuns.stockPostingSequence })
-      .from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), inArray(productionRuns.biocharStorageLocationId, biocharBinIds), eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS)))
+      .from(productionRuns).innerJoin(storageLocations, and(eq(storageLocations.id, productionRuns.biocharStorageLocationId), eq(storageLocations.organizationId, ctx.organizationId)))
+      .where(and(eq(productionRuns.organizationId, ctx.organizationId), inArray(productionRuns.biocharStorageLocationId, biocharBinIds), productionRunAddsStockSql()))
       .orderBy(asc(productionRuns.stockPostingSequence), asc(productionRuns.id)) : [],
     biocharBinIds.length ? reader.select({ binId: biocharProductSourceAllocations.sourceStorageLocationId, productId: biocharProductSourceAllocations.biocharProductId, runId: biocharProductSourceAllocations.productionRunId,
       dryKg: sql<string>`${biocharProductSourceAllocations.allocatedDryMassKg}::text` }).from(biocharProductSourceAllocations)
@@ -117,7 +118,7 @@ export function getProductOutputStockLayers(ctx: OrgContext, input: { storageLoc
 }
 
 /**
- * Completed production layers. Missing established dry mass or completion is
+ * Eligible terminal production layers. Missing established dry mass or end time is
  * unresolved, never inferred from wet stock.
  */
 export function getBiocharOutputStockLayers(ctx: OrgContext, input: { storageLocationId: string; facilityId: string; occurredAt: string }, reader: Reader = db, options: ReadOptions = {}) {

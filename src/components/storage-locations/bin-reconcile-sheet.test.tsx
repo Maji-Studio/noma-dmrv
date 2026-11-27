@@ -59,6 +59,7 @@ const storageLocation: StorageLocationWithFacility = {
   name: "North hopper",
   stockMode: "split", drawOrder: "oldest_first",
   type: "feedstock_bin",
+  uncarbonized: false,
   capacityKg: null,
   storageMethod: null,
   storageDescription: null,

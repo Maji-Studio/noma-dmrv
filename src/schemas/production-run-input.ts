@@ -28,9 +28,9 @@ const describedFields = {
   dieselGensetLiters: pipeToCanonicalNumber(clearableNumber, fields.dieselGensetLiters).describe("Generator diesel in litres."),
   preprocessingFuelLiters: pipeToCanonicalNumber(clearableNumber, fields.preprocessingFuelLiters).describe("Preprocessing fuel in litres."),
   electricityKwh: pipeToCanonicalNumber(clearableNumber, fields.electricityKwh).describe("Electricity in kilowatt hours."),
-  biocharOutputKg: pipeToCanonicalNumber(clearableNumber, fields.biocharOutputKg).describe("Wet biochar output in kilograms. Must be positive when complete."),
-  biocharMoisturePercent: pipeToCanonicalNumber(clearableNumber, fields.biocharMoisturePercent).describe("Biochar water as percent of wet mass, 0 to below 100. Required when complete."),
-  biocharStorageLocationId: fields.biocharStorageLocationId.describe("Biochar output bin UUID in the effective facility. Required when complete; null clears it for other statuses."),
+  biocharOutputKg: pipeToCanonicalNumber(clearableNumber, fields.biocharOutputKg).describe("Wet biochar output in kilograms. Must be positive when complete or failed."),
+  biocharMoisturePercent: pipeToCanonicalNumber(clearableNumber, fields.biocharMoisturePercent).describe("Biochar water as percent of wet mass, 0 to below 100. Required when complete or failed."),
+  biocharStorageLocationId: fields.biocharStorageLocationId.describe("Biochar output bin UUID in the effective facility. Required when complete or failed. Failed needs an Uncarbonized biochar bin; Complete needs an untagged biochar bin. Null clears it for other statuses."),
 };
 export const createProductionRunInput = z.strictObject({
   ...describedFields,

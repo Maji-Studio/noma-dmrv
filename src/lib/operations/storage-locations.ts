@@ -18,6 +18,7 @@ export const createStorageLocation: Operation<typeof createStorageLocationSchema
       code,
       name: input.name,
       type: input.type,
+      uncarbonized: input.uncarbonized,
       facilityId: input.facilityId,
       capacityKg: input.capacityKg ?? null,
       feedstockTypeId: input.feedstockTypeId ?? null,

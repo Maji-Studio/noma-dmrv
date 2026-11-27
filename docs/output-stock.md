@@ -1,6 +1,8 @@
 # Output stock and completed deliveries
 
-Biochar bins hold layers from completed production runs. Product bins hold layers
+Biochar bins hold layers from Complete runs in untagged bins and Failed runs in
+Uncarbonized bins. A Failed run in an untagged bin contributes no layer.
+Product bins hold layers
 from products placed in that bin. Stock accounting follows dry biochar and frozen
 source-run shares. Wet stock is wet mass added less wet mass taken out, per
 layer, from the last posted count on (`estimateStock` in
@@ -15,6 +17,19 @@ sees every posted count and draw, and a backdated count's solids already
 reflect what was posted before it. A product draw saved before the ledger counts before every count.
 Dry biochar alone blocks a draw, so wet stock can still show once dried biochar
 has none left.
+
+Biochar bins tagged **Uncarbonized** segregate output from Failed runs
+([ADR 0036](./adr/0036-failed-run-output-to-uncarbonized-bins.md)). Only
+biochar bins can carry this tag, and it cannot change once a bin has stock or
+history. Product creation and stock previews refuse every production draw from
+a tagged bin through the shared output-stock preparation guard, including REST
+and MCP. Lost mass and stock counts stay allowed. Tagged bins retain their own
+stock figures but do not contribute to facility or board biochar totals; facility
+stock also reports an independent uncarbonized total. Both Complete and Failed runs require output above 0 kg wet, moisture and a
+biochar bin matching the status on every save, including unchanged saves.
+Failed output stays out of products, credit batches, removals, certification,
+Sankey and biochar totals. Its output edits follow the same stock locks as
+Complete output: later counts, losses, draws and splits protect their basis.
 
 ## Physical order and mass basis
 
@@ -115,7 +130,7 @@ shares, including physical residuals whose dry grams were already attributed.
 
 The facility sheet sums its output bins, including archived bins, through the same read as the board: wet mass when every bin has an estimate, otherwise dry biochar.
 
-Every bin uses the same stock card and a separate Stock over time card. The headline reads "200 kg wet mass" with "90 kg dry biochar" under it. Every run and product enters its bin with a wet mass (a product's moisture is required, and `production_runs_complete_has_output` refuses a complete run without moisture, output above zero and a bin), so the headline is always the wet mass. A wet figure that is still missing would be a defect; the known dry biochar then stands in, never a placeholder. No approximation sign and no "estimated" in the figures. "Estimated" lives in the details, the chart key and the ⓘ tooltip, and the line under the bays says how they are drawn. Split
+Every bin uses the same stock card and a separate Stock over time card. The headline reads "200 kg wet mass" with "90 kg dry biochar" under it. Every run and product enters its bin with a wet mass (a product's moisture is required, and the app refuses Complete or Failed runs without output above zero, moisture and a matching bin), so the headline is always the wet mass. A wet figure that is still missing would be a defect; the known dry biochar then stands in, never a placeholder. No approximation sign and no "estimated" in the figures. "Estimated" lives in the details, the chart key and the ⓘ tooltip, and the line under the bays says how they are drawn. Split
 output bins show fixed-width bays in the bin's default draw order, wrapping when
 needed, with a key below. Mix and feedstock bins show one pile. A lone vessel
 fills against the configured capacity and lists its parts beside it. Multiple
@@ -196,12 +211,19 @@ replay re-bases an unknown wet or solids figure on a movement's saved or
 recomputed (`currentAfterWetKg`) after-balance only while no earlier-dated entry
 was recorded after that balance was saved; a stale value is refused and wet stays
 unknown (`src/lib/output-stock/stock-replay.ts`). A run intake's recording time is
-`production_runs.output_posted_at`. It is set when the run becomes complete,
-moved when a complete run's posted output changes (wet mass, moisture, dry mass,
-bin or end time), cleared when the run leaves complete, and untouched by other
-edits. Check `production_runs_complete_has_output_posted_at` requires it on
-complete runs. Bay, pile-band and chart
-point details open on hover, keyboard focus or tap. A product bin's bays and
+`production_runs.output_posted_at`. It is set when the run becomes Complete or Failed,
+moved when either terminal run's posted output changes (wet mass, moisture, dry
+mass, bin or end time), cleared when the run leaves a terminal status, and
+untouched by other edits. A terminal save also repairs a missing receipt marker.
+The Complete CHECKs `production_runs_complete_has_output` and
+`production_runs_complete_has_output_posted_at` stay unchanged and apply only to
+Complete runs. Failed output (wet output above 0 kg, output moisture, an
+Uncarbonized biochar bin and `output_posted_at`) is enforced by the application
+(lifecycle and data access) on every save, like the bin-tag pairing. Staging
+holds Failed runs recorded before this rule. An older Failed run without
+output stays readable and must get output on its next save.
+
+Bay, pile-band and chart point details open on hover, keyboard focus or tap. A product bin's bays and
 pile bands name their parts as the product composition does (dry biochar,
 "<ingredient> solids", estimated water): `getOutputSubBins` splits each layer's
 ingredient solids by the product's saved ingredient snapshots, pro rata, since

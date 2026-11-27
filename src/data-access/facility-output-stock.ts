@@ -13,6 +13,7 @@ export interface FacilityOutputStockGroup {
 
 export interface FacilityOutputStock {
   biochar: FacilityOutputStockGroup | null;
+  uncarbonized: FacilityOutputStockGroup | null;
   product: FacilityOutputStockGroup | null;
 }
 
@@ -25,7 +26,7 @@ export async function getFacilityOutputStock(
   return withStockSnapshot(async tx => {
     await requireOrgFacility(ctx, facilityId, tx);
 
-    const bins = await tx.select({ id: storageLocations.id, type: storageLocations.type }).from(storageLocations).where(and(
+    const bins = await tx.select({ id: storageLocations.id, type: storageLocations.type, uncarbonized: storageLocations.uncarbonized }).from(storageLocations).where(and(
       eq(storageLocations.organizationId, ctx.organizationId),
       eq(storageLocations.facilityId, facilityId),
       inArray(storageLocations.type, ["biochar_bin", "product_bin"]),
@@ -33,11 +34,12 @@ export async function getFacilityOutputStock(
     const stocks = await getOutputBinStocks(ctx, bins.map(bin => bin.id), tx);
     const total: FacilityOutputStock = {
       biochar: { wetKg: 0, dryBiocharKg: 0 },
+      uncarbonized: { wetKg: 0, dryBiocharKg: 0 },
       product: { wetKg: 0, dryBiocharKg: 0 },
     };
     for (const bin of bins) {
       const stock = stocks.get(bin.id);
-      const field = bin.type === "biochar_bin" ? "biochar" : "product";
+      const field = bin.uncarbonized ? "uncarbonized" : bin.type === "biochar_bin" ? "biochar" : "product";
       const group = total[field];
       if (group === null) continue;
       if (stock?.availableDryKg == null) {

@@ -331,6 +331,14 @@ run writers still take runs before artifacts. The residual order is tracked in
 payload, with `payload_snapshot_frozen` retaining that freeze through retries
 and status resets. Only the `journaled` recovery key remains mutable.
 
+The Complete CHECKs `production_runs_complete_has_output` and
+`production_runs_complete_has_output_posted_at` stay unchanged and apply only to
+Complete runs. Failed output (wet output above 0 kg, output moisture, an
+Uncarbonized biochar bin and `output_posted_at`) is enforced by the application
+(lifecycle and data access) on every save, like the bin-tag pairing. Staging
+holds Failed runs recorded before this rule. An older Failed run without
+output stays readable and must get output on its next save.
+
 ## Numeric Column Families
 
 `src/db/schema/numeric-families.ts` (migration `0066`) exports `massKg`, `tonnes`, `ppm`, `fraction`, `percent`, and `emissionFactor` (kg CO₂e per activity unit, migration `0120`), all exact `numeric(p,s)`.

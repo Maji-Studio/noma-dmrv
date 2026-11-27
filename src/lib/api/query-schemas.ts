@@ -110,7 +110,12 @@ export const applicationListSchema = z.strictObject({
   appliedFrom: orderedDateSchema.optional().describe("Applications on or after this calendar date, YYYY-MM-DD, on the delivery facility's clock."),
   appliedBefore: orderedDateSchema.optional().describe("Applications before this calendar date, YYYY-MM-DD, on the delivery facility's clock. Exclusive upper bound."),
 });
+const uncarbonizedFilterSchema = z.union([z.boolean(), z.enum(["true", "false"])])
+  .transform(value => value === true || value === "true").optional()
+  .describe("Filter bins by their uncarbonized tag. Tagged bins cannot supply biochar products.");
+publishedJsonSchemas.add(uncarbonizedFilterSchema, { jsonSchema: { type: "boolean" } });
 export const storageLocationListSchema = facilityLookupListSchema.extend({
+  uncarbonized: uncarbonizedFilterSchema,
   type: z.enum(storageLocationTypes).optional().describe("Material lane filter: feedstock_bin, biochar_bin or product_bin."),
   formulationId: uuidSchema().optional().describe("Claimed formulation filter, UUID. Matches product bins claimed by this formulation."),
 });

@@ -61,6 +61,7 @@ export interface ProductionRunWithRelations {
   operatorName: string | null;
   biocharStorageLocationCode: string | null;
   biocharStorageLocationName: string | null;
+  biocharStorageLocationUncarbonized: boolean | null;
   // M:M feedstocks
   feedstocks: ProductionRunFeedstockWithDetails[];
   // Canonical explicit source-bin withdrawals

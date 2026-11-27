@@ -13,12 +13,13 @@ vi.mock("@/hooks/use-facility-context", () => ({
 }));
 vi.mock("@/hooks/use-entities", () => ({ useEntityById: () => ({ data: undefined }) }));
 const pickers = vi.hoisted(() => [] as Array<Record<string, unknown>>);
+const dialogs = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 vi.mock("@/components/forms/entity-select", async () => ({
   useSelectDefault: (await vi.importActual<typeof import("@/components/forms/entity-select/use-select-default")>(
     "@/components/forms/entity-select/use-select-default",
   )).useSelectDefault,
   EntitySelect: (props: Record<string, unknown>) => { pickers.push(props); return null; },
-  StorageLocationQuickAddDialog: () => null,
+  StorageLocationQuickAddDialog: (props: Record<string, unknown>) => { dialogs.push(props); return null; },
   useQuickAddDialog: () => ({ isOpen: false, open: vi.fn(), close: vi.fn() }),
 }));
 const switches = vi.hoisted(() => ({ multiBinRuns: true }));
@@ -57,7 +58,7 @@ const savedRun = {
   biocharStorageLocationId: "44444444-4444-4444-8444-444444444444",
 } as unknown as ProductionRunWithRelations;
 
-afterEach(() => { cleanup(); pickers.length = 0; previewProps.length = 0; });
+afterEach(() => { cleanup(); pickers.length = 0; dialogs.length = 0; previewProps.length = 0; });
 
 describe("ProductionRunForm reactor picker", () => {
   it("links to creating a reactor at the run's facility", () => {
@@ -263,32 +264,46 @@ describe("ProductionRunForm output section by status", () => {
     expect(screen.getByText("Output")).toBeTruthy();
   });
 
-  it("hides the Output section for Failed on create and keeps typed values for a switch back to Complete", async () => {
-    const onSubmit = vi.fn();
-    render(<ProductionRunForm onSubmit={onSubmit} />);
-    fireEvent.click(screen.getByRole("radio", { name: "Complete" }));
-    fireEvent.change(document.querySelector('input[name="biocharOutputKg"]')!, { target: { value: "50" } });
+  it("shows the Output section for Failed with the same required markers as Complete", () => {
+    render(<ProductionRunForm onSubmit={vi.fn()} />);
     fireEvent.click(screen.getByRole("radio", { name: "Failed" }));
-    expect(outputInputs()).toHaveLength(0);
-    fireEvent.click(screen.getByRole("radio", { name: "Complete" }));
-    expect((document.querySelector('input[name="biocharOutputKg"]') as HTMLInputElement).value).toBe("50");
-    expect(onSubmit).not.toHaveBeenCalled();
+    expect(outputInputs()).toHaveLength(2);
+    expect(screen.getByText("Output")).toBeTruthy();
+    const bin = pickers.findLast((props) => props.entityType === "storageLocation") as { id: string };
+    for (const id of ["biocharOutputKg", "biocharMoisturePercent", bin.id]) {
+      expect(document.querySelector(`label[for="${id}"]`)?.textContent).toContain("Required");
+    }
   });
 
-  it("omits output from the payload for a saved run edited to Failed, or already Failed, even above dry input", async () => {
-    for (const from of ["running", "failed"] as const) {
-      const onSubmit = vi.fn();
-      // 100 kg wet at 20% is 80 kg dry; 500 kg of stored output would block a Complete save.
-      render(<ProductionRunForm productionRun={{ ...savedRun, status: from, biocharOutputKg: 500, biocharMoisturePercent: 0 }} onSubmit={onSubmit} lock={OPEN_LOCK} />);
-      if (from === "running") fireEvent.click(screen.getByRole("radio", { name: "Failed" }));
-      expect(outputInputs()).toHaveLength(0);
-      fireEvent.click(screen.getByRole("button", { name: "Update production run" }));
-      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
-      const sent = onSubmit.mock.calls[0][0] as Record<string, unknown>;
-      expect(sent.status).toBe("failed");
-      for (const key of ["biocharOutputKg", "biocharMoisturePercent"]) expect(key in sent).toBe(false);
-      expect(sent.biocharStorageLocationId).toBeNull();
-      cleanup();
-    }
+  it("filters the output bin by status and clears a bin picked for the other kind", async () => {
+    render(<ProductionRunForm onSubmit={vi.fn()} />);
+    const bin = () => pickers.findLast((props) => props.entityType === "storageLocation") as {
+      filterBy: Record<string, string>; value?: string; onChange: (id: string) => void;
+    };
+    fireEvent.click(screen.getByRole("radio", { name: "Complete" }));
+    expect(bin().filterBy).toMatchObject({ type: "biochar_bin", uncarbonized: "false" });
+    await act(async () => bin().onChange("44444444-4444-4444-8444-444444444444"));
+    expect(bin().value).toBe("44444444-4444-4444-8444-444444444444");
+    fireEvent.click(screen.getByRole("radio", { name: "Failed" }));
+    expect(bin().filterBy).toMatchObject({ type: "biochar_bin", uncarbonized: "true" });
+    expect(bin().value).toBeUndefined();
+    expect(screen.getByText(/uncarbonized bin/)).toBeTruthy();
+  });
+
+  it("creates a tagged bin from quick-add only for a Failed run", () => {
+    render(<ProductionRunForm onSubmit={vi.fn()} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Complete" }));
+    expect(dialogs.at(-1)?.uncarbonized).toBe(false);
+    fireEvent.click(screen.getByRole("radio", { name: "Failed" }));
+    expect(dialogs.at(-1)?.uncarbonized).toBe(true);
+  });
+
+  it("requires output to save a Failed run", async () => {
+    const onSubmit = vi.fn();
+    render(<ProductionRunForm productionRun={{ ...savedRun, status: "running", biocharOutputKg: null, biocharMoisturePercent: null, biocharStorageLocationId: null }} onSubmit={onSubmit} lock={OPEN_LOCK} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Failed" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update production run" }));
+    await waitFor(() => expect(screen.getAllByText(/needs/).length).toBeGreaterThan(0));
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,5 @@
 import { isReturnedStatement } from "@/lib/record-lock";
+import { assertCarbonizedProductSource } from "@/lib/storage-location-material";
 import { DomainError } from '@/lib/domain-errors';
 import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, formulations, productionRuns, storageLocations } from '@/db/schema';
@@ -40,6 +41,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   const lane = bin.type === 'biochar_bin' ? 'biochar' as const : 'product' as const;
   if (input.kind === 'delivery' && lane !== 'product') throw new SafeError('Choose a product bin for delivery.');
   if (input.kind === 'production_draw' && lane !== 'biochar') throw new SafeError('Choose a biochar bin for product creation.');
+  if (input.kind === 'production_draw') assertCarbonizedProductSource(bin.uncarbonized);
   const state = lane === 'biochar' ? await getBiocharOutputStockLayers(ctx, input, reader) : await getProductOutputStockLayers(ctx, input, reader);
   const correction = input.correctsMovementId ? await prepareOutputCorrection(ctx, input, state.layers, reader) : null;
   const layers = correction?.layers ?? state.layers;

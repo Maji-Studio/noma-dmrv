@@ -23,5 +23,5 @@ export const createQuickStorageLocation: Operation<typeof storageLocationQuickAd
   input: storageLocationQuickAddSchema,
   supportsDryRun: false,
   execute: ({ ctx, tx }, input) => withAutoCodes(ctx, tx, BIN_PREFIXES[input.type] ?? "PB", storageLocations, storageLocations.code, AUTO_CODE_COUNT,
-    ([code], savepoint) => createQuickStorageLocationInTransaction(ctx, savepoint, { ...input, code }), CODE_CONFLICT_MESSAGES.storageLocation),
+    ([code], savepoint) => createQuickStorageLocationInTransaction(ctx, savepoint, { ...input, uncarbonized: input.uncarbonized, code }), CODE_CONFLICT_MESSAGES.storageLocation),
 };

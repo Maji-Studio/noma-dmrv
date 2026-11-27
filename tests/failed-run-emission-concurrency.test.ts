@@ -50,6 +50,7 @@ async function fixture() {
     await db.delete(productionRuns).where(eq(productionRuns.id, f.run.id));
     await db.delete(feedstocks).where(eq(feedstocks.id, f.stock.id));
     await db.delete(storageLocations).where(eq(storageLocations.id, f.stock.storageLocationId!));
+    await db.delete(storageLocations).where(eq(storageLocations.id, f.outputBin.id));
     await db.delete(reactors).where(eq(reactors.id, f.run.reactorId!));
     await db.delete(productionProcesses).where(eq(productionProcesses.facilityId, f.facility.id));
     await db.delete(facilities).where(eq(facilities.id, f.facility.id));

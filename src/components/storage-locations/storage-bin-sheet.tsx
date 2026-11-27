@@ -8,6 +8,7 @@
  */
 "use client";
 
+import { UncarbonizedBadge } from "@/components/ui/uncarbonized-badge";
 import {
   EntitySideSheet,
   type SideSheetMode,
@@ -108,6 +109,7 @@ export function StorageBinSheet({
     onStateChange({ mode: mode === "edit" ? "edit" : "view", entity: state.entity });
   };
 
+  const lockProps = recordLockSheetProps({ lock, status: lockStatus, retry: retryLock, retrying: lockRetrying, subject: "storageBin" });
   const editingEntity = state?.mode === "edit" ? state.entity : null;
   const isSubmitting = createStorageLocation.isPending || updateStorageLocation.isPending;
 
@@ -125,7 +127,13 @@ export function StorageBinSheet({
       // small, on the line beneath.
       title={state?.mode === "create" ? "Create storage bin" : state?.entity?.name ?? ""}
       subtitle={state?.mode === "create" ? undefined : state?.entity?.code}
-      {...recordLockSheetProps({ lock, status: lockStatus, retry: retryLock, retrying: lockRetrying, subject: "storageBin" })}
+      {...lockProps}
+      titleBadge={
+        <>
+          {state?.entity?.uncarbonized && <UncarbonizedBadge size="default" />}
+          {lockProps.titleBadge}
+        </>
+      }
       editLabel="Edit storage bin"
       readOnly={readOnly}
       canEdit={state?.entity?.archivedAt == null && isRecordEditable(lock)}

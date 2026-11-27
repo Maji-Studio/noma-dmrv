@@ -60,7 +60,7 @@ describe("updateProductionRun terminal to running", () => {
         .returning({ id: reactors.id });
       createdReactorIds.push(reactor.id);
 
-      const outputBinId = await createProductionRunOutputBin(TEST_ORG_ID, facility.id);
+      const outputBinId = await createProductionRunOutputBin(TEST_ORG_ID, facility.id, status === "failed");
       createdBinIds.push(outputBinId);
       const [run] = await db
         .insert(productionRuns)
@@ -70,8 +70,8 @@ describe("updateProductionRun terminal to running", () => {
           reactorId: reactor.id,
           code: `PR-REOPEN-${tag}`,
           status,
-          outputPostedAt: status === "complete" ? new Date("2026-07-01T10:00:00Z") : null,
-          biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0, biocharOutputKg: 100,
+          outputPostedAt: new Date("2026-07-01T10:00:00Z"),
+          biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0, biocharOutputKg: 100, biocharDryMassKg: 100,
           startTime: new Date("2026-07-01T08:00:00Z"),
           endTime: new Date("2026-07-01T10:00:00Z"),
         })

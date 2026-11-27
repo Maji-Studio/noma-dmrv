@@ -1,6 +1,6 @@
 import { realColumn } from './real-column';
 import { relations, sql } from 'drizzle-orm';
-import { integer, check, doublePrecision, foreignKey, pgTable, text, timestamp, unique, uniqueIndex, uuid, jsonb } from 'drizzle-orm/pg-core';
+import { boolean, integer, check, doublePrecision, foreignKey, pgTable, text, timestamp, unique, uniqueIndex, uuid, jsonb } from 'drizzle-orm/pg-core';
 import { REACTOR_TYPES, outputDrawOrder, outputStockMode, storageLocationType, durabilityOption } from './common';
 import { organizations } from './auth';
 
@@ -132,6 +132,7 @@ export const storageLocations = pgTable(
     code: text('code').notNull(),
     name: text('name').notNull(), // e.g., "Bin 7", "Feedstock Pile 002"
     type: storageLocationType('type').notNull(),
+    uncarbonized: boolean('uncarbonized').notNull().default(false),
     capacityKg: realColumn('capacity_kg'),
     storageMethod: text('storage_method'),
     storageDescription: text('storage_description'),
@@ -168,6 +169,10 @@ export const storageLocations = pgTable(
     check(
       'storage_locations_formulation_product_bin_only',
       sql`${table.type} = 'product_bin' or ${table.formulationId} is null`
+    ),
+    check(
+      'storage_locations_uncarbonized_biochar_bin_only',
+      sql`${table.type} = 'biochar_bin' or ${table.uncarbonized} = false`
     ),
     // Bin name is unique per facility, case- and whitespace-insensitive (issue
     // #252). Archived bins keep their name reserved so a facility restore can't

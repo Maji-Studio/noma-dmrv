@@ -40,7 +40,12 @@ function stockRow(label: string, scope: string, group: FacilityOutputStockGroup 
 }
 
 export function facilitySheetSections(facility: FacilityWithRelations, stock?: FacilityStockState): DetailPanelSection[] {
-  const biochar = stockRow("Biochar in bins", "biochar bins", stock?.data?.biochar, stock);
+  const biochar = stockRow("Biochar in bins", "biochar bins without the Uncarbonized tag", stock?.data?.biochar, stock);
+  // Uncarbonized stock is its own line, and only when a failed run put something there.
+  const uncarbonizedGroup = stock?.data?.uncarbonized;
+  const uncarbonized = uncarbonizedGroup && !isOutputStockEmpty(uncarbonizedGroup.wetKg, uncarbonizedGroup.dryBiocharKg)
+    ? stockRow("Uncarbonized in bins", "uncarbonized bins", uncarbonizedGroup, stock)
+    : [];
   const product = stockRow("Products in bins", "product bins", stock?.data?.product, stock);
   return [
     {
@@ -102,6 +107,7 @@ export function facilitySheetSections(facility: FacilityWithRelations, stock?: F
             : `${formatMassKg(facility.inventorySummary.feedstockWetKg)} wet mass`,
         },
         ...biochar,
+        ...uncarbonized,
         ...product,
       ],
     },

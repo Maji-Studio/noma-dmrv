@@ -6,12 +6,14 @@
  * Every day is a facility-local `YYYY-MM-DD` string. Every activity reading is
  * nullable: null is a missing reading, never zero.
  */
+import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 import type { TransportMethodValue } from "@/schemas/transport-legs";
 import type { EnergySourceKey, SourceAmounts } from "./sources";
 
 // ------------------------------------------------------------------ inputs
 
 export interface EnergyRunInput {
+  status: ProductionRunStatus;
   id: string;
   code: string;
   /** Facility day of the run start. */

@@ -1,10 +1,14 @@
 "use client";
 
+import { FormError } from "@/components/forms/form-error";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 
 import { useId } from "react";
+import { Notice } from "@/components/ui/notice";
+import { LABEL_HIT_AREA } from "@/components/ui/touch-target";
+import { cn } from "@/lib/utils";
 import { useForm, useWatch, type Resolver } from "react-hook-form";
 import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
@@ -43,6 +47,8 @@ import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
  */
 type StorageLocationFormValues = Omit<StorageLocationFormData, "type"> & { type: StorageLocationType | null };
 
+const UNCARBONIZED_FIXED_NOTE = "This bin holds uncarbonized material. Products cannot draw from it.";
+
 const schemaResolver = zodResolver(storageLocationFormSchema);
 /** The schema reads the draft, null type included, and refuses a missing type. */
 const resolveStorageLocation: Resolver<StorageLocationFormValues, unknown, StorageLocationFormData> = (values, context, options) =>
@@ -75,6 +81,10 @@ interface StorageLocationFormProps {
   defaultFacilityId?: string;
   /** The saved bin's lock: stock history fixes its storage type and feedstock type. */
   lock?: RecordLockView;
+  /** Starts a new bin tagged uncarbonized (a caller that creates one for a failed run's output). */
+  defaultUncarbonized?: boolean;
+  /** Hides the tag's checkbox, for pickers that fix the tag themselves. */
+  hideUncarbonized?: boolean;
 }
 
 export function StorageLocationForm({
@@ -92,6 +102,8 @@ export function StorageLocationForm({
   defaultFormulationId,
   defaultFacilityId,
   lock,
+  defaultUncarbonized = false,
+  hideUncarbonized = false,
 }: StorageLocationFormProps) {
   const isEditMode = !!storageLocation;
   // The identity guard (#767) refuses these two once any stock row points at
@@ -134,6 +146,7 @@ export function StorageLocationForm({
       capacityKg: storageLocation?.capacityKg ?? null,
       feedstockTypeId: storageLocation?.feedstockTypeId ?? defaultFeedstockTypeId ?? "",
       formulationId: storageLocation?.formulationId ?? defaultFormulationId ?? "",
+      uncarbonized: storageLocation?.uncarbonized ?? defaultUncarbonized,
       stockMode: storageLocation?.stockMode ?? "split",
       drawOrder: storageLocation?.drawOrder ?? "oldest_first",
       mergedAt: "",
@@ -147,6 +160,8 @@ export function StorageLocationForm({
   const showFeedstockType = isFeedstockBinType(watchedType);
   const copy = showFeedstockType ? STOCK_MODE_FORM_COPY.feedstock : STOCK_MODE_FORM_COPY.output;
   const showFormulation = watchedType === "product_bin";
+  const showUncarbonized = watchedType === "biochar_bin" && !hideUncarbonized;
+  const fixedUncarbonized = watchedType === "biochar_bin" && hideUncarbonized && defaultUncarbonized;
   // Output bins choose a stock mode; feedstock bins choose a draw method on the same fields.
   const showStockMode = showFeedstockType || isOutputBinType(watchedType);
   const watchedStockMode = useWatch({ control, name: "stockMode" });
@@ -177,6 +192,7 @@ export function StorageLocationForm({
     if (normalized.type !== "product_bin") {
       normalized.formulationId = null;
     }
+    if (normalized.type !== "biochar_bin") normalized.uncarbonized = false;
     if (!isFeedstockBinType(normalized.type) && !isOutputBinType(normalized.type)) normalized.stockMode = "split";
     if (!merging) normalized.mergedAt = null;
     else if (!normalized.mergedAt) {
@@ -213,7 +229,12 @@ export function StorageLocationForm({
               disabled={isSubmitting || identityLocked}
               error={!!errors.type}
               options={storageTypeOptions}
-              {...register("type")}
+              {...register("type", {
+                // The tag's checkbox is hidden off biochar bins, so a stale true must not be sent.
+                onChange: (event) => {
+                  if (event.target.value !== "biochar_bin") setValue("uncarbonized", false);
+                },
+              })}
             />
           </FormField>
         )}
@@ -329,6 +350,31 @@ export function StorageLocationForm({
             filterBy={feedstockTypeFilter}
           />
           </div>
+        </div>
+      )}
+
+      {fixedUncarbonized && (
+        <Notice tone="info">{UNCARBONIZED_FIXED_NOTE}</Notice>
+      )}
+
+      {showUncarbonized && (
+        <div className="flex flex-col gap-4">
+          <label htmlFor="uncarbonized" className={cn(LABEL_HIT_AREA, "flex items-center gap-12 cursor-pointer")}>
+            <input
+              type="checkbox"
+              id="uncarbonized"
+              className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
+              disabled={isSubmitting || identityLocked}
+              aria-describedby={errors.uncarbonized?.message ? "uncarbonized-hint uncarbonized-error" : "uncarbonized-hint"}
+              aria-invalid={!!errors.uncarbonized}
+              {...register("uncarbonized")}
+            />
+            <span className="body-medium text-[var(--color-text-primary)]">This bin holds uncarbonized material</span>
+          </label>
+          <p id="uncarbonized-hint" className="body-caption text-[var(--color-text-tertiary)]">
+            {identityLocked ? "Fixed once this bin has stock or history." : "For output of failed runs. Products cannot draw from it."}
+          </p>
+          <FormError id="uncarbonized-error" message={errors.uncarbonized?.message} />
         </div>
       )}
 

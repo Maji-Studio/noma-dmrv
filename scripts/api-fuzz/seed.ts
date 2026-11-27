@@ -10,6 +10,7 @@ const FACILITY_TIME_ZONE = "UTC";
 const INTAKE_WET_MASS_KG = 100;
 const INTAKE_MOISTURE_PERCENT = 20;
 const RUN_DRAW_WET_MASS_KG = 10;
+const FAILED_OUTPUT_WET_MASS_KG = 2;
 const SEEDED_RUN_END_HOURS_AGO = 2;
 // The completed run that fills the biochar bin ends before the product, which
 // precedes the loss. hooks.py places its create example later still.
@@ -139,8 +140,12 @@ async function main(): Promise<void> {
     feedstockDraws: [{ storageLocationId: runBin.id, wetMassKg: RUN_DRAW_WET_MASS_KG }],
     feedstockMoisturePercent: INTAKE_MOISTURE_PERCENT,
   })).data;
+  const failedBin = await db.transaction(tx => createStorageLocationInTransaction(ctx, tx, {
+    code: "FUZZ-FAILED-BIN", name: `${FIXTURE_LABEL} uncarbonized bin`, type: "biochar_bin", facilityId: facility.id, uncarbonized: true,
+  }));
   const run = (await runOperation(updateProductionRun, ctx, {
     productionRunId: startedRun.id, expectedVersion: startedRun.version, status: "failed",
+    biocharOutputKg: FAILED_OUTPUT_WET_MASS_KG, biocharMoisturePercent: BIOCHAR_MOISTURE_PERCENT, biocharStorageLocationId: failedBin.id,
     endTime: new Date(now - SEEDED_RUN_END_HOURS_AGO * MS_PER_HOUR).toISOString(),
   })).data;
   // Biochar side. Bin and formulation names are unique per facility.

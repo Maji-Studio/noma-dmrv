@@ -91,3 +91,33 @@ describe("default draw order", () => {
     }
   });
 });
+
+describe("uncarbonized bin tag", () => {
+  const base = { name: "E2E Segregated bin", facilityId: FACILITY_ID };
+  it.each([storageLocationFormSchema, storageLocationQuickAddSchema])("accepts either biochar tag and refuses other tagged lanes", schema => {
+    for (const uncarbonized of [true, false]) {
+      expect(schema.parse({ ...base, type: "biochar_bin", uncarbonized }).uncarbonized).toBe(uncarbonized);
+    }
+    for (const type of ["feedstock_bin", "product_bin"]) {
+      const parsed = schema.safeParse({ ...base, type, feedstockTypeId: type === "feedstock_bin" ? RELATED_ID : undefined, uncarbonized: true });
+      expect(parsed.success).toBe(false);
+      if (parsed.success) throw new Error("Tagged non-biochar bin was accepted");
+      expect(parsed.error.issues).toContainEqual(expect.objectContaining({ path: ["uncarbonized"], message: "Only biochar bins can hold uncarbonized material." }));
+    }
+  });
+  it("preserves partial update omission and explicit false", () => {
+    const update = { storageLocationId: RELATED_ID, expectedVersion: 1 };
+    expect(updateStorageLocationSchema.parse(update).uncarbonized).toBeUndefined();
+    expect(updateStorageLocationSchema.parse({ ...update, uncarbonized: false }).uncarbonized).toBe(false);
+    expect(updateStorageLocationSchema.parse({ ...update, uncarbonized: true }).uncarbonized).toBe(true);
+    const result = updateStorageLocationSchema.safeParse({ ...update, type: "product_bin", uncarbonized: true });
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error("Tagged product bin was accepted");
+    expect(result.error.issues[0]?.path).toEqual(["uncarbonized"]);
+  });
+  it("rejects null and truthy strings instead of coercing them", () => {
+    for (const uncarbonized of [null, "true", "false", 1]) {
+      expect(storageLocationFormSchema.safeParse({ ...base, type: "biochar_bin", uncarbonized }).success).toBe(false);
+    }
+  });
+});

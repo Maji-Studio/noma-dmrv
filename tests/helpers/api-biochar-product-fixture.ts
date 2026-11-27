@@ -55,8 +55,8 @@ async function issueKey(f: ApiProductParents, name: string, scopes: readonly Api
 }
 
 /** Parents from the output-stock fixture, a Pure product bin, a stocked ingredient bin and real credentials. */
-export async function createApiProductFixture(): Promise<ApiProductFixture> {
-  const f = await seedOutputStockParents(db);
+export async function createApiProductFixture(options: { uncarbonized?: boolean } = {}): Promise<ApiProductFixture> {
+  const f = await seedOutputStockParents(db, options);
   const organizationId = f.ctx.organizationId;
   await db.insert(members).values({ id: randomUUID(), organizationId, userId: f.ctx.userId, role: "admin" });
   const [pureBin] = await db.insert(storageLocations).values({ organizationId, facilityId: f.facility.id, formulationId: f.pure.id,

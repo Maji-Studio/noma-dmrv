@@ -159,7 +159,7 @@ export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreview
     case "error":
       return errorLineCopy();
     case "not-applicable":
-      // A failed run adds no biochar but its emissions count in a batch, so it never reads "Not applicable".
+      // A failed run adds no biochar to a batch but its emissions count in a batch, so it never reads "Not applicable".
       if (view.status === FAILED_PRODUCTION_RUN_STATUS) {
         return emissionLineCopy(view.savedEmissionAttachment ? describeFailedRunEmissions(view.savedEmissionAttachment) : UNSAVED_FAILED_RUN_EMISSIONS);
       }

@@ -299,6 +299,7 @@ export async function getRecordedEnergyInputs(
       runs: runRows.map((run) => ({
         id: run.id,
         code: run.code,
+        status: run.status,
         day: dayOf(run.startTime),
         reactorName: run.reactorName,
         creditBatchId: batchByRun.get(run.id) ?? null,

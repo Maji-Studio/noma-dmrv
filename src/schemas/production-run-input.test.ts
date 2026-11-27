@@ -58,12 +58,12 @@ it.each(inputs)("keeps draw checks for coerced masses and canonical published nu
 it.each(inputs)("publishes conditional output requirements for $name", ({ schema }) => {
   const contract = toOperationJsonSchema(schema);
   const fields = contract.properties as Record<string, { description: string }>;
-  expect(fields.biocharStorageLocationId.description).toContain("Required when complete");
-  expect(fields.biocharMoisturePercent.description).toContain("Required when complete");
-  expect(fields.biocharOutputKg.description).toContain("Must be positive when complete");
+  expect(fields.biocharStorageLocationId.description).toContain("Required when complete or failed");
+  expect(fields.biocharMoisturePercent.description).toContain("Required when complete or failed");
+  expect(fields.biocharOutputKg.description).toContain("Must be positive when complete or failed");
 });
 
-it("create schemas accept failed and still refuse cancelled", () => {
+it("transport schemas accept Failed for merged-row validation and still refuse Cancelled on create", () => {
   const base = { facilityId: crypto.randomUUID(), reactorId: crypto.randomUUID(), startTime: "2026-03-10T08:00:00Z" };
   expect(createProductionRunInput.safeParse({ ...base, status: "failed" }).success).toBe(true);
   expect(createProductionRunInput.safeParse({ ...base, status: "cancelled" }).success).toBe(false);

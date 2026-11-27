@@ -145,7 +145,7 @@ describe("production-run lifecycle", () => {
       [
         "a complete run without positive output",
         { biocharOutputKg: 0 },
-        { code: "complete-output-required" },
+        { code: "terminal-output-required" },
       ],
       [
         "a terminal run without consumed feedstock",
@@ -184,7 +184,7 @@ describe("production-run lifecycle", () => {
 
     it.each([null, undefined])("requires biochar moisture when complete: %s", (moisture) => {
       const input = makeOutcomeInput({ biocharMoisturePercent: moisture });
-      expect(getProductionRunOutcomeViolations(input)).toContainEqual({ code: "complete-output-moisture-required" });
+      expect(getProductionRunOutcomeViolations(input)).toContainEqual({ code: "terminal-output-moisture-required" });
       expect(() => assertProductionRunOutcome(input)).toThrow("Enter biochar moisture for a complete run.");
     });
 
@@ -192,9 +192,8 @@ describe("production-run lifecycle", () => {
       expect(() => assertProductionRunOutcome(makeOutcomeInput({ biocharMoisturePercent: 0 }))).not.toThrow();
     });
 
-    it.each(["running", "failed", "cancelled"] as const)("allows missing output bin and moisture when %s", (status) => {
-      const terminal = status === "failed";
-      const input = makeOutcomeInput({ status, endTime: terminal ? END_TIME : null, endTimePresent: terminal,
+    it.each(["running", "cancelled"] as const)("allows missing output bin and moisture when %s", (status) => {
+      const input = makeOutcomeInput({ status, endTime: null, endTimePresent: false,
         cancellationReason: "Recorded in error", biocharStorageLocationId: null, biocharMoisturePercent: null });
       expect(getProductionRunOutcomeViolations(input)).toEqual([]);
       expect(() => assertProductionRunOutcome(input)).not.toThrow();
@@ -202,7 +201,7 @@ describe("production-run lifecycle", () => {
 
     it.each([null, undefined, ""])("requires an output bin when complete: %s", (bin) => {
       const input = { ...makeOutcomeInput(), biocharStorageLocationId: bin };
-      expect(getProductionRunOutcomeViolations(input)).toContainEqual({ code: "complete-output-bin-required" });
+      expect(getProductionRunOutcomeViolations(input)).toContainEqual({ code: "terminal-output-bin-required" });
       expect(() => assertProductionRunOutcome(input)).toThrow("Select a biochar output bin for a complete run.");
     });
 
@@ -271,9 +270,9 @@ describe("production-run lifecycle", () => {
 
       expect(violations).toEqual([
         { code: "terminal-end-required", status: "complete" },
-        { code: "complete-output-required" },
-        { code: "complete-output-bin-required" },
-        { code: "complete-output-moisture-required" },
+        { code: "terminal-output-required" },
+        { code: "terminal-output-bin-required" },
+        { code: "terminal-output-moisture-required" },
         {
           code: "feedstock-required",
           status: "complete",
@@ -291,7 +290,7 @@ describe("production-run lifecycle", () => {
         endTimePresent: false,
         cancellationReason: "operator error",
       }),
-      makeOutcomeInput({ status: "failed", biocharOutputKg: null }),
+      makeOutcomeInput({ status: "failed" }),
     ])("accepts a valid $status outcome", (input) => {
       expect(getProductionRunOutcomeViolations(input)).toEqual([]);
     });
@@ -332,21 +331,30 @@ describe("production-run lifecycle", () => {
       ).toThrow(DRY_MASS_BALANCE_MESSAGE);
     });
 
-    it("permits failed output to be absent", () => {
+    it("requires failed output", () => {
       expect(() =>
         assertProductionRunOutcome(
           makeOutcomeInput({ status: "failed", biocharOutputKg: null }),
         ),
-      ).not.toThrow();
+      ).toThrow("A failed run must record positive biochar output");
     });
   });
 });
 
 describe("dry-mass balance and failed runs", () => {
   const over = { feedstockWetMassKg: 50, feedstockMoisturePercent: 20, biocharOutputKg: 60, biocharMoisturePercent: 0 };
-  it("flags excess output for complete but ignores stored output on a failed run", () => {
+  it("flags excess output for complete and failed runs", () => {
     const codes = (status: "complete" | "failed") => getProductionRunOutcomeViolations(makeOutcomeInput({ status, ...over })).map((v) => v.code);
     expect(codes("complete")).toContain("dry-mass-balance-exceeded");
-    expect(codes("failed")).not.toContain("dry-mass-balance-exceeded");
+    expect(codes("failed")).toContain("dry-mass-balance-exceeded");
   });
+});
+
+it.each(["complete", "failed"] as const)("requires all output fields for %s", status => {
+  const input = makeOutcomeInput({ status, biocharOutputKg: null, biocharStorageLocationId: null, biocharMoisturePercent: null });
+  expect(getProductionRunOutcomeViolations(input).map(v => v.code)).toEqual([
+    "terminal-output-required", "terminal-output-bin-required", "terminal-output-moisture-required",
+  ]);
+  expect(() => assertProductionRunOutcome({ ...input, biocharOutputKg: 20 })).toThrow(`Select a biochar output bin for a ${status} run.`);
+  expect(() => assertProductionRunOutcome({ ...input, biocharOutputKg: 20, biocharStorageLocationId: "bin" })).toThrow(`Enter biochar moisture for a ${status} run.`);
 });

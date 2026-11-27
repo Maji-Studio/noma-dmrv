@@ -301,6 +301,11 @@ If that dry run fails, the 409 carries no `preview`; a failure the API treats as
 unexpected is logged value-free with the operation and request ids, a domain
 refusal is not. The fallback never claims an idempotency key.
 
+Product creation refuses a source biochar bin tagged Uncarbonized with 422
+`validation_failed` at `/sourceBiocharStorageLocationId`. This applies to REST,
+MCP, previews and app writes through the shared output-stock draw guard. Choose
+an untagged biochar bin; `uncarbonized=false` filters source-bin lookups.
+
 Biochar product representation revision 3 returns `productionDate` as the
 facility-local mixing day for blends and the oldest drawn lot's production-run
 calendar day for pure biochar (`YYYY-MM-DD`, OpenAPI `date`). A blend has at
@@ -315,6 +320,21 @@ Production-run operation inputs accept offset date-time strings or facility-loca
 facility, including a new facility on update. Native Dates are an in-process
 convenience and do not appear as a third published shape. UI actions validate
 the form contract before passing only operation fields to the runner.
+
+Complete and Failed runs require wet output above 0 kg, output moisture and an
+output biochar bin on create and every update. Complete uses an untagged bin;
+Failed uses a bin tagged Uncarbonized. Wrong bin/tag pairings return
+`validation_failed` on `biocharStorageLocationId`, including unchanged saves.
+Both outcomes post output stock in their bins. Failed output never
+counts as biochar or supplies products, credit batches, removals, certification
+or Sankey. Its energy readings remain included in facility energy activity.
+The Complete CHECKs `production_runs_complete_has_output` and
+`production_runs_complete_has_output_posted_at` stay unchanged and apply only to
+Complete runs. Failed output (wet output above 0 kg, output moisture, an
+Uncarbonized biochar bin and `output_posted_at`) is enforced by the application
+(lifecycle and data access) on every save, like the bin-tag pairing. Staging
+holds Failed runs recorded before this rule. An older Failed run without
+output stays readable and must get output on its next save.
 
 The `audit` run option supplies request and credential IDs for API writes only.
 Audited operations must implement `describe`.
@@ -483,8 +503,10 @@ distances. Lists have no ETags; location detail reads and writes use the locatio
 version. See [party locations](./api-master-data.md#party-locations) for distance
 inputs, archived destinations, defaults, fills and delete refusals. Orders expose
 list and id-or-code reads under `orders:read`. Both read scopes are on by default.
-Storage locations use representation revision 4, exposing `formulationId`,
-`stockMode` and `drawOrder`, and accept `type` and `formulationId` list filters.
+Storage locations use representation revision 5, adding `uncarbonized` alongside
+`formulationId`, `stockMode` and `drawOrder`. Lists accept `type`, `formulationId`
+and `uncarbonized` filters. Pass `uncarbonized=true` or `uncarbonized=false` to
+select bins by their tag. Only biochar bins can carry the tag.
 For feedstock bins, `mix` means Mass weighted over remaining deliveries; `split`
 means In order, using `oldest_first` or `newest_first`. Feedstock bins have no sub-bins.
 

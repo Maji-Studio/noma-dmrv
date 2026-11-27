@@ -33,7 +33,7 @@ export async function findApiStorageLocation(ctx: OrgContext, identifier: ApiLoo
   return row;
 }
 
-export interface ApiStorageLocationFilters extends ApiFacilityLookupFilters { type?: StorageLocationType; formulationId?: string }
+export interface ApiStorageLocationFilters extends ApiFacilityLookupFilters { type?: StorageLocationType; formulationId?: string; uncarbonized?: boolean }
 
 export async function listApiStorageLocations(ctx: OrgContext, filters: ApiStorageLocationFilters, limit: number, cursor?: ApiLookupPosition) {
   requireOrgScope(ctx);
@@ -45,6 +45,7 @@ export async function listApiStorageLocations(ctx: OrgContext, filters: ApiStora
     eq(storageLocations.organizationId, ctx.organizationId),
     isNull(storageLocations.archivedAt),
     filters.type === undefined ? undefined : eq(storageLocations.type, filters.type),
+    filters.uncarbonized === undefined ? undefined : eq(storageLocations.uncarbonized, filters.uncarbonized),
     filters.formulationId === undefined ? undefined : eq(storageLocations.formulationId, filters.formulationId),
     filters.facilityId === undefined ? undefined : eq(storageLocations.facilityId, filters.facilityId),
     filters.code === undefined ? undefined : eq(storageLocations.code, filters.code),

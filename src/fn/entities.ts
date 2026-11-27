@@ -36,6 +36,9 @@ const searchEntitiesSchema = z
     limit: z.number().int().positive().max(MAX_SEARCH_LIMIT).optional(),
   })
   .superRefine((data, ctx) => {
+    if (data.filterBy?.uncarbonized !== undefined && !["true", "false"].includes(data.filterBy.uncarbonized)) {
+      ctx.addIssue({ code: "custom", path: ["filterBy", "uncarbonized"], message: "Choose true or false for the uncarbonized filter." });
+    }
     if (data.filterBy?.customerId !== undefined) {
       const customerId = uuidSchema().safeParse(data.filterBy.customerId);
       if (!customerId.success) {

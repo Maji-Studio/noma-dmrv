@@ -7,6 +7,7 @@
  */
 
 import { z } from "zod";
+import { UNCARBONIZED_BIOCHAR_BIN_MESSAGE } from "@/lib/storage-location-material";
 import {
   emptyToNull,
   positiveMassKgSchema,
@@ -108,6 +109,7 @@ export const storageLocationQuickAddSchema = z.object({
     .min(1, "Bin name is required")
     .max(255, "Name must be less than 255 characters"),
   type: z.enum(storageLocationTypes, { message: "Bin type is required" }),
+  uncarbonized: storageLocationFormSchema.shape.uncarbonized,
   stockMode: storageLocationFormSchema.shape.stockMode,
   drawOrder: storageLocationFormSchema.shape.drawOrder,
   facilityId: z
@@ -121,6 +123,9 @@ export const storageLocationQuickAddSchema = z.object({
   // Product bins only — restricts the bin to one formulation (empty = pure biochar)
   formulationId: emptyToNull.or(z.string().uuid("Choose a valid formulation.")).nullable().optional(),
 }).superRefine((data, ctx) => {
+  if (data.uncarbonized && data.type !== "biochar_bin") {
+    ctx.addIssue({ code: "custom", path: ["uncarbonized"], message: UNCARBONIZED_BIOCHAR_BIN_MESSAGE });
+  }
   if (data.formulationId && data.type !== "product_bin") {
     ctx.addIssue({
       code: "custom",

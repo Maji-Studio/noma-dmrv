@@ -11,6 +11,8 @@ export async function failedRunFixture(tx: DbTransaction, options: { timezone?: 
   const site = { ...org, facilityId: facility.id };
   const [type] = await tx.insert(feedstockTypes).values({ ...org, code: `FR-T-${tag}`, name: `Failed run fixture ${tag}`, usage: "pyrolysis", category: "forestry" }).returning();
   const [bin] = await tx.insert(storageLocations).values({ ...site, code: `FR-B-${tag}`, name: `Failed run fixture ${tag}`, type: "feedstock_bin", feedstockTypeId: type.id }).returning();
+  // A failed run's output goes into an uncarbonized biochar bin (#439).
+  const [outputBin] = await tx.insert(storageLocations).values({ ...site, code: `FR-O-${tag}`, name: `Failed run output ${tag}`, type: "biochar_bin", uncarbonized: true }).returning();
   const [reactor] = await tx.insert(reactors).values({ ...site, code: `FR-R-${tag}`, identifier: `Failed run fixture ${tag}`, reactorType: "fixed-bed" }).returning();
   const [process] = await tx.insert(productionProcesses).values({ ...site, feedstockTypeId: type.id }).returning();
   const [stock] = await tx.insert(feedstocks).values(await feedstockFixtureValues(tx, { ...site, code: `FR-S-${tag}`, feedstockTypeId: type.id, storageLocationId: bin.id,
@@ -18,10 +20,12 @@ export async function failedRunFixture(tx: DbTransaction, options: { timezone?: 
   const [run] = await tx.insert(productionRuns).values({ ...site, reactorId: reactor.id, code: `FR-PR-${tag}`,
     startTime: new Date("2026-02-28T12:00:00Z"), endTime: new Date(options.endTime ?? "2026-03-01T12:00:00Z"), status: "failed",
     feedstockWetMassKg: 100, feedstockMoisturePercent: 0, feedstockMassDryKg: 100,
+    biocharOutputKg: 10, biocharMoisturePercent: 0, biocharDryMassKg: 10, biocharStorageLocationId: outputBin.id,
+    outputPostedAt: new Date(options.endTime ?? "2026-03-01T12:00:00Z"),
     dieselOperationLiters: 2, dieselGensetLiters: 3, preprocessingFuelLiters: 4, electricityKwh: 5,
   }).returning();
   await tx.insert(productionRunFeedstocks).values({ ...org, productionRunId: run.id, feedstockId: stock.id, wetMassUsedKg: 100 });
   const batchValues = { ...site, code: `FR-CB-${tag}`, feedstockTypeId: type.id, productionProcessId: process.id, startDate: "2026-03-01", endDate: "2026-03-31" };
   const batch = options.batch === false ? null : (await tx.insert(creditBatches).values(batchValues).returning())[0];
-  return { org, site, facility, type, stock, run, batch, batchValues };
+  return { org, site, facility, type, stock, run, batch, batchValues, outputBin };
 }

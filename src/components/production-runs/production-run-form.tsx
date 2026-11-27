@@ -55,7 +55,6 @@ import {
   allowedProductionRunStatusesFrom,
   isTerminalProductionRunStatus,
   PRODUCTION_RUN_CREATE_STATUSES,
-  productionRunRecordsOutput,
   shouldClearProductionRunEndTime,
   shouldIncludeProductionRunEndTime,
 } from "@/lib/production-runs/lifecycle";
@@ -124,20 +123,8 @@ interface ProductionRunFormProps {
   /** The saved run's lock: a product, stock entry or count fixes its output basis. */
   lock?: RecordLockView;
 }
-/**
- * A failed run's Output section is hidden, so its mass and moisture are neither
- * checked nor submitted. They stay in the form (switching back shows them) and
- * in the saved record (an update that omits them leaves them alone). The output
- * bin is submitted as null, which releases it.
- */
 const OUTPUT_FIELDS = ["biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"] as const;
-
-function withoutHiddenOutput<T extends { status?: unknown }>(values: T): T {
-  if (productionRunRecordsOutput(values.status as ProductionRunStatus)) return values;
-  const rest: Record<string, unknown> = { ...values, biocharStorageLocationId: null };
-  for (const field of OUTPUT_FIELDS) if (field !== "biocharStorageLocationId") delete rest[field];
-  return rest as T;
-}
+const FAILED_OUTPUT_BIN_HINT = "A failed run's output goes into an uncarbonized bin. It never goes into products.";
 
 export function ProductionRunForm({
   productionRun,
@@ -211,13 +198,14 @@ export function ProductionRunForm({
         unknown,
         ProductionRunFormData
       >
-    )(withoutHiddenOutput(values), context, options);
+    )(values, context, options);
   const {
     register,
     handleSubmit,
     control,
     trigger,
     setValue,
+    getValues,
     resetField,
     setError,
     clearErrors,
@@ -256,6 +244,8 @@ export function ProductionRunForm({
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedStatus = useWatch({ control, name: "status" });
   const terminal = isTerminalProductionRunStatus(watchedStatus);
+  // A failed run's output goes into an uncarbonized bin, any other run's into an untagged one.
+  const failedRun = watchedStatus === "failed";
 
   // The zone the entered start/end are interpreted in — the facility picked in
   // the form, which can differ from the context facility.
@@ -429,7 +419,14 @@ export function ProductionRunForm({
             options={statusOptions}
             disabled={isSubmitting || outputLocked}
             error={!!errors.status}
-            {...register("status")}
+            {...register("status", {
+              // The bin list flips with the status, so a bin picked for the other kind no longer fits.
+              onChange: (event) => {
+                if ((event.target.value === "failed") !== failedRun && getValues("biocharStorageLocationId")) {
+                  setValue("biocharStorageLocationId", "", SET_VALUE_OPTS);
+                }
+              },
+            })}
           />
         </FormField>
 
@@ -695,8 +692,8 @@ export function ProductionRunForm({
         </div>
       </FormSection>
 
-      {/* ── Output (a failed run has none) ── */}
-      {productionRunRecordsOutput(watchedStatus) && <FormSection
+      {/* ── Output (a failed run's goes into an uncarbonized bin) ── */}
+      <FormSection
         title="Output"
         icon={<PackageIcon size={14} weight="bold" />}
         fields={[...OUTPUT_FIELDS]}
@@ -705,7 +702,8 @@ export function ProductionRunForm({
         <FormField
           id="biocharStorageLocationId"
           label="Biochar storage bin"
-          required={watchedStatus === "complete"}
+          helperText={failedRun ? FAILED_OUTPUT_BIN_HINT : undefined}
+          required={terminal}
           error={errors.biocharStorageLocationId?.message}
         >
           <Controller
@@ -720,14 +718,14 @@ export function ProductionRunForm({
                 onChange={field.onChange}
                 disabled={isSubmitting || !watchedFacilityId || outputLocked}
                 error={!!errors.biocharStorageLocationId}
-                filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "biochar_bin" } : undefined}
+                filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "biochar_bin", uncarbonized: failedRun ? "true" : "false" } : undefined}
                 allowCreate={!!watchedFacilityId}
                 onCreateNew={() => biocharBinDialog.open()}
               />
             )}
           />
         </FormField>
-        <ProductionRunMixBinNotice binId={watchedDestBinId} facilityId={watchedFacilityId} startDate={watchedStartDate} endDate={watchedEndDate} endTime={watchedEndTime} timeZone={formTimezone} complete={watchedStatus === "complete" && (productionRun?.status !== "complete" || !!dirtyFields.endDate || !!dirtyFields.endTime || !!dirtyFields.biocharStorageLocationId)} />
+        <ProductionRunMixBinNotice binId={watchedDestBinId} facilityId={watchedFacilityId} startDate={watchedStartDate} endDate={watchedEndDate} endTime={watchedEndTime} timeZone={formTimezone} complete={terminal && (productionRun?.status !== watchedStatus || !!dirtyFields.endDate || !!dirtyFields.endTime || !!dirtyFields.biocharStorageLocationId)} />
 
         <MassMoistureFields
           materialLabel="Biochar"
@@ -735,22 +733,22 @@ export function ProductionRunForm({
           moisturePercent={watchedBiocharMoisture}
           wet={{
             id: "biocharOutputKg",
-            required: watchedStatus === "complete",
+            required: terminal,
             error: biocharOutputError,
             warning: massBalanceFeedback.wetWarning,
             disabled: isSubmitting || outputLocked,
             placeholder: "e.g. 150",
-            certifyRequired: isProductionRunCertifyField("biocharOutputKg"),
+            certifyRequired: !failedRun && isProductionRunCertifyField("biocharOutputKg"),
             certifyStatus: certStatus("biocharOutputKg"),
             registration: register("biocharOutputKg", { setValueAs: nullableNumericValue }),
           }}
           moisture={{
             id: "biocharMoisturePercent",
-            required: watchedStatus === "complete",
+            required: terminal,
             error: errors.biocharMoisturePercent?.message,
             disabled: isSubmitting || outputLocked,
             placeholder: "e.g. 1.5",
-            certifyRequired: isProductionRunCertifyField("biocharMoisturePercent"),
+            certifyRequired: !failedRun && isProductionRunCertifyField("biocharMoisturePercent"),
             certifyStatus: certStatus("biocharMoisturePercent"),
             registration: register("biocharMoisturePercent", { setValueAs: nullableNumericValue }),
           }}
@@ -770,9 +768,10 @@ export function ProductionRunForm({
             biocharMoisturePercent={typeof watchedBiocharMoisture === "number" ? watchedBiocharMoisture : null}
             biocharDryKg={previewBiocharDryMass}
             destinationBinName={selectedDestBin?.name ?? null}
+            hideYield={failedRun}
           />
         )}
-      </FormSection>}
+      </FormSection>
 
       {/* ── Energy ── */}
       <FormSection
@@ -891,6 +890,7 @@ export function ProductionRunForm({
             biocharBinDialog.close();
           }}
           defaultBinType="biochar_bin"
+          uncarbonized={failedRun}
           allowedTypes={BIOCHAR_BIN_QUICK_ADD_TYPES}
           facilityId={watchedFacilityId}
         />

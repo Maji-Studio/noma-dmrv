@@ -1,5 +1,5 @@
 /** Production run side-sheet view mode: the sections config for EntitySideSheet. */
-import { productionRunRecordsOutput } from "@/lib/production-runs/lifecycle";
+import { UncarbonizedBadge } from "@/components/ui/uncarbonized-badge";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { resolveFacilityTimezone } from "@/lib/date-utils";
 import { formatMassKg } from "@/lib/format-utils";
@@ -31,8 +31,9 @@ export function RunStatusBadge({ status }: { status: ProductionRunStatus }) {
 
 export function productionRunSheetSections(run: ProductionRunWithRelations, facilities: readonly { id: string; timezone: string }[]): DetailPanelSection[] {
   // Feedstock in and biochar out are drawn to one mass scale, as in the form.
-  const records = productionRunRecordsOutput(run.status);
-  const scaleKg = flowScaleKg(run.totalFeedstockWetMassKg, records ? run.biocharOutputKg : null);
+  const scaleKg = flowScaleKg(run.totalFeedstockWetMassKg, run.biocharOutputKg);
+  // A failed run's output never reaches certification, so its fields carry no CERT chip.
+  const failed = run.status === "failed";
   return [
     {
       title: "Run setup",
@@ -75,15 +76,17 @@ export function productionRunSheetSections(run: ProductionRunWithRelations, faci
         />
       ),
     },
-    ...(!records ? [] : [{
+    {
       title: "Output",
       fields: [
         {
           label: "Biochar storage",
-          value: run.biocharStorageLocationName,
+          value: run.biocharStorageLocationUncarbonized && run.biocharStorageLocationName
+            ? <span className="inline-flex flex-wrap items-center gap-6">{run.biocharStorageLocationName}<UncarbonizedBadge /></span>
+            : run.biocharStorageLocationName,
         },
-        { label: qualifyMassLabel(WET_MASS_FIELD_LABEL, "Biochar"), ...certificationDetailField("productionRun", "biocharOutputKg"), value: formatMassKg(run.biocharOutputKg) },
-        { label: qualifyMassLabel(MOISTURE_FIELD_LABEL, "Biochar"), ...certificationDetailField("productionRun", "biocharMoisturePercent"), value: formatMoisturePercent(run.biocharMoisturePercent) },
+        { label: qualifyMassLabel(WET_MASS_FIELD_LABEL, "Biochar"), certifyRequired: !failed && certificationDetailField("productionRun", "biocharOutputKg").certifyRequired, value: formatMassKg(run.biocharOutputKg) },
+        { label: qualifyMassLabel(MOISTURE_FIELD_LABEL, "Biochar"), certifyRequired: !failed && certificationDetailField("productionRun", "biocharMoisturePercent").certifyRequired, value: formatMoisturePercent(run.biocharMoisturePercent) },
       ],
       content: (
         <MoistureSplit
@@ -94,7 +97,7 @@ export function productionRunSheetSections(run: ProductionRunWithRelations, faci
           barWidthPercent={flowBarWidthPercent(run.biocharOutputKg, scaleKg)}
         />
       ),
-    }]),
+    },
     {
       title: "Energy",
       fields: [

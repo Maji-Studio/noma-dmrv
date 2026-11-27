@@ -166,17 +166,17 @@ describe("read sheets", () => {
     storageSummary: { feedstockBinCount: 0, biocharBinCount: 0, productBinCount: 0 },
     inventorySummary: { feedstockWetKg: 1200 },
   }), stock).find(section => section.title === "Inventory snapshot")!;
-  const settled = (biochar: FacilityOutputStockGroup | null, product: FacilityOutputStockGroup | null) => ({ data: { biochar, product }, isPending: false, isError: false });
+  const settled = (biochar: FacilityOutputStockGroup | null, product: FacilityOutputStockGroup | null) => ({ data: { biochar, product, uncarbonized: { wetKg: 0, dryBiocharKg: 0 } }, isPending: false, isError: false });
 
   const wetHint = (scope: string) => `Estimated wet mass at each batch's moisture. Sum of this facility's ${scope}, archived bins included.`;
   const dryHint = (scope: string) => `A bin here has no wet estimate, so this is the dry biochar sum of this facility's ${scope}, archived bins included.`;
   const emptyHint = undefined;
   it.each([
-    { name: "wet mass with a dry line", biochar: { wetKg: 800, dryBiocharKg: 640 }, product: { wetKg: 400, dryBiocharKg: 200 }, figures: ["800 kg wet mass", "400 kg wet mass"], dry: ["640 kg", "200 kg"], hints: [wetHint("biochar bins"), wetHint("product bins")] },
-    { name: "known dry biochar as the headline", biochar: { wetKg: null, dryBiocharKg: 640 }, product: { wetKg: null, dryBiocharKg: 200 }, figures: ["640 kg dry biochar", "200 kg dry biochar"], dry: [undefined, undefined], hints: [dryHint("biochar bins"), dryHint("product bins")] },
-    { name: "large masses, still in kg", biochar: { wetKg: 2500, dryBiocharKg: 2000 }, product: { wetKg: null, dryBiocharKg: 1200 }, figures: ["2,500 kg wet mass", "1,200 kg dry biochar"], dry: ["2,000 kg", undefined], hints: [wetHint("biochar bins"), dryHint("product bins")] },
+    { name: "wet mass with a dry line", biochar: { wetKg: 800, dryBiocharKg: 640 }, product: { wetKg: 400, dryBiocharKg: 200 }, figures: ["800 kg wet mass", "400 kg wet mass"], dry: ["640 kg", "200 kg"], hints: [wetHint("biochar bins without the Uncarbonized tag"), wetHint("product bins")] },
+    { name: "known dry biochar as the headline", biochar: { wetKg: null, dryBiocharKg: 640 }, product: { wetKg: null, dryBiocharKg: 200 }, figures: ["640 kg dry biochar", "200 kg dry biochar"], dry: [undefined, undefined], hints: [dryHint("biochar bins without the Uncarbonized tag"), dryHint("product bins")] },
+    { name: "large masses, still in kg", biochar: { wetKg: 2500, dryBiocharKg: 2000 }, product: { wetKg: null, dryBiocharKg: 1200 }, figures: ["2,500 kg wet mass", "1,200 kg dry biochar"], dry: ["2,000 kg", undefined], hints: [wetHint("biochar bins without the Uncarbonized tag"), dryHint("product bins")] },
     { name: "empty groups", biochar: { wetKg: 0, dryBiocharKg: 0 }, product: { wetKg: 0, dryBiocharKg: 0 }, figures: ["Empty", "Empty"], dry: [undefined, undefined], hints: [emptyHint, emptyHint] },
-    { name: "a wet estimate that rounds to zero", biochar: { wetKg: 800, dryBiocharKg: 640 }, product: { wetKg: 0.4, dryBiocharKg: 0.2 }, figures: ["800 kg wet mass", "Empty"], dry: ["640 kg", undefined], hints: [wetHint("biochar bins"), emptyHint] },
+    { name: "a wet estimate that rounds to zero", biochar: { wetKg: 800, dryBiocharKg: 640 }, product: { wetKg: 0.4, dryBiocharKg: 0.2 }, figures: ["800 kg wet mass", "Empty"], dry: ["640 kg", undefined], hints: [wetHint("biochar bins without the Uncarbonized tag"), emptyHint] },
   ])("shows the facility inventory with $name", ({ biochar, product, figures, dry, hints }) => {
     const snapshot = facilityWithStock(settled(biochar, product));
     expect(snapshot.fields.map(field => [field.label, field.value])).toEqual([

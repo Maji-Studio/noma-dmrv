@@ -474,6 +474,7 @@ export function BiocharProductForm({
                     ? { facilityId: selectedFacilityId }
                     : {}),
                   type: "biochar_bin",
+                  uncarbonized: "false",
                 }}
                 emptyHint={{
                   message:

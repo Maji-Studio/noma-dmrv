@@ -104,6 +104,7 @@ export type BaseStorageLocationRow = {
   code: string;
   name: string;
   type: StorageLocation["type"];
+  uncarbonized: boolean;
   capacityKg: number | null;
   storageMethod: string | null;
   storageDescription: string | null;

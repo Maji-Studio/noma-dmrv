@@ -22,6 +22,7 @@ import type { OutputDrawOrder, OutputStockMode } from "@/lib/output-stock/stock-
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { assertUncarbonizedBinType } from "@/lib/storage-location-material";
 import { guardStorageLocationName } from "./unique-name-guards";
 import { isPgUniqueViolation } from "@/db/errors";
 import { getStorageLocationById } from "./entities/storage-locations";
@@ -200,6 +201,7 @@ export interface CreateStorageLocationData {
   name: string;
   type: StorageLocationType;
   facilityId: string;
+  uncarbonized?: boolean;
   capacityKg?: number | null;
   feedstockTypeId?: string | null;
   formulationId?: string | null;
@@ -224,6 +226,7 @@ export async function createQuickStorageLocationInTransaction(
 ): Promise<EntityOption> {
   requireOrgScope(ctx);
 
+  assertUncarbonizedBinType(data.type, data.uncarbonized ?? false);
   await lockActiveFacilityReference(ctx, tx, data.facilityId);
   if (data.feedstockTypeId) {
     await assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId, tx);
@@ -240,6 +243,7 @@ export async function createQuickStorageLocationInTransaction(
         code: data.code,
         name: data.name,
         type: data.type,
+        uncarbonized: data.uncarbonized ?? false,
         facilityId: data.facilityId,
         capacityKg: data.capacityKg ?? null,
         feedstockTypeId: data.feedstockTypeId ?? null,

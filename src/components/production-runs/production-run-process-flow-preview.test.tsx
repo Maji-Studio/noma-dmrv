@@ -28,6 +28,12 @@ function text(node: ReactElement): string {
 }
 
 describe("ProcessFlowPreview", () => {
+  it("leaves the yield headline out for a failed run but still draws the flow", () => {
+    const rendered = text(<ProcessFlowPreview {...run} hideYield />);
+    expect(rendered).not.toContain("yield");
+    expect(rendered).toContain("Reactor 1");
+  });
+
   it("draws the run as a mass flow: source bin, reactor, destination bin, then what left the process", () => {
     const rendered = text(<ProcessFlowPreview {...run} />);
 

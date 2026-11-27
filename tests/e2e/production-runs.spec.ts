@@ -33,10 +33,13 @@ import { eq, inArray } from "drizzle-orm";
 import { validateAndSaveMeasurement, validateAndSaveIncident } from "./helpers/production-child-forms";
 import { chooseRunStatus } from "./helpers/run-status";
 import { formatFacilityWallClock } from "@/lib/date-utils";
-import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
-
-const FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR =
-  'input[name="feedstockDraws.0.wetMassKg"]';
+import {
+  FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR,
+  openRunForm,
+  submitCreate,
+  editFirstRow,
+  saveEdit,
+} from "./helpers/production-run-form";
 
 test.describe("Production Run + Sample UI CRUD", () => {
   async function createProductionRun(page: Page, seededData: SeededChainData) {
@@ -380,83 +383,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
   });
 });
 
-// Shared helpers for the production-run lifecycle and time-window specs below.
 const overlapText = /overlaps run|is unfinished/i;
-
-async function openRunForm(
-  page: Page,
-  seededData: SeededChainData,
-  window: {
-    startDate: string;
-    startTime: string;
-    endDate?: string;
-    endTime?: string;
-    status?: ProductionRunStatus;
-    recordOutput?: boolean;
-  },
-) {
-  await page.goto(`/production-runs?facility=${seededData.facility.id}`);
-  await expect(
-    page.locator("aside").getByText(seededData.facility.name, { exact: false }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "New production run" }).click();
-  await waitForSideSheet(page);
-  await chooseRunStatus(page, window.status ?? "running");
-  await selectEntity(
-    page,
-    "Reactor",
-    seededData.reactor.id,
-    seededData.reactor.identifier,
-  );
-  await page.fill('input[name="startDate"]', window.startDate);
-  await page.fill('input[name="startTime"]', window.startTime);
-  if (window.endDate) await page.fill('input[name="endDate"]', window.endDate);
-  if (window.endTime) await page.fill('input[name="endTime"]', window.endTime);
-  if (window.recordOutput) {
-    await selectEntity(page, "Source Bin", seededData.feedstockStorageLocation.id, seededData.feedstockStorageLocation.name);
-    await page.fill(FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR, "50");
-    await page.fill('input[name="feedstockMoisturePercent"]', "15");
-    await selectEntity(page, "Biochar Storage", seededData.biocharStorageLocation.id, seededData.biocharStorageLocation.name);
-    await page.fill('input[name="biocharOutputKg"]', "10");
-    await page.fill('input[name="biocharMoisturePercent"]', "0");
-  }
-}
-
-async function submitCreate(page: Page) {
-  await page
-    .locator('[role="dialog"]')
-    .locator('button:has-text("Create production run")')
-    .click();
-}
-
-async function editFirstRow(page: Page) {
-  // Edit via the row overflow menu (openEdit — it does NOT set the deep-link
-  // focus that would re-open a view sheet after save, so the sheet closes
-  // cleanly). A post-save list refetch can re-render the row and detach the
-  // menu's "Edit" item mid-click, so retry the open→Edit sequence instead of
-  // waiting for network idle (CI dev servers may never settle within budget).
-  // Edit is offered only once the row's lock read answers (#1119); the retry
-  // below covers that wait, since an Open row shows no chip to wait for.
-  await expect(async () => {
-    await page
-      .locator("tbody tr")
-      .first()
-      .getByRole("button", { name: /Actions for/ })
-      .click({ timeout: 5000 });
-    await page.getByRole("menuitem", { name: "Edit" }).click({ timeout: 5000 });
-  }).toPass({ timeout: 30000 });
-  await waitForSideSheet(page);
-  await expect(
-    page.locator('[role="dialog"] input[name="startTime"]'),
-  ).toBeVisible();
-}
-
-async function saveEdit(page: Page) {
-  await page
-    .locator('[role="dialog"]')
-    .locator('button:has-text("Save changes")')
-    .click();
-}
 
 test.describe("Production Run lifecycle (#254)", () => {
   test("shows immediate concise wet and dry mass-balance feedback", async ({
@@ -685,57 +612,6 @@ test.describe("Production Run lifecycle (#254)", () => {
     await expect(
       dialog.getByText("Enter feedstock moisture."),
     ).toBeHidden();
-  });
-
-  test("renders a failed run with the canonical error treatment", async ({
-    adminPage: page,
-    seededData,
-  }) => {
-    await openRunForm(page, seededData, {
-      startDate: "2025-02-05",
-      startTime: "08:00",
-      status: "running",
-    });
-    await submitCreate(page);
-    await waitForSideSheetClose(page);
-
-    await page
-      .getByLabel("Filter production runs by status")
-      .selectOption("running");
-    await expect(page.locator('tbody [data-status="running"]').first()).toBeVisible();
-    await editFirstRow(page);
-
-    const dialog = page.locator('[role="dialog"]');
-    await dialog.locator('input[name="endDate"]').fill("2025-02-05");
-    await dialog.locator('input[name="endTime"]').fill("12:00");
-    // A Running run cannot keep an end time; the field says so until the status changes.
-    await dialog.locator('input[name="endTime"]').blur();
-    await expect(
-      dialog.getByText("Choose Complete or clear the end time for a Running run."),
-    ).toBeVisible();
-    // A failed run needs a source bin, moisture %, and wet mass to compute
-    // consumed feedstock (same guard as a complete run) — the lifecycle
-    // schema rejects the status change without them.
-    await selectEntity(
-      page,
-      "Source Bin",
-      seededData.feedstockStorageLocation.id,
-      seededData.feedstockStorageLocation.name,
-    );
-    await dialog.locator(FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR).fill("50");
-    await dialog.locator('input[name="feedstockMoisturePercent"]').fill("15");
-    await chooseRunStatus(dialog, "failed");
-    await saveEdit(page);
-    await waitForSideSheetClose(page);
-
-    await page
-      .getByLabel("Filter production runs by status")
-      .selectOption("failed");
-    const failedBadge = page.locator('tbody [data-status="failed"]').first();
-    await expect(failedBadge).toBeVisible();
-    await expect(failedBadge).toHaveText("Failed");
-    await expect(failedBadge).toHaveAttribute("data-status-state", "error");
-    await expect(failedBadge).toHaveClass(/--st-bad-bg/);
   });
 });
 

@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { feedstocks, productionRunFeedstockDraws, productionRunFeedstocks, productionRuns } from "@/db/schema";
+import { feedstocks, productionRunFeedstockDraws, productionRunFeedstocks, productionRuns, storageLocations } from "@/db/schema";
 import { withLineageFixture, type LineageFixture } from "./certification-lineage-fixture";
 import { TEST_ORG_ID } from "./test-org";
 
@@ -22,10 +22,14 @@ export async function withFailedRunLineage(
       .where(eq(productionRuns.id, fixture.productionRunId));
     await db.update(feedstocks).set({ massWetKg: INTAKE_WET_KG, massDryKg: INTAKE_DRY_KG })
       .where(eq(feedstocks.id, fixture.feedstockId));
+    // A failed run's output goes into an uncarbonized biochar bin (#439).
+    const [outputBin] = await db.insert(storageLocations).values({ organizationId: TEST_ORG_ID, facilityId: fixture.facilityId,
+      code: `E2E-FAILED-BIN-${crypto.randomUUID()}`, name: `Failed run output ${crypto.randomUUID()}`, type: "biochar_bin", uncarbonized: true }).returning();
     const [run] = await db.insert(productionRuns).values({
       organizationId: TEST_ORG_ID, facilityId: fixture.facilityId, reactorId: fixture.reactorId,
       code: `E2E-FAILED-${crypto.randomUUID()}`, status: "failed", startTime: FAILED_START, endTime: FAILED_END,
       feedstockWetMassKg: DRAW_WET_KG, feedstockMassDryKg: DRAW_DRY_KG, feedstockMoisturePercent: 10,
+      biocharOutputKg: 10, biocharMoisturePercent: 10, biocharDryMassKg: 9, biocharStorageLocationId: outputBin.id, outputPostedAt: FAILED_END,
       dieselOperationLiters: 2, electricityKwh: 3,
     }).returning();
     await db.insert(productionRunFeedstockDraws).values({ organizationId: TEST_ORG_ID,
@@ -37,6 +41,7 @@ export async function withFailedRunLineage(
       await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, run.id));
       await db.delete(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, run.id));
       await db.delete(productionRuns).where(eq(productionRuns.id, run.id));
+      await db.delete(storageLocations).where(eq(storageLocations.id, outputBin.id));
     }
   }, holder);
 }

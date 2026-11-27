@@ -1,6 +1,7 @@
 import { ArrowSquareOutIcon, EyeIcon, PencilSimpleIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { Combobox } from "@base-ui/react/combobox";
 import { cn } from "@/lib/utils";
+import { UncarbonizedBadge } from "@/components/ui/uncarbonized-badge";
 import type { EntityOption, EntitySelectProps } from "./types";
 
 export type SelectRow =
@@ -10,8 +11,9 @@ export type SelectRow =
 export function EntityOptionText({ option }: { option: EntityOption }) {
   return (
     <>
-      <span className="block truncate text-[var(--text-s)] text-[var(--color-text-primary)]">
-        {option.name}
+      <span className="flex items-center gap-6 text-[var(--text-s)] text-[var(--color-text-primary)]">
+        <span className="min-w-0 truncate">{option.name}</span>
+        {option.uncarbonized && <UncarbonizedBadge className="shrink-0" />}
       </span>
       {option.subtitle && (
         <span className="block body-small text-[var(--color-text-secondary)] mt-2">

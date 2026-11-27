@@ -139,7 +139,8 @@ function buildModel(inputs: EnergyInputs): Model {
   const batchIds = new Set(inputs.creditBatches.map((batch) => batch.id));
 
   const runs = new Map<string, RunCalc>();
-  for (const run of inputs.runs) {
+  for (const input of inputs.runs) {
+    const run = input.status === "failed" ? { ...input, biocharDryMassKg: null } : input;
     runs.set(run.id, {
       run,
       creditBatchId:
@@ -164,7 +165,7 @@ function buildModel(inputs: EnergyInputs): Model {
   }
 
   const sharesByDelivery = groupBy(
-    inputs.deliveryRunShares.filter((share) => share.dryMassKg > 0),
+    inputs.deliveryRunShares.filter((share) => share.dryMassKg > 0 && runs.get(share.runId)?.run.status !== "failed"),
     (share) => share.ownerId,
   );
   const deliveries = new Map<string, DeliveryCalc>();
@@ -263,7 +264,7 @@ function addCarriedProduction(
 ): void {
   for (const share of shares) {
     const calc = model.runs.get(share.runId);
-    if (!calc) continue;
+    if (!calc || calc.run.status === "failed") continue;
     const output = calc.run.biocharDryMassKg;
     addRun(tally, model, calc, output != null && output > 0 ? Math.min(share.dryMassKg / output, 1) : null);
   }
@@ -348,7 +349,7 @@ function deliveryRecords(model: Model): EnergyRecord[] {
 
 function applicationRecords(model: Model, inputs: EnergyInputs): EnergyRecord[] {
   const sharesByApplication = groupBy(
-    inputs.applicationRunShares.filter((share) => share.dryMassKg > 0),
+    inputs.applicationRunShares.filter((share) => share.dryMassKg > 0 && model.runs.get(share.runId)?.run.status !== "failed"),
     (share) => share.ownerId,
   );
   return inputs.applications.map((application) => {

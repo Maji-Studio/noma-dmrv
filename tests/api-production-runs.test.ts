@@ -36,6 +36,10 @@ async function create(body: unknown = productionRunInput(a), fixture = a, key = 
 }
 const patch = (id: string, body: unknown, tag: string, path = "", fixture = a) =>
   PATCH(request("PATCH", `/${id}${path}`, body, { "if-match": tag }, fixture), params(id));
+async function failedOutput() {
+  await db.update(storageLocations).set({ uncarbonized: true }).where(and(eq(storageLocations.organizationId, a.ctx.organizationId), eq(storageLocations.id, a.outputBinId)));
+  return { biocharOutputKg: 200, biocharMoisturePercent: 2, biocharStorageLocationId: a.outputBinId };
+}
 const rows = () => db.select().from(productionRuns).where(eq(productionRuns.organizationId, a.ctx.organizationId));
 
 describe("production run REST outcomes", { timeout: TIMEOUT_MS }, () => {
@@ -91,7 +95,7 @@ describe("production run REST outcomes", { timeout: TIMEOUT_MS }, () => {
 
   it("fails through status PATCH while retaining consumed stock", async () => {
     const saved = await create();
-    const response = await patch(saved.row.id, { status: "failed", endTime: "2026-10-06T11:00:00Z" }, saved.etag);
+    const response = await patch(saved.row.id, { status: "failed", endTime: "2026-10-06T11:00:00Z", ...await failedOutput() }, saved.etag);
     expect(response.status).toBe(200);
     expect((await response.json()).data.status).toBe("failed");
     expect(await rows()).toMatchObject([{ status: "failed" }]);
@@ -286,10 +290,10 @@ describe("production run review regressions", { timeout: TIMEOUT_MS }, () => {
     expect(await rows()).toHaveLength(0);
   });
 
-  it("creates a failed run with an end time, draws and moisture and posts no output", async () => {
-    const saved = await create({ ...productionRunInput(a), status: "failed", endTime: "2026-10-06T11:00:00Z" });
+  it("creates a failed run with an end time, draws, moisture and posted output", async () => {
+    const saved = await create({ ...productionRunInput(a), status: "failed", endTime: "2026-10-06T11:00:00Z", ...await failedOutput() });
     expect(saved.row).toMatchObject({ status: "failed" });
-    expect(await rows()).toMatchObject([{ status: "failed", outputPostedAt: null }]);
+    expect(await rows()).toMatchObject([{ status: "failed", outputPostedAt: expect.any(Date) }]);
   });
 
   it.each([{ biocharOutputKg: 300 }, { feedingRateKgHr: 100 }])("refuses edits to terminal runs without feedstock: %j", async (body) => {
@@ -321,6 +325,7 @@ describe("production run review regressions", { timeout: TIMEOUT_MS }, () => {
 
   it.each(["complete", "failed"])("requires moisture and draws when PATCH makes a run %s", async (status) => {
     const saved = await create({ ...productionRunInput(a), feedstockMoisturePercent: null });
+    if (status === "failed") await failedOutput();
     const terminal = { status, endTime: "2026-10-06T11:00:00Z", biocharOutputKg: 200, biocharMoisturePercent: 2, biocharStorageLocationId: a.outputBinId };
     const refusal = await problem(await patch(saved.row.id, terminal, saved.etag), 422, "validation_failed");
     expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/feedstockMoisturePercent", detail: "Enter feedstock moisture." }));

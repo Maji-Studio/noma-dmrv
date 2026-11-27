@@ -6,7 +6,7 @@ export const STOCK_EFFECTS_RULE = "Use dryRun to inspect stockEffects: each chan
 
 export const PRODUCTION_RUN_UNITS = "Masses are kilograms. Convert tonnes to kilograms exactly once. Draws are wet mass withdrawn from a feedstock bin. Never invent a draw mass the user did not give: ask, or start the run without draws and say the mass is still needed.";
 export const PRODUCTION_RUN_TIMES = "Send times as facility-local { date, time } from whoami or RFC 3339 with an explicit offset. For 'now', use the facility's { date: today, time: localTime }, never the device or model clock.";
-export const PRODUCTION_RUN_STATUS = "Use update_production_run for status changes. Complete requires positive biochar output, an output bin and biochar moisture. Failed uses failed; cancelled needs cancellationReason.";
+export const PRODUCTION_RUN_STATUS = "Use update_production_run for status changes. Complete and Failed need wet output above 0, biochar moisture and a bin (Failed: Uncarbonized). Cancelled needs cancellationReason.";
 export const PRODUCTION_RUN_REFERENCES = "Run records carry IDs. Resolve codes with lookups and facility zones with whoami or find_facilities.";
 export const PRODUCTION_RUN_GUIDANCE = `${PRODUCTION_RUN_UNITS} ${PRODUCTION_RUN_TIMES} ${PRODUCTION_RUN_STATUS} ${PRODUCTION_RUN_REFERENCES}`;
 
@@ -17,7 +17,8 @@ export const OUTPUT_STOCK_COUNT = "A count is the whole bin weighed: its wet mas
 export const OUTPUT_BIN_STOCK_SOURCES = "A split-bin loss names returned layerIds in sources; a mix-bin loss takes no sources.";
 export const OUTPUT_BIN_STOCK_ETAG = "The stock ETag says whether published stock changed between two reads; it is not a reservation. A loss's optimistic check stays the dry run's basisFingerprint.";
 export const OUTPUT_STOCK_NO_CORRECTIONS = "Corrections are not available through the API.";
-export const BIOCHAR_PRODUCT_GUIDANCE = `${BIOCHAR_PRODUCT_MASS} ${OUTPUT_STOCK_TIMES} ${OUTPUT_STOCK_BASIS}`;
+export const BIOCHAR_PRODUCT_SOURCE = "Bins tagged Uncarbonized (Failed-run output) cannot supply products.";
+export const BIOCHAR_PRODUCT_GUIDANCE = `${BIOCHAR_PRODUCT_SOURCE} ${BIOCHAR_PRODUCT_MASS} ${OUTPUT_STOCK_TIMES} ${OUTPUT_STOCK_BASIS}`;
 export const OUTPUT_STOCK_GUIDANCE = `${OUTPUT_STOCK_TIMES} ${OUTPUT_STOCK_COUNT} ${OUTPUT_STOCK_BASIS} ${OUTPUT_STOCK_NO_CORRECTIONS}`;
 
 export const LAB_SAMPLE_TIMES = "samplingTime takes an RFC 3339 instant with an explicit offset, or a facility-local { date, time } read in the credit batch's facility zone. Call whoami for that facility's timeZone, today and localTime, never the device or model clock. A time in the future is refused.";
