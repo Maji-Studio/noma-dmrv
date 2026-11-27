@@ -30,15 +30,17 @@ date runs by the day they started on the facility's calendar.
 **Production run status**:
 New runs default to *Running*. Operators may create an already-finished run
 as *Complete* with its end time, feedstock and biochar output recorded, or as
-*Failed* with its end time, feedstock and feedstock moisture recorded (no
-biochar output). Missing fields prevent saving. *Cancelled* is an action on a
-saved run; it is not available on create.
-*Complete* — the batch finished and its core quantities (feedstock
-consumed, biochar output) are recorded. *Failed* — the run physically
+*Failed* with its end time, feedstock, feedstock moisture and output recorded.
+Both outcomes require wet output above zero, output moisture and a biochar bin.
+Complete uses an untagged bin; Failed uses an Uncarbonized bin. Missing fields
+prevent saving. *Cancelled* is an action on a saved run; it is not available on create.
+*Complete*: the batch finished and its core quantities (feedstock
+consumed, biochar output) are recorded. *Failed*: the run physically
 happened and consumed feedstock but did not produce usable biochar;
-its material stays in the mass balance (conversion loss, dump-back)
-but never joins a credit batch. *Cancelled* — the record was created
-in error; the event never happened and counts nowhere. Failed marks a
+its output posts as stock in an **Uncarbonized bin**, where lost mass and
+counts apply. This material never counts as biochar and never reaches products,
+credit batches, removals, certification or Sankey. Its energy remains recorded.
+*Cancelled*: the record was created in error; the event never happened and counts nowhere. Failed marks a
 real event with a bad outcome; cancelled marks a record that should
 not exist.
 _Avoid_: void (old name for cancelled), aborted.

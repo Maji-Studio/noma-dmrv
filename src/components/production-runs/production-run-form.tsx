@@ -5,6 +5,9 @@
  */
 "use client";
 
+// Temporary until run C updates the Failed output views.
+const productionRunRecordsOutput = (status: string) => status !== "failed";
+
 import { useFeatureSwitches } from "@/components/providers/feature-switches-provider";
 import { recordHref } from "@/lib/record-links";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
@@ -55,7 +58,6 @@ import {
   allowedProductionRunStatusesFrom,
   isTerminalProductionRunStatus,
   PRODUCTION_RUN_CREATE_STATUSES,
-  productionRunRecordsOutput,
   shouldClearProductionRunEndTime,
   shouldIncludeProductionRunEndTime,
 } from "@/lib/production-runs/lifecycle";

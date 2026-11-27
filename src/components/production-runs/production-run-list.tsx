@@ -4,6 +4,9 @@
  */
 "use client";
 
+// Temporary until run C updates the Failed output views.
+const productionRunRecordsOutput = (status: string) => status !== "failed";
+
 import { RECORD_LINKS, recordHref } from "@/lib/record-links";
 import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 import { useState, useEffect, useRef } from "react";
@@ -72,7 +75,6 @@ import {
 } from "@/schemas/production-runs";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { productionRunRecordsOutput } from "@/lib/production-runs/lifecycle";
 import { formatMoisturePercent, MASS_MOISTURE_LABELS, qualifyMassLabel } from "@/lib/mass-moisture";
 import { ILLUSTRATION_SIZE, ReactorArt } from "@/components/ui/illustrations";
 

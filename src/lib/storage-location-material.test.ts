@@ -1,3 +1,4 @@
+import { productionRunAddsStock, assertProductionRunOutputBin } from "./storage-location-material";
 import { describe, expect, it } from "vitest";
 import { DomainError } from "@/lib/domain-errors";
 import {
@@ -27,4 +28,19 @@ describe("uncarbonized material guards", () => {
     expectFieldError(() => assertCarbonizedProductSource(true), "sourceBiocharStorageLocationId", UNCARBONIZED_PRODUCT_SOURCE_MESSAGE);
     expect(() => assertCarbonizedProductSource(false)).not.toThrow();
   });
+});
+
+it.each([
+  ["complete", false, true], ["complete", true, false],
+  ["failed", true, true], ["failed", false, false],
+  ["running", false, false], ["running", true, false],
+  ["cancelled", false, false], ["cancelled", true, false],
+] as const)("stock pairing %s / uncarbonized=%s is %s", (status, tag, expected) => {
+  expect(productionRunAddsStock(status, tag)).toBe(expected);
+  if (status === "complete" || status === "failed") {
+    if (expected) expect(() => assertProductionRunOutputBin(status, tag)).not.toThrow();
+    else expect(() => assertProductionRunOutputBin(status, tag)).toThrow(expect.objectContaining({
+      code: "validation_failed", issues: [expect.objectContaining({ path: ["biocharStorageLocationId"] })],
+    }));
+  }
 });

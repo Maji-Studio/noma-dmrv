@@ -26,8 +26,8 @@ import {
   PRODUCTION_RUN_CREATE_STATUSES,
   PRODUCTION_RUN_CREATE_STATUS_MESSAGE,
   DRY_MASS_BALANCE_MESSAGE,
-  COMPLETE_OUTPUT_BIN_MESSAGE,
-  COMPLETE_OUTPUT_MOISTURE_MESSAGE,
+  outputBinMessage,
+  outputMoistureMessage,
   RUNNING_END_FORBIDDEN_MESSAGE,
   getProductionRunOutcomeViolations,
   PRODUCTION_RUN_STATUSES,
@@ -317,16 +317,16 @@ export function makeProductionRunFormSchema(
           });
           break;
         case "complete-output-bin-required":
-          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["biocharStorageLocationId"], message: COMPLETE_OUTPUT_BIN_MESSAGE });
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["biocharStorageLocationId"], message: outputBinMessage(data.status) });
           break;
         case "complete-output-moisture-required":
-          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["biocharMoisturePercent"], message: COMPLETE_OUTPUT_MOISTURE_MESSAGE });
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["biocharMoisturePercent"], message: outputMoistureMessage(data.status) });
           break;
         case "complete-output-required":
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ["biocharOutputKg"],
-            message: "A complete run needs positive biochar output.",
+            message: `A ${data.status} run needs positive biochar output.`,
           });
           break;
         case "feedstock-required":

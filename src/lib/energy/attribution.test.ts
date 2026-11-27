@@ -7,6 +7,7 @@ const ALL_TIME = { from: null, to: "2026-09-30" };
 function run(overrides: Partial<EnergyRunInput> & { id: string }): EnergyRunInput {
   return {
     code: overrides.id.toUpperCase(),
+    status: "complete",
     day: "2026-09-10",
     reactorName: "Reactor 1",
     creditBatchId: null,
@@ -452,4 +453,18 @@ describe("buildEnergyBreakdown", () => {
     );
     expect(breakdown.from).toBe("2025-03-02");
   });
+});
+
+it("keeps Failed energy while excluding its output from biochar and carried-production denominators", () => {
+  const breakdown = buildEnergyBreakdown(inputs({
+    runs: [run({ id: "failed", status: "failed", biocharDryMassKg: 900 }), run({ id: "complete" })],
+    deliveries: [{ id: "delivery", code: "DL-FAILED", day: "2026-09-20", customerName: null,
+      effectiveDistanceKm: 0, deliveredWetMassKg: 100, massDryKg: 90 }],
+    deliveryRunShares: [{ ownerId: "delivery", runId: "failed", dryMassKg: 90 }],
+  }), ALL_TIME);
+  expect(record(breakdown.records, "failed")).toMatchObject({ dryMassKg: null, footprint: { activity: { grid: 100, startup: 10 } } });
+  expect(record(breakdown.records, "complete").dryMassKg).toBe(900);
+  expect(record(breakdown.records, "delivery").footprint.activity.grid).toBe(0);
+  expect(record(breakdown.records, "delivery").runCount).toBe(0);
+  expect(sumFlows(breakdown, "grid")).toBe(200);
 });

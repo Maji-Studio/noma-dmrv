@@ -1,3 +1,4 @@
+import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } from "./helpers/test-org";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -29,6 +30,7 @@ describe("createProductionRun — feedstock type usage gate", () => {
   let pyrolysisBinId: string;
   let blendBinId: string;
   const createdRunIds: string[] = [];
+  const outputBinIds: string[] = [];
   const createdFeedstockIds: string[] = [];
 
   beforeAll(() => ensureTestOrg());
@@ -161,6 +163,7 @@ beforeAll(async () => {
       );
       await cleanupFeedstockFixtureParents(db);
     }
+    if (outputBinIds.length) await cleanup(() => db.delete(storageLocations).where(inArray(storageLocations.id, outputBinIds)));
     if (pyrolysisBinId || blendBinId) {
       await cleanup(() =>
         db
@@ -210,8 +213,11 @@ beforeAll(async () => {
     );
     createdRunIds.push(run.id);
     expect(run.status).toBe("running");
+    const failedBinId = await createProductionRunOutputBin(TEST_ORG_ID, facilityId, true);
+    outputBinIds.push(failedBinId);
     await updateProductionRun(makeTestOrgContext(TEST_USER_ID), run.id, {
       expectedVersion: run.version, status: "failed", endTime: new Date("2026-01-15T10:00:00Z"),
+      biocharOutputKg: 10, biocharMoisturePercent: 0, biocharStorageLocationId: failedBinId,
     });
 
     expect(run.feedstockDraws).toEqual([

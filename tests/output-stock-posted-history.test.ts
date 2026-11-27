@@ -15,7 +15,7 @@ const time = '2026-09-14T12:00:00.000Z';
 it('keeps replay stable after an unrelated run edit', async () => {
   const outputPostedAt = new Date('2026-09-13');
   const rows = new Map<unknown, unknown[]>([
-    [storageLocations, [{ id: 'bin', type: 'biochar_bin', facilityId: 'facility' }]],
+    [storageLocations, [{ id: 'bin', type: 'biochar_bin', uncarbonized: false, facilityId: 'facility' }]],
   ]);
   mocks.select.mockImplementation(() => {
     let table: unknown;

@@ -24,7 +24,7 @@ function historyRows(policy: string, placedAt: string[], sequences: string[], sa
     basisSnapshot: { policy, placedAt: placedAt[index], postingSequence: sequences[index], readingPercent: '25' },
   } }));
   const rows = new Map<unknown, unknown[]>([
-    [storageLocations, [{ id: 'bin', type: 'biochar_bin', facilityId: 'facility' }]],
+    [storageLocations, [{ id: 'bin', type: 'biochar_bin', facilityId: 'facility', uncarbonized: false }]],
     [binMovements, [{ movement, actorName: null }]], [outputStockAllocations, allocations],
   ]);
   mocks.select.mockImplementation(() => {
@@ -104,4 +104,14 @@ it('can omit wet recomputation for sub-bin history readers', async () => {
   const history = await getOutputStockHistory(ctx, 'bin', undefined, { recomputeWet: false });
   expect(bases).not.toHaveBeenCalled();
   expect(history.find(entry => entry.id === 'movement')).not.toHaveProperty('currentAfterWetKg');
+});
+
+it.each([true, false])('includes Failed receipts only in Uncarbonized bins: %s', async uncarbonized => {
+  const rows = historyRows('fifo', ['2026-09-12', '2026-09-13'], ['1', '2']);
+  rows.set(storageLocations, [{ id: 'bin', type: 'biochar_bin', facilityId: 'facility', uncarbonized }]);
+  rows.set(productionRuns, [{ id: LAYER_A, code: 'FAILED', status: 'failed', biocharStorageLocationId: 'bin',
+    endTime: new Date(time), outputPostedAt: new Date(time), biocharOutputKg: 50, biocharDryMassKg: 40, biocharMoisturePercent: 20 }]);
+  vi.spyOn(stock, 'readOutputBinAllLayers').mockResolvedValue({ layers: [], allLayersDryKg: '0.000', availableDryKg: '0.000', expectedSolidsKg: decimal('0') });
+  const history = await getOutputStockHistory(ctx, 'bin', undefined, { recomputeWet: false });
+  expect(history.some(entry => entry.id === LAYER_A && entry.kind === 'intake')).toBe(uncarbonized);
 });

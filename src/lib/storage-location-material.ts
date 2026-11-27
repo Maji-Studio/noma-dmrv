@@ -20,3 +20,23 @@ export function assertCarbonizedProductSource(uncarbonized: boolean): void {
     issues: [{ path: ["sourceBiocharStorageLocationId"], code: "validation_failed", message: UNCARBONIZED_PRODUCT_SOURCE_MESSAGE }],
   });
 }
+
+/** The sole status/bin pairing used by stock reads and terminal-run validation. */
+export const PRODUCTION_RUN_STOCK_PAIRS = [
+  { status: "complete", uncarbonized: false },
+  { status: "failed", uncarbonized: true },
+] as const;
+
+export function productionRunAddsStock(status: string, uncarbonized: boolean): boolean {
+  return PRODUCTION_RUN_STOCK_PAIRS.some(pair => pair.status === status && pair.uncarbonized === uncarbonized);
+}
+
+export function assertProductionRunOutputBin(status: string, uncarbonized: boolean): void {
+  if (!PRODUCTION_RUN_STOCK_PAIRS.some(pair => pair.status === status) || productionRunAddsStock(status, uncarbonized)) return;
+  const message = status === "failed"
+    ? "Choose an uncarbonized biochar bin for a failed run."
+    : "Choose a biochar bin that is not uncarbonized for a complete run.";
+  throw new DomainError("validation_failed", message, {
+    issues: [{ path: ["biocharStorageLocationId"], code: "validation_failed", message }],
+  });
+}

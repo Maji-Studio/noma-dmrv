@@ -83,7 +83,7 @@ function unresolvedRunMessage(run: CompletedRunRow): string {
 }
 
 /**
- * A biochar bin's layers: one per completed run. A product draw with ledger
+ * A biochar bin's layers: one per eligible terminal run. A product draw with ledger
  * allocations is counted from the ledger; its source snapshot then names the
  * same draw, so it is skipped. `excludeUnresolvedRunId` drops the one
  * unresolved run a repair is replacing, and only while nothing drew from it.

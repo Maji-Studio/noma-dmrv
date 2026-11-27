@@ -1,3 +1,4 @@
+import { assertProductionRunOutputBin } from "@/lib/storage-location-material";
 import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze } from "../feedstock-transport-ownership-freeze";
 import { reallocateRunsForBins } from "../feedstock-run-allocations";
 import { readRecordDependents } from "../record-lock-dependents";
@@ -31,7 +32,7 @@ import {
   assertProductionRunOutcome,
   assertProductionRunTransition,
   assertProductionRunCreateStatus,
-  productionRunRecordsOutput,
+  isTerminalProductionRunStatus,
   statusOccupiesReactor,
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
@@ -104,11 +105,11 @@ async function validateBiocharStorageLocation(
   tx: DbTransaction,
   locationId: string,
   facilityId: string,
-  label: string,
+  status: ProductionRunStatus,
 ) {
   requireOrgScope(ctx);
   const [loc] = await tx
-    .select({ id: storageLocations.id, facilityId: storageLocations.facilityId, type: storageLocations.type })
+    .select({ id: storageLocations.id, facilityId: storageLocations.facilityId, type: storageLocations.type, uncarbonized: storageLocations.uncarbonized })
     .from(storageLocations)
     .where(
       and(
@@ -118,9 +119,10 @@ async function validateBiocharStorageLocation(
       ),
     );
 
-  if (!loc) throw runReferenceNotFound(`${label} storage bin not found`, ["biocharStorageLocationId"]);
-  if (loc.facilityId !== facilityId) throw new SafeError(`${label} bin does not belong to the selected facility`);
+  if (!loc) throw runReferenceNotFound("Biochar storage bin not found", ["biocharStorageLocationId"]);
+  if (loc.facilityId !== facilityId) throw new SafeError("Biochar bin does not belong to the selected facility");
   if (loc.type !== "biochar_bin") throw new SafeError("Selected storage bin is not a biochar bin");
+  assertProductionRunOutputBin(status, loc.uncarbonized);
 }
 
 /** Recheck the reactor after the facility lock, serializing against facility moves. */
@@ -200,8 +202,6 @@ export async function createProductionRunInTransaction(
   }
 
   const status = data.status ?? "running";
-  // A failed run records no output, so it holds no output bin.
-  if (!productionRunRecordsOutput(status)) data = { ...data, biocharStorageLocationId: null };
   const feedstockDraws = normalizeProductionRunFeedstockDraws(
     data.feedstockDraws ?? [],
   );
@@ -258,7 +258,7 @@ export async function createProductionRunInTransaction(
 
     // Validate long-tail storage references before writing the run.
     if (data.biocharStorageLocationId) {
-      await validateBiocharStorageLocation(ctx, tx, data.biocharStorageLocationId, data.facilityId, "Biochar");
+      await validateBiocharStorageLocation(ctx, tx, data.biocharStorageLocationId, data.facilityId, status);
       await assertRunAdditionAfterSplit(ctx, tx, { status, biocharStorageLocationId: data.biocharStorageLocationId, facilityId: data.facilityId, endTime: data.endTime ?? null });
     }
 
@@ -271,7 +271,7 @@ export async function createProductionRunInTransaction(
         code: data.code,
         facilityId: data.facilityId,
         status,
-        outputPostedAt: status === "complete" ? new Date() : null,
+        outputPostedAt: isTerminalProductionRunStatus(status) ? new Date() : null,
         cancellationReason: data.cancellationReason?.trim() || null,
         startTime: data.startTime,
         endTime: data.endTime,
@@ -396,8 +396,6 @@ export async function updateProductionRunInTransaction(
   if (!existing) {
     throw runReferenceNotFound("Production run not found");
   }
-  // Saving a failed run releases its output bin; mass and moisture stay as stored.
-  if (!productionRunRecordsOutput(data.status ?? existing.status)) data = { ...data, biocharStorageLocationId: null };
   const existingFeedstockStorageLocationIds =
     await getProductionRunFeedstockDrawStorageIds(ctx, tx, productionRunId);
   const inputFeedstockDraws = data.feedstockDraws;
@@ -714,9 +712,9 @@ export async function updateProductionRunInTransaction(
 
       if (
         effectiveBiocharStorageId &&
-        (data.biocharStorageLocationId !== undefined || data.facilityId !== undefined)
+        (isTerminalProductionRunStatus(lockedTargetStatus) || data.biocharStorageLocationId !== undefined || data.facilityId !== undefined)
       ) {
-        await validateBiocharStorageLocation(ctx, tx, effectiveBiocharStorageId, lockedTargetFacilityId, "Biochar");
+        await validateBiocharStorageLocation(ctx, tx, effectiveBiocharStorageId, lockedTargetFacilityId, lockedTargetStatus);
       }
       const biocharStockState =
         await deriveProductionRunUpdateBiocharStockState(
@@ -779,8 +777,8 @@ export async function updateProductionRunInTransaction(
         (transactionUpdateData.biocharDryMassKg !== undefined && transactionUpdateData.biocharDryMassKg !== locked.biocharDryMassKg) ||
         effectiveBiocharStorageId !== locked.biocharStorageLocationId ||
         lockedTargetEndTime?.getTime() !== locked.endTime?.getTime();
-      if (lockedTargetStatus !== locked.status || (lockedTargetStatus === "complete" && postedOutputChanged)) {
-        transactionUpdateData.outputPostedAt = lockedTargetStatus === "complete" ? new Date() : null;
+      if (lockedTargetStatus !== locked.status || (isTerminalProductionRunStatus(lockedTargetStatus) && (postedOutputChanged || !locked.outputPostedAt))) {
+        transactionUpdateData.outputPostedAt = isTerminalProductionRunStatus(lockedTargetStatus) ? new Date() : null;
       }
 
       const previousDraws = await readRunDrawSnapshot(ctx, tx, productionRunId);

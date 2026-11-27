@@ -604,7 +604,7 @@ describe("complete run output requirements", () => {
   it("accepts zero biochar moisture", () => {
     expect(productionRunFormSchema.safeParse({ ...completeProductionRunInput, biocharMoisturePercent: 0 }).success).toBe(true);
   });
-  it.each(["running", "failed", "cancelled"])("allows empty output for %s", (status) => {
+  it.each(["running", "cancelled"])("allows empty output for %s", (status) => {
     expect(productionRunFormSchema.safeParse({ ...completeProductionRunInput, status,
       endTime: status === "running" ? undefined : completeProductionRunInput.endTime,
       cancellationReason: "Recorded in error", biocharStorageLocationId: null, biocharMoisturePercent: null }).success).toBe(true);
@@ -630,4 +630,16 @@ describe("makeProductionRunFormSchema wall-clock times", () => {
       );
     }
   });
+});
+
+it("reports Failed output prerequisites with status-specific field errors", () => {
+  const result = productionRunFormSchema.safeParse({ ...completeProductionRunInput, status: "failed",
+    biocharOutputKg: null, biocharStorageLocationId: null, biocharMoisturePercent: null });
+  expect(result.success).toBe(false);
+  if (!result.success) expect(result.error.issues).toEqual(expect.arrayContaining([
+    expect.objectContaining({ path: ["biocharOutputKg"], message: "A failed run needs positive biochar output." }),
+    expect.objectContaining({ path: ["biocharStorageLocationId"], message: "Select a biochar output bin for a failed run." }),
+    expect.objectContaining({ path: ["biocharMoisturePercent"], message: "Enter biochar moisture for a failed run." }),
+  ]));
+  expect(productionRunFormSchema.safeParse({ ...completeProductionRunInput, status: "failed" }).success).toBe(true);
 });

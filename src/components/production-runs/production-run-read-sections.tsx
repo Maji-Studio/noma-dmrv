@@ -1,5 +1,7 @@
+
+// Temporary until run C updates the Failed output views.
+const productionRunRecordsOutput = (status: string) => status !== "failed";
 /** Production run side-sheet view mode: the sections config for EntitySideSheet. */
-import { productionRunRecordsOutput } from "@/lib/production-runs/lifecycle";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { resolveFacilityTimezone } from "@/lib/date-utils";
 import { formatMassKg } from "@/lib/format-utils";

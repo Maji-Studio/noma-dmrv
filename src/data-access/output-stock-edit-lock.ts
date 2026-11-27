@@ -1,3 +1,4 @@
+import { productionRunAddsStockSql } from './production-run-output-stock';
 import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, productionRuns, storageLocations, outputStockMoistureReadings } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
@@ -21,7 +22,8 @@ export async function outputBinReceipts(ctx: OrgContext, storageLocationId: stri
   requireOrgScope(ctx);
   const [products, runs] = await Promise.all([
     reader.select({ id: biocharProducts.id, recordedAt: biocharProducts.createdAt }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, storageLocationId))),
-    reader.select({ id: productionRuns.id, recordedAt: productionRuns.updatedAt }).from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.biocharStorageLocationId, storageLocationId), eq(productionRuns.status, 'complete'))),
+    reader.select({ id: productionRuns.id, recordedAt: productionRuns.updatedAt }).from(productionRuns).innerJoin(storageLocations, and(eq(storageLocations.id, productionRuns.biocharStorageLocationId), eq(storageLocations.organizationId, ctx.organizationId)))
+      .where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.biocharStorageLocationId, storageLocationId), productionRunAddsStockSql())),
   ]);
   return [...products, ...runs];
 }

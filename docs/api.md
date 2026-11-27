@@ -321,6 +321,14 @@ facility, including a new facility on update. Native Dates are an in-process
 convenience and do not appear as a third published shape. UI actions validate
 the form contract before passing only operation fields to the runner.
 
+Complete and Failed runs require wet output above 0 kg, output moisture and an
+output biochar bin on create and every update. Complete uses an untagged bin;
+Failed uses a bin tagged Uncarbonized. Wrong bin/tag pairings return
+`validation_failed` on `biocharStorageLocationId`, including unchanged saves of
+legacy rows. Both outcomes post output stock in their bins. Failed output never
+counts as biochar or supplies products, credit batches, removals, certification
+or Sankey. Its energy readings remain included in facility energy activity.
+
 The `audit` run option supplies request and credential IDs for API writes only.
 Audited operations must implement `describe`.
 `src/data-access/activity-events.ts:recordActivity` is the single audit writer.

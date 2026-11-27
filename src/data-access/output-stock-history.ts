@@ -1,3 +1,4 @@
+import { productionRunAddsStock } from '@/lib/storage-location-material';
 import { postingWetSteps } from '@/lib/output-stock/moisture-estimate';
 import { stockOrder } from '@/lib/output-stock/stock-order';
 import { deletedProductReversals } from './output-stock-active-movements';
@@ -101,8 +102,8 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
       wet: Number(p.massKg ?? 0) + Number(p.waterAddedKg ?? 0), moisture: p.moistureContentPercent,
       dry,
       runs: provenance.map(s => ({ productionRunId: s.productionRunId, code: runCode.get(s.productionRunId) ?? s.productionRunId, dryMassKg: Number(s.allocatedDryMassKg) })) };
-  }) : runs.filter(r => r.biocharStorageLocationId === storageLocationId && r.status === 'complete' && r.endTime && r.outputPostedAt).map(r => ({
-    // A product posts its stock when created; a run uses outputPostedAt, set on completion and moved when posted output changes.
+  }) : runs.filter(r => r.biocharStorageLocationId === storageLocationId && productionRunAddsStock(r.status, bin.uncarbonized) && r.endTime && r.outputPostedAt).map(r => ({
+    // A product posts its stock when created; a run uses outputPostedAt, set on completion or failure and moved when posted output changes.
     solids: r.biocharDryMassKg === null ? null : Number(r.biocharDryMassKg), id: r.id, code: r.code, occurredAt: r.endTime!.toISOString(), recordedAt: r.outputPostedAt!,
     wet: Number(r.biocharOutputKg ?? 0), moisture: r.biocharMoisturePercent, dry: Number(r.biocharDryMassKg ?? 0),
     runs: [{ productionRunId: r.id, code: r.code, dryMassKg: Number(r.biocharDryMassKg ?? 0) }],
@@ -110,8 +111,7 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
   for (const r of receipts) history.push({ id: r.id, kind: 'intake', occurredAt: r.occurredAt, recordedAt: r.recordedAt.toISOString(), actorName: null,
     reason: `Intake ${r.code}`, wetMassKg: r.wet, moisturePercent: r.moisture, dryMassKg: -r.dry, beforeDryKg: 0, afterDryKg: 0,
     correctsMovementId: null, deliveryId: null, source: { entity: bin.type === 'product_bin' ? 'biocharProduct' : 'productionRun', id: r.id },
-    // Every batch enters with its wet mass: a product's moisture is required, and the database
-    // refuses a complete run without moisture, output above zero and a bin (production_runs_complete_has_output).
+    // Every new terminal run requires wet output, moisture and a matching bin in the application.
     wetDeltaKg: r.wet, solidsDeltaKg: r.solids, allocations: [{ layerId: r.id, code: r.code, wetMassKg: r.wet, dryMassKg: r.dry, runs: r.runs }] });
   for (const [productId, movement] of new Map(deletedPlacements.map(row => [row.id, row.movement]))) {
     const intake = history.find(entry => entry.kind === 'intake' && entry.id === productId);

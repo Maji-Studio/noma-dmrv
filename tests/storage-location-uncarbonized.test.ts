@@ -163,10 +163,9 @@ describe("uncarbonized storage bins", { timeout: TIMEOUT_MS }, () => {
   it("segregates facility totals and keeps individual tagged stock visible", async () => {
     const f = await fixture(true);
     const ordinary = await unusedBin(f);
-    // Place the second fixture lot in the ordinary bin. This seeds the two populations
-    // directly; production-run workflow changes belong to the next run.
+    // Move the second lot to the ordinary bin with the matching Complete status.
     const { productionRuns } = await import("@/db/schema");
-    await db.update(productionRuns).set({ biocharStorageLocationId: ordinary.id })
+    await db.update(productionRuns).set({ biocharStorageLocationId: ordinary.id, status: "complete" })
       .where(and(eq(productionRuns.organizationId, f.ctx.organizationId), eq(productionRuns.id, f.runs[1].id)));
     const stock = await getFacilityOutputStock(f.ctx, f.facility.id);
     expect(stock).toMatchObject({ biochar: { wetKg: SECOND_RUN_WET_KG, dryBiocharKg: SECOND_RUN_DRY_KG }, uncarbonized: { wetKg: FIRST_RUN_WET_KG, dryBiocharKg: FIRST_RUN_DRY_KG } });

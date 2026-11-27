@@ -116,6 +116,7 @@ export async function getEnergyInputs(
       .select({
         id: productionRuns.id,
         code: productionRuns.code,
+        status: productionRuns.status,
         startTime: productionRuns.startTime,
         reactorName: reactors.identifier,
         creditBatchId: creditBatchProductionRuns.creditBatchId,
@@ -282,6 +283,7 @@ export async function getEnergyInputs(
       runs: runRows.map((run) => ({
         id: run.id,
         code: run.code,
+        status: run.status,
         day: dayOf(run.startTime),
         reactorName: run.reactorName,
         creditBatchId: run.creditBatchId,
@@ -289,7 +291,7 @@ export async function getEnergyInputs(
         dieselGensetLiters: run.dieselGensetLiters,
         preprocessingFuelLiters: run.preprocessingFuelLiters,
         electricityKwh: run.electricityKwh,
-        biocharDryMassKg: run.biocharDryMassKg,
+        biocharDryMassKg: run.status === "failed" ? null : run.biocharDryMassKg,
       })),
       feedstocks: feedstockRows.map((feedstock) => ({
         id: feedstock.id,
