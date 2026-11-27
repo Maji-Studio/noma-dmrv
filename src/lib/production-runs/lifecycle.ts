@@ -73,9 +73,9 @@ export type ProductionRunOutcomeViolation =
       code: "terminal-end-required";
       status: TerminalProductionRunStatus;
     }
-  | { code: "complete-output-required" }
-  | { code: "complete-output-bin-required" }
-  | { code: "complete-output-moisture-required" }
+  | { code: "terminal-output-required" }
+  | { code: "terminal-output-bin-required" }
+  | { code: "terminal-output-moisture-required" }
   | {
       code: "feedstock-required";
       status: TerminalProductionRunStatus;
@@ -157,15 +157,15 @@ export function getProductionRunOutcomeViolations(
     terminalStatus &&
     !(input.biocharOutputKg && input.biocharOutputKg > 0)
   ) {
-    violations.push({ code: "complete-output-required" });
+    violations.push({ code: "terminal-output-required" });
   }
 
   if (terminalStatus && !input.biocharStorageLocationId) {
-    violations.push({ code: "complete-output-bin-required" });
+    violations.push({ code: "terminal-output-bin-required" });
   }
 
   if (terminalStatus && input.biocharMoisturePercent == null) {
-    violations.push({ code: "complete-output-moisture-required" });
+    violations.push({ code: "terminal-output-moisture-required" });
   }
 
   if (terminalStatus) {
@@ -210,9 +210,9 @@ const MUTATION_VIOLATION_PRIORITY: readonly ProductionRunOutcomeViolation["code"
   "running-end-forbidden",
   "terminal-end-required",
   "feedstock-required",
-  "complete-output-required",
-  "complete-output-bin-required",
-  "complete-output-moisture-required",
+  "terminal-output-required",
+  "terminal-output-bin-required",
+  "terminal-output-moisture-required",
 ];
 
 export function assertProductionRunOutcome(
@@ -260,15 +260,15 @@ export function assertProductionRunOutcome(
       }
       throw new SafeError(`A ${violation.status} run must consume feedstock`);
     }
-    case "complete-output-moisture-required":
+    case "terminal-output-moisture-required":
       throw new DomainError("validation_failed", outputMoistureMessage(input.status), {
         issues: [{ path: ["biocharMoisturePercent"], code: "validation_failed", message: outputMoistureMessage(input.status) }],
       });
-    case "complete-output-bin-required":
+    case "terminal-output-bin-required":
       throw new DomainError("validation_failed", outputBinMessage(input.status), {
         issues: [{ path: ["biocharStorageLocationId"], code: "validation_failed", message: outputBinMessage(input.status) }],
       });
-    case "complete-output-required":
+    case "terminal-output-required":
       throw new DomainError("validation_failed", outputRequiredMessage(input.status), {
         issues: [{ path: ["biocharOutputKg"], code: "validation_failed", message: outputRequiredMessage(input.status) }],
       });

@@ -13,12 +13,13 @@ import { getOutputStockHistory } from "@/data-access/output-stock-history";
 import { getFacilityOutputStock } from "@/data-access/facility-output-stock";
 import { previewProductStock } from "@/data-access/product-stock-preview";
 import { outputReceiptMarker } from "@/data-access/output-stock-edit-lock";
-import { getProductionRunById, getProductionRunStats } from "@/data-access/production-runs/queries";
+import { getProductionRunById, getProductionRuns, getProductionRunStats } from "@/data-access/production-runs/queries";
 import { updateStorageLocation, deleteStorageLocation } from "@/data-access/storage-locations";
 import { storageLocations } from "@/db/schema";
 import { readRecordDependents } from "@/data-access/record-lock-dependents";
 import { runOperation } from "@/lib/operations/runner";
 import { recordOutputStockMovement } from "@/lib/operations/output-stock";
+import { FAILED_RUN_OUTPUT_BIN_MESSAGE, COMPLETE_RUN_OUTPUT_BIN_MESSAGE } from "@/lib/storage-location-material";
 import { DRY_MASS_BALANCE_MESSAGE } from "@/lib/production-runs/lifecycle";
 import { seedOutputStockParents } from "./helpers/output-stock-fixture";
 import { cleanupOutputStockFixture } from "./helpers/output-stock-cleanup";
@@ -92,6 +93,9 @@ describe("Failed output in Uncarbonized bins", { timeout: TIMEOUT_MS }, () => {
   it("posts output stock, withdraws feedstock and records a linked intake and Lost mass", async () => {
     const before = await deriveFeedstockWetStockKg(f.ctx, db, fuelBinId);
     const run = await createProductionRun(f.ctx, input());
+    expect(await getProductionRunById(f.ctx, run.id)).toMatchObject({ biocharStorageLocationUncarbonized: true });
+    const listed = await getProductionRuns(f.ctx, { facilityId: f.facility.id });
+    expect(listed.items).toContainEqual(expect.objectContaining({ id: run.id, biocharStorageLocationUncarbonized: true }));
     expect(await deriveFeedstockWetStockKg(f.ctx, db, fuelBinId)).toBe(before - DRAW_KG);
     expect(await stored(run.id)).toMatchObject({ outputPostedAt: expect.any(Date), biocharStorageLocationId: failedBinId, biocharOutputKg: OUTPUT_KG });
     expect(await getOutputBinStockView(f.ctx, failedBinId)).toMatchObject({ dryMassKg: OUTPUT_DRY_KG, estimatedWetMassKg: OUTPUT_KG });
@@ -130,7 +134,7 @@ describe("Failed output in Uncarbonized bins", { timeout: TIMEOUT_MS }, () => {
 
   it.each(["complete", "failed"] as const)("checks the %s bin tag on create and unchanged save", async status => {
     const wrongBinId = status === "failed" ? f.source.id : failedBinId;
-    const message = status === "failed" ? "Choose an uncarbonized biochar bin for a failed run." : "Choose a biochar bin that is not uncarbonized for a complete run.";
+    const message = status === "failed" ? FAILED_RUN_OUTPUT_BIN_MESSAGE : COMPLETE_RUN_OUTPUT_BIN_MESSAGE;
     await expect(createProductionRun(f.ctx, { ...input(), status, biocharStorageLocationId: wrongBinId }))
       .rejects.toMatchObject({ ...validation("biocharStorageLocationId"), message });
     const run = await createProductionRun(f.ctx, { ...input(), status, biocharStorageLocationId: status === "failed" ? failedBinId : f.source.id });
@@ -168,14 +172,6 @@ describe("Failed output in Uncarbonized bins", { timeout: TIMEOUT_MS }, () => {
     await expect(edit(run.id, { expectedVersion: await version(run.id), biocharOutputKg: OUTPUT_KG + 1 })).rejects.toThrow();
     await edit(run.id, { expectedVersion: await version(run.id), electricityKwh: 3 });
     expect(await stored(run.id)).toMatchObject({ biocharStorageLocationId: failedBinId, electricityKwh: 3, biocharOutputKg: OUTPUT_KG });
-  });
-
-  it("leaves older Failed rows readable but requires their output on the next save", async () => {
-    const run = await createProductionRun(f.ctx, input());
-    await db.update(productionRuns).set({ biocharOutputKg: null, biocharMoisturePercent: null, biocharDryMassKg: null,
-      biocharStorageLocationId: null, outputPostedAt: null }).where(and(eq(productionRuns.organizationId, f.ctx.organizationId), eq(productionRuns.id, run.id)));
-    expect(await getProductionRunById(f.ctx, run.id)).toMatchObject({ status: "failed", biocharOutputKg: null });
-    await expect(edit(run.id, { expectedVersion: await version(run.id), electricityKwh: 1 })).rejects.toMatchObject(validation("biocharOutputKg"));
   });
 
   it("refuses a Failed addition timed before a later switch back to split", async () => {

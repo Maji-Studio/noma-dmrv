@@ -1,7 +1,7 @@
 # Output stock and completed deliveries
 
 Biochar bins hold layers from Complete runs in untagged bins and Failed runs in
-Uncarbonized bins. A legacy Failed run in an untagged bin contributes no layer.
+Uncarbonized bins. A Failed run in an untagged bin contributes no layer.
 Product bins hold layers
 from products placed in that bin. Stock accounting follows dry biochar and frozen
 source-run shares. Wet stock is wet mass added less wet mass taken out, per
@@ -215,10 +215,13 @@ unknown (`src/lib/output-stock/stock-replay.ts`). A run intake's recording time 
 moved when either terminal run's posted output changes (wet mass, moisture, dry
 mass, bin or end time), cleared when the run leaves a terminal status, and
 untouched by other edits. A terminal save also repairs a missing receipt marker.
-The app enforces the Failed output rule without adding DB CHECKs; existing
-`production_runs_complete_has_output` and
-`production_runs_complete_has_output_posted_at` still apply only to Complete. Bay, pile-band and chart
-point details open on hover, keyboard focus or tap. A product bin's bays and
+The CHECKs `production_runs_complete_has_output` and
+`production_runs_complete_has_output_posted_at` cover both Complete and Failed.
+Migration `0180_failed_run_output_checks` adds them as `NOT VALID`, allowing an
+older Failed row without output to remain until its next save. Every insert and
+update is checked, so that save must supply output and a posting time.
+
+Bay, pile-band and chart point details open on hover, keyboard focus or tap. A product bin's bays and
 pile bands name their parts as the product composition does (dry biochar,
 "<ingredient> solids", estimated water): `getOutputSubBins` splits each layer's
 ingredient solids by the product's saved ingredient snapshots, pro rata, since

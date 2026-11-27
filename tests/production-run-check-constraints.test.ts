@@ -5,7 +5,7 @@ import { db, type DbTransaction } from "@/db";
 import { facilities, productionRuns, reactors, storageLocations } from "@/db/schema";
 import { ensureTestOrg, TEST_ORG_ID, TEST_SITE_POSITION } from "./helpers/test-org";
 
-const COMPLETE_OUTPUT_CONSTRAINT = "production_runs_complete_has_output";
+const TERMINAL_OUTPUT_CONSTRAINT = "production_runs_complete_has_output";
 const OUTPUT_WET_KG = 100;
 const OUTPUT_MOISTURE_PERCENT = 5;
 const START_TIME = new Date("2026-10-06T10:00:00Z");
@@ -13,7 +13,7 @@ const END_TIME = new Date("2026-10-06T11:00:00Z");
 type RunValues = typeof productionRuns.$inferInsert;
 
 /** Direct writes exercise the database guard without application validation. */
-async function withRunFixture(assert: (tx: DbTransaction, values: RunValues) => Promise<void>) {
+async function withRunFixture(status: "complete" | "failed", assert: (tx: DbTransaction, values: RunValues) => Promise<void>) {
   try {
     await db.transaction(async (tx) => {
       await ensureTestOrg(tx);
@@ -28,11 +28,11 @@ async function withRunFixture(assert: (tx: DbTransaction, values: RunValues) => 
       }).returning();
       const [bin] = await tx.insert(storageLocations).values({
         organizationId: TEST_ORG_ID, facilityId: facility.id,
-        code: `BIN-CHECK-${tag}`, name: "Check output bin", type: "biochar_bin",
+        code: `BIN-CHECK-${tag}`, name: "Check output bin", type: "biochar_bin", uncarbonized: status === "failed",
       }).returning();
       await assert(tx, {
         organizationId: TEST_ORG_ID, facilityId: facility.id, reactorId: reactor.id,
-        code: `PR-CHECK-${tag}`, status: "complete", startTime: START_TIME, endTime: END_TIME, outputPostedAt: END_TIME,
+        code: `PR-CHECK-${tag}`, status, startTime: START_TIME, endTime: END_TIME, outputPostedAt: END_TIME,
         biocharOutputKg: OUTPUT_WET_KG, biocharMoisturePercent: OUTPUT_MOISTURE_PERCENT,
         biocharStorageLocationId: bin.id,
       });
@@ -43,31 +43,31 @@ async function withRunFixture(assert: (tx: DbTransaction, values: RunValues) => 
   }
 }
 
-describe("production_runs complete output check constraint", () => {
-  it.each([undefined, null])("refuses a complete run without output posting time: %s", async (outputPostedAt) => {
-    await expect(withRunFixture(async (tx, values) => {
+describe.each(["complete", "failed"] as const)("production_runs %s output check constraints", (status) => {
+  it.each([undefined, null])("refuses a terminal run without output posting time: %s", async (outputPostedAt) => {
+    await expect(withRunFixture(status, async (tx, values) => {
       await tx.insert(productionRuns).values({ ...values, outputPostedAt });
     })).rejects.toMatchObject({ cause: { code: "23514", constraint: "production_runs_complete_has_output_posted_at" } });
   });
 
-  it.each([undefined, null])("refuses a complete run without moisture: %s", async (moisture) => {
-    await expect(withRunFixture(async (tx, values) => {
+  it.each([undefined, null])("refuses a terminal run without moisture: %s", async (moisture) => {
+    await expect(withRunFixture(status, async (tx, values) => {
       await tx.insert(productionRuns).values({ ...values, biocharMoisturePercent: moisture });
-    })).rejects.toMatchObject({ cause: { code: "23514", constraint: COMPLETE_OUTPUT_CONSTRAINT } });
+    })).rejects.toMatchObject({ cause: { code: "23514", constraint: TERMINAL_OUTPUT_CONSTRAINT } });
   });
 
-  it.each([0, OUTPUT_MOISTURE_PERCENT])("accepts a complete run with output, bin and moisture: %s", async (moisture) => {
-    await withRunFixture(async (tx, values) => {
+  it.each([0, OUTPUT_MOISTURE_PERCENT])("accepts a terminal run with output, bin and moisture: %s", async (moisture) => {
+    await withRunFixture(status, async (tx, values) => {
       const [saved] = await tx.insert(productionRuns).values({ ...values, biocharMoisturePercent: moisture }).returning();
       expect(saved).toMatchObject({
-        status: "complete", biocharOutputKg: OUTPUT_WET_KG,
+        status, biocharOutputKg: OUTPUT_WET_KG,
         biocharMoisturePercent: moisture, biocharStorageLocationId: values.biocharStorageLocationId,
       });
     });
   });
 
   it("accepts a running run without moisture, output or bin", async () => {
-    await withRunFixture(async (tx, values) => {
+    await withRunFixture(status, async (tx, values) => {
       const [saved] = await tx.insert(productionRuns).values({
         ...values, status: "running", endTime: null, outputPostedAt: null,
         biocharMoisturePercent: null, biocharOutputKg: null, biocharStorageLocationId: null,
@@ -82,16 +82,22 @@ describe("production_runs complete output check constraint", () => {
     { biocharOutputKg: 0 },
     { biocharOutputKg: -1 },
     { biocharStorageLocationId: null },
-  ])("refuses a complete run with invalid output: %j", async (patch) => {
-    await expect(withRunFixture(async (tx, values) => {
+  ])("refuses a terminal run with invalid output: %j", async (patch) => {
+    await expect(withRunFixture(status, async (tx, values) => {
       await tx.insert(productionRuns).values({ ...values, ...patch });
-    })).rejects.toMatchObject({ cause: { code: "23514", constraint: COMPLETE_OUTPUT_CONSTRAINT } });
+    })).rejects.toMatchObject({ cause: { code: "23514", constraint: TERMINAL_OUTPUT_CONSTRAINT } });
   });
 
-  it("refuses clearing moisture on an existing complete run", async () => {
-    await expect(withRunFixture(async (tx, values) => {
+  it.each([
+    { patch: { biocharMoisturePercent: null }, constraint: TERMINAL_OUTPUT_CONSTRAINT },
+    { patch: { biocharOutputKg: null }, constraint: TERMINAL_OUTPUT_CONSTRAINT },
+    { patch: { biocharOutputKg: 0 }, constraint: TERMINAL_OUTPUT_CONSTRAINT },
+    { patch: { biocharStorageLocationId: null }, constraint: TERMINAL_OUTPUT_CONSTRAINT },
+    { patch: { outputPostedAt: null }, constraint: "production_runs_complete_has_output_posted_at" },
+  ])("refuses invalid output updates: $patch", async ({ patch, constraint }) => {
+    await expect(withRunFixture(status, async (tx, values) => {
       const [saved] = await tx.insert(productionRuns).values(values).returning();
-      await tx.update(productionRuns).set({ biocharMoisturePercent: null }).where(eq(productionRuns.id, saved.id));
-    })).rejects.toMatchObject({ cause: { code: "23514", constraint: COMPLETE_OUTPUT_CONSTRAINT } });
+      await tx.update(productionRuns).set(patch).where(eq(productionRuns.id, saved.id));
+    })).rejects.toMatchObject({ cause: { code: "23514", constraint } });
   });
 });

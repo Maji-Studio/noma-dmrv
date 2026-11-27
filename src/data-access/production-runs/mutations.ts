@@ -85,9 +85,9 @@ const PREFLIGHT_OUTCOME_VIOLATIONS = [
   "dry-mass-balance-exceeded",
   "terminal-end-required",
   "feedstock-required",
-  "complete-output-required",
-  "complete-output-bin-required",
-  "complete-output-moisture-required",
+  "terminal-output-required",
+  "terminal-output-bin-required",
+  "terminal-output-moisture-required",
 ] as const;
 
 async function readRunDrawSnapshot(ctx: OrgContext, tx: DbTransaction, productionRunId: string) {

@@ -1,7 +1,10 @@
-import { productionRunAddsStock, assertProductionRunOutputBin } from "./storage-location-material";
 import { describe, expect, it } from "vitest";
 import { DomainError } from "@/lib/domain-errors";
 import {
+  productionRunAddsStock,
+  assertProductionRunOutputBin,
+  FAILED_RUN_OUTPUT_BIN_MESSAGE,
+  COMPLETE_RUN_OUTPUT_BIN_MESSAGE,
   assertCarbonizedProductSource,
   assertUncarbonizedBinType,
   UNCARBONIZED_BIOCHAR_BIN_MESSAGE,
@@ -39,8 +42,10 @@ it.each([
   expect(productionRunAddsStock(status, tag)).toBe(expected);
   if (status === "complete" || status === "failed") {
     if (expected) expect(() => assertProductionRunOutputBin(status, tag)).not.toThrow();
-    else expect(() => assertProductionRunOutputBin(status, tag)).toThrow(expect.objectContaining({
-      code: "validation_failed", issues: [expect.objectContaining({ path: ["biocharStorageLocationId"] })],
-    }));
+    else expectFieldError(
+      () => assertProductionRunOutputBin(status, tag),
+      "biocharStorageLocationId",
+      status === "failed" ? FAILED_RUN_OUTPUT_BIN_MESSAGE : COMPLETE_RUN_OUTPUT_BIN_MESSAGE,
+    );
   }
 });

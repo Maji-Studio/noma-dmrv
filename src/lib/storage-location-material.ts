@@ -5,6 +5,11 @@ export const UNCARBONIZED_BIOCHAR_BIN_MESSAGE =
 export const UNCARBONIZED_PRODUCT_SOURCE_MESSAGE =
   "This bin holds uncarbonized material from failed runs. Choose another biochar bin.";
 
+export const FAILED_RUN_OUTPUT_BIN_MESSAGE =
+  "Choose an uncarbonized biochar bin for a failed run.";
+export const COMPLETE_RUN_OUTPUT_BIN_MESSAGE =
+  "A complete run needs a biochar bin without the Uncarbonized tag. Choose another bin.";
+
 /** Validate the effective row, including partial updates that omit the bin type. */
 export function assertUncarbonizedBinType(type: string, uncarbonized: boolean): void {
   if (!uncarbonized || type === "biochar_bin") return;
@@ -34,8 +39,8 @@ export function productionRunAddsStock(status: string, uncarbonized: boolean): b
 export function assertProductionRunOutputBin(status: string, uncarbonized: boolean): void {
   if (!PRODUCTION_RUN_STOCK_PAIRS.some(pair => pair.status === status) || productionRunAddsStock(status, uncarbonized)) return;
   const message = status === "failed"
-    ? "Choose an uncarbonized biochar bin for a failed run."
-    : "Choose a biochar bin that is not uncarbonized for a complete run.";
+    ? FAILED_RUN_OUTPUT_BIN_MESSAGE
+    : COMPLETE_RUN_OUTPUT_BIN_MESSAGE;
   throw new DomainError("validation_failed", message, {
     issues: [{ path: ["biocharStorageLocationId"], code: "validation_failed", message }],
   });

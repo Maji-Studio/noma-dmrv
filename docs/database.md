@@ -331,6 +331,15 @@ run writers still take runs before artifacts. The residual order is tracked in
 payload, with `payload_snapshot_frozen` retaining that freeze through retries
 and status resets. Only the `journaled` recovery key remains mutable.
 
+Production-run CHECKs `production_runs_complete_has_output` and
+`production_runs_complete_has_output_posted_at` require Complete and Failed
+runs to have positive wet output, output moisture, an output bin and
+`output_posted_at`. Migration `0180_failed_run_output_checks` drops and re-adds
+both as `NOT VALID` so an older Failed row without output does not block the
+migration. PostgreSQL checks every insert and every update, including unrelated
+edits, so that row must get output and a posting time on its next save. Existing
+rows are not scanned or backfilled by this migration.
+
 ## Numeric Column Families
 
 `src/db/schema/numeric-families.ts` (migration `0066`) exports `massKg`, `tonnes`, `ppm`, `fraction`, `percent`, and `emissionFactor` (kg CO₂e per activity unit, migration `0120`), all exact `numeric(p,s)`.

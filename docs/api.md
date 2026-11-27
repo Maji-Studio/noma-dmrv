@@ -324,10 +324,15 @@ the form contract before passing only operation fields to the runner.
 Complete and Failed runs require wet output above 0 kg, output moisture and an
 output biochar bin on create and every update. Complete uses an untagged bin;
 Failed uses a bin tagged Uncarbonized. Wrong bin/tag pairings return
-`validation_failed` on `biocharStorageLocationId`, including unchanged saves of
-legacy rows. Both outcomes post output stock in their bins. Failed output never
+`validation_failed` on `biocharStorageLocationId`, including unchanged saves.
+Both outcomes post output stock in their bins. Failed output never
 counts as biochar or supplies products, credit batches, removals, certification
 or Sankey. Its energy readings remain included in facility energy activity.
+The DB CHECKs `production_runs_complete_has_output` and
+`production_runs_complete_has_output_posted_at` also cover Failed. Migration
+`0180_failed_run_output_checks` adds them as `NOT VALID`: an older Failed row
+without output stays readable, but every insert and update is checked, so its
+next save must supply output and a posting time.
 
 The `audit` run option supplies request and credential IDs for API writes only.
 Audited operations must implement `describe`.

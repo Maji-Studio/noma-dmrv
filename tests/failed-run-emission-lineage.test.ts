@@ -20,7 +20,7 @@ async function makeFailed(f: LineageFixture) {
     await tx.delete(creditBatchProductionRuns).where(and(
       eq(creditBatchProductionRuns.organizationId, TEST_ORG_ID), eq(creditBatchProductionRuns.productionRunId, f.productionRunId),
     ));
-    await tx.update(productionRuns).set({ status: "failed", outputPostedAt: null })
+    await tx.update(productionRuns).set({ status: "failed" })
       .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, f.productionRunId)));
   });
 }

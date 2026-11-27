@@ -163,8 +163,8 @@ bound); these are the decisions it deliberately did not make.
   the registry. But the gate fires AFTER the 15 monitored-input datapoint POSTs
   succeeded, so a refused submission leaves orphan datapoints in the registry.
 - Root enabler: run completion requires positive wet output, an output bin,
-  and biochar moisture (`complete-output-required`, `complete-output-bin-required`,
-  and `complete-output-moisture-required` in `src/lib/production-runs/lifecycle.ts`).
+  and biochar moisture (`terminal-output-required`, `terminal-output-bin-required`,
+  and `terminal-output-moisture-required` in `src/lib/production-runs/lifecycle.ts`).
   A moisture of 100% is still accepted, so 0 kg dry remains reachable. The
   `runsMissingDryMass` (NULL dry mass) branch in
   `buildProductionBatchSubmission` (`src/fn/certification/production-batches.ts`)

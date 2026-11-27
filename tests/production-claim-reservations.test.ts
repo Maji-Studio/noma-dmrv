@@ -588,6 +588,9 @@ describe("failed production source reservations", () => {
           organizationId: ctx.organizationId, facilityId: run.facilityId, reactorId: run.reactorId,
           code: `FAILED-${crypto.randomUUID()}`, status: "failed",
           startTime: new Date("2026-01-01T00:00:00Z"), endTime: run.endTime,
+          // The DB CHECK requires output on a Failed run (#439); this test only reads its feedstock link.
+          biocharOutputKg: 1, biocharMoisturePercent: 0, biocharDryMassKg: 1,
+          biocharStorageLocationId: run.biocharStorageLocationId, outputPostedAt: run.endTime,
         }).returning();
         await db.insert(productionRunFeedstocks).values({ organizationId: ctx.organizationId,
           productionRunId: failed.id, feedstockId: feedstock.id, wetMassUsedKg: 1,

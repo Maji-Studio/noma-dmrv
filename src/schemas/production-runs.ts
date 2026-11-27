@@ -316,13 +316,13 @@ export function makeProductionRunFormSchema(
             message: `A ${violation.status} run needs an end time.`,
           });
           break;
-        case "complete-output-bin-required":
+        case "terminal-output-bin-required":
           ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["biocharStorageLocationId"], message: outputBinMessage(data.status) });
           break;
-        case "complete-output-moisture-required":
+        case "terminal-output-moisture-required":
           ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["biocharMoisturePercent"], message: outputMoistureMessage(data.status) });
           break;
-        case "complete-output-required":
+        case "terminal-output-required":
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ["biocharOutputKg"],

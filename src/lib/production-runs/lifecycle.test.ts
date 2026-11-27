@@ -145,7 +145,7 @@ describe("production-run lifecycle", () => {
       [
         "a complete run without positive output",
         { biocharOutputKg: 0 },
-        { code: "complete-output-required" },
+        { code: "terminal-output-required" },
       ],
       [
         "a terminal run without consumed feedstock",
@@ -184,7 +184,7 @@ describe("production-run lifecycle", () => {
 
     it.each([null, undefined])("requires biochar moisture when complete: %s", (moisture) => {
       const input = makeOutcomeInput({ biocharMoisturePercent: moisture });
-      expect(getProductionRunOutcomeViolations(input)).toContainEqual({ code: "complete-output-moisture-required" });
+      expect(getProductionRunOutcomeViolations(input)).toContainEqual({ code: "terminal-output-moisture-required" });
       expect(() => assertProductionRunOutcome(input)).toThrow("Enter biochar moisture for a complete run.");
     });
 
@@ -201,7 +201,7 @@ describe("production-run lifecycle", () => {
 
     it.each([null, undefined, ""])("requires an output bin when complete: %s", (bin) => {
       const input = { ...makeOutcomeInput(), biocharStorageLocationId: bin };
-      expect(getProductionRunOutcomeViolations(input)).toContainEqual({ code: "complete-output-bin-required" });
+      expect(getProductionRunOutcomeViolations(input)).toContainEqual({ code: "terminal-output-bin-required" });
       expect(() => assertProductionRunOutcome(input)).toThrow("Select a biochar output bin for a complete run.");
     });
 
@@ -270,9 +270,9 @@ describe("production-run lifecycle", () => {
 
       expect(violations).toEqual([
         { code: "terminal-end-required", status: "complete" },
-        { code: "complete-output-required" },
-        { code: "complete-output-bin-required" },
-        { code: "complete-output-moisture-required" },
+        { code: "terminal-output-required" },
+        { code: "terminal-output-bin-required" },
+        { code: "terminal-output-moisture-required" },
         {
           code: "feedstock-required",
           status: "complete",
@@ -353,7 +353,7 @@ describe("dry-mass balance and failed runs", () => {
 it.each(["complete", "failed"] as const)("requires all output fields for %s", status => {
   const input = makeOutcomeInput({ status, biocharOutputKg: null, biocharStorageLocationId: null, biocharMoisturePercent: null });
   expect(getProductionRunOutcomeViolations(input).map(v => v.code)).toEqual([
-    "complete-output-required", "complete-output-bin-required", "complete-output-moisture-required",
+    "terminal-output-required", "terminal-output-bin-required", "terminal-output-moisture-required",
   ]);
   expect(() => assertProductionRunOutcome({ ...input, biocharOutputKg: 20 })).toThrow(`Select a biochar output bin for a ${status} run.`);
   expect(() => assertProductionRunOutcome({ ...input, biocharOutputKg: 20, biocharStorageLocationId: "bin" })).toThrow(`Enter biochar moisture for a ${status} run.`);

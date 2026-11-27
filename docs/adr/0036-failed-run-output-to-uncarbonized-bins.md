@@ -4,14 +4,17 @@
 
 A Failed production run records output above 0 kg wet, output moisture and an
 Uncarbonized biochar bin. A Complete run uses an untagged biochar bin. Every
-terminal save validates the effective row, including unchanged saves of legacy
-rows. Failed remains available on create.
+terminal save validates the effective row, including unchanged saves. Failed
+remains available on create.
 
 Both outcomes set `output_posted_at` and add stock layers in the matching bin.
 Failed output appears in stock history and supports lost mass and stock counts.
-Output edits follow the same dependency locks as Complete runs. Older Failed
-rows remain readable but must meet these rules when saved. The application
-enforces this without new Failed DB CHECK constraints.
+Output edits follow the same dependency locks as Complete runs. The CHECKs
+`production_runs_complete_has_output` and
+`production_runs_complete_has_output_posted_at` cover both Complete and Failed.
+Migration `0180_failed_run_output_checks` adds them as `NOT VALID` so an older
+Failed row without output does not block migration. Every insert and update is
+checked; that older row must get output and a posting time on its next save.
 
 ## Rejected alternative
 
