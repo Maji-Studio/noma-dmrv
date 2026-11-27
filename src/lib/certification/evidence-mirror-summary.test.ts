@@ -448,3 +448,18 @@ describe("loadEvidenceMirrorSummaryForScope", () => {
     expect(listDocumentsForEntityIds).not.toHaveBeenCalled();
   });
 });
+
+it("counts the supplied production feedstock scope, including failed-only intake evidence", async () => {
+  storageMocks.headObject.mockResolvedValue({ size: 1 });
+  vi.mocked(listDocumentUploadsForDocuments).mockResolvedValue([]);
+  vi.mocked(listDocumentsForEntityIds).mockImplementation(async (_ctx, kind, ids) =>
+    kind === "feedstock" && ids.includes("failed-only") ? [{
+      id: "failed-bol", entityType: "feedstock", entityId: "failed-only", documentType: "bill_of_lading",
+      fileName: "receipt.pdf", storageKey: "receipt", fileSizeBytes: 1, mimeType: "application/pdf", uploadStatus: "uploaded",
+    }] as never : []);
+  const scope = { removalId: "removal", memberBatches: [], lineages: [lineage], transportFeedstockIds: ["failed-only"] };
+  expect(await loadEvidenceMirrorSummaryForScope(orgCtx, scope)).toEqual({ total: 1, mirrored: 0 });
+  expect(listDocumentsForEntityIds).toHaveBeenCalledWith(orgCtx, "feedstock", ["failed-only"]);
+  expect(await loadEvidenceMirrorSummaryForScope(orgCtx, { ...scope, transportFeedstockIds: [] }))
+    .toEqual({ total: 0, mirrored: 0 });
+});

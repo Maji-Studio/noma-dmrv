@@ -1,3 +1,4 @@
+import type { FacilityFailedRunEmissionTodo } from "./failed-run-emission-guidance";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTableName, sql } from "drizzle-orm";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
@@ -12,11 +13,13 @@ import { CHANGED_SINCE_REVIEW_LABEL } from "@/lib/certification/interrupted-remo
 
 const mocks = vi.hoisted(() => ({
   select: vi.fn(),
+  failedTodos: vi.fn(async (): Promise<FacilityFailedRunEmissionTodo[]> => []),
   previews: vi.fn(),
   union: vi.fn(async (): Promise<unknown[]> => []),
   returned: vi.fn(async (): Promise<Set<string>> => new Set()),
   changedAttempts: vi.fn(async (): Promise<Set<string>> => new Set()),
 }));
+vi.mock("./failed-run-emission-guidance", () => ({ loadFacilityFailedRunEmissionTodos: mocks.failedTodos }));
 vi.mock("./removal-latest-attempt", () => ({ getRemovalIdsWithChangedLatestAttempt: mocks.changedAttempts }));
 vi.mock("./dashboard-returned-removals", () => ({ loadReturnedRemovalIds: mocks.returned }));
 // Batch rows carry already-derived Removal displays in these tests.
@@ -86,6 +89,7 @@ beforeEach(() => {
   mocks.changedAttempts.mockResolvedValue(new Set());
   mocks.union.mockResolvedValue([]);
   mocks.returned.mockResolvedValue(new Set());
+  mocks.failedTodos.mockResolvedValue([]);
   rowsByTable = { facilities: [{ timezone: "UTC" }] };
   mocks.previews.mockResolvedValue({});
   // Project only selected columns, so omitting composition or the allocation
@@ -395,5 +399,67 @@ describe("needs attention rows", () => {
       // The Production station still counts the batches that came back.
       expect(batches.returned).toBe(2);
     });
+  });
+});
+
+
+it("includes facility failed-emission checks without a batch and removes them on the next resolved read", async () => {
+  mocks.union.mockResolvedValue([{ kind: "failed-emissions" }]);
+  mocks.failedTodos.mockResolvedValue([{
+    id: "failed-run-emissions:run-1",
+    productionRun: { id: "run-1", code: "PR-1" }, target: { href: "/credit-batches?facility=test" },
+    emissionAttachment: { productionRunId: "run-1", runCode: "PR-1", facilityId: FACILITY_ID,
+      endDay: DAY, feedstockTypeId: "type-1", feedstockTypeName: "Wood", state: "no-match", batch: null,
+      href: "/credit-batches?facility=test" },
+  }]);
+  const unresolved = await getDashboardAttentionItems(CTX, FACILITY_ID, DAY);
+  expect(unresolved.items).toMatchObject([{ id: "failed-run-emissions:run-1", stage: "production", recordKind: "productionRun", recordIds: ["run-1"], date: DAY, title: "Emissions without a credit batch", entityCode: "PR-1" }]);
+  expect(unresolved.batches.failedEmissions).toBe(1);
+  mocks.failedTodos.mockResolvedValue([]);
+  expect((await getDashboardAttentionItems(CTX, FACILITY_ID, DAY)).items).toEqual([]);
+});
+
+
+it("skips failed-emission guidance when the attention query finds no failed runs", async () => {
+  mocks.failedTodos.mockClear();
+  await getDashboardAttentionItems(CTX, FACILITY_ID, DAY);
+  expect(mocks.failedTodos).not.toHaveBeenCalled();
+});
+
+it.each([
+  ["mixed-feedstock", "Emissions need one feedstock type"],
+  ["empty-feedstock", "Emissions need a feedstock type"],
+] as const)("uses the shared %s row title", async (state, title) => {
+  mocks.union.mockResolvedValue([{ kind: "failed-emissions" }]);
+  mocks.failedTodos.mockResolvedValue([{
+    id: "failed-run-emissions:run-1", productionRun: { id: "run-1", code: "PR-1" },
+    target: { href: "/production-runs?productionRun=run-1" },
+    emissionAttachment: { productionRunId: "run-1", runCode: "PR-1", facilityId: FACILITY_ID,
+      endDay: DAY, feedstockTypeId: null, feedstockTypeName: null, state, batch: null,
+      href: "/production-runs?productionRun=run-1" },
+  }]);
+  expect((await getDashboardAttentionItems(CTX, FACILITY_ID, DAY)).items).toMatchObject([
+    { title, scope: "facility", recordIds: ["run-1"] },
+  ]);
+});
+
+it("groups failed-emission checks at the facility credit batches list", async () => {
+  mocks.union.mockResolvedValue([{ kind: "failed-emissions" }]);
+  const todos = Array.from({ length: ATTENTION_PER_CHECK + 1 }, (_, index): FacilityFailedRunEmissionTodo => ({
+    id: `failed-run-emissions:run-${index}`,
+    productionRun: { id: `run-${index}`, code: `PR-${index}` },
+    target: { href: `/credit-batches?facility=${FACILITY_ID}` },
+    emissionAttachment: { productionRunId: `run-${index}`, runCode: `PR-${index}`, facilityId: FACILITY_ID,
+      endDay: DAY, feedstockTypeId: "type-1", feedstockTypeName: "Wood", state: "no-match", batch: null,
+      href: `/credit-batches?facility=${FACILITY_ID}` },
+  }));
+  mocks.failedTodos.mockResolvedValue(todos);
+  const { items } = await getDashboardAttentionItems(CTX, FACILITY_ID, DAY);
+  expect(items).toHaveLength(1);
+  expect(items[0]).toMatchObject({
+    id: "failed-run-emissions-group", entityCode: "Credit batches", scope: "facility", stage: "production", recordKind: "productionRun",
+    title: "Failed run emissions without a credit batch", count: todos.length,
+    href: `/credit-batches?facility=${FACILITY_ID}`, recordIds: todos.map(todo => todo.productionRun.id),
+    recordItems: todos.map(todo => ({ id: todo.id, scope: "facility", title: "Emissions without a credit batch" })),
   });
 });

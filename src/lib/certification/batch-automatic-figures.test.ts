@@ -86,3 +86,19 @@ it("does not let owned-elsewhere evidence override invalid recorded legs", () =>
   expect(figures["feedstock-transport"]).toBeNull();
   expect(figures["delivery-transport"]).toBeNull();
 });
+
+it("adds failed inputs exactly while ignoring stale positive failed output", () => {
+  const material = run({ id: "material", biocharDryMassKg: 10, electricityKwh: 0.1 });
+  const failed = run({ id: "failed", status: "failed", biocharDryMassKg: 999, electricityKwh: 0.2,
+    dieselOperationLiters: 2, dieselGensetLiters: 3, preprocessingFuelLiters: 4 });
+  const figures = batchAutomaticFigures([material], emptyLegs, {
+    runs: { material: { feedstockMassDryKg: "9007199254740993.001", biocharDryMassKg: "10" },
+      failed: { feedstockMassDryKg: "0.002", biocharDryMassKg: "999" } }, legs: {},
+  }, [failed]);
+  expect(figures["feedstock-dry-mass"]?.magnitude).toBe("9007199254740993.003");
+  expect(figures["biochar-dry-mass"]?.magnitude).toBe("10");
+  expect(figures["safety-margin"]?.magnitude).toBe("10");
+  expect(figures["run-electricity"]?.magnitude).toBe("0.3");
+  expect(figures["run-genset-diesel"]?.magnitude).toBe("7");
+  expect(figures["run-startup-diesel"]?.magnitude).toBe("2");
+});

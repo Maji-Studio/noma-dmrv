@@ -49,7 +49,7 @@ export function DashboardBody({ data: overview, isLoading: overviewLoading, erro
   const batchId = useSelectedBatchId(facilityId);
   // Wait for the batch list before reading, so a stale `?batch=` reads all batches once.
   const scope = useDashboardBatchScope(batchId === undefined ? null : facilityId, batchId ?? null);
-  const data = overview && scope.data ? applyBatchScope(overview, scope.data) : undefined;
+  const data = overview && scope.data ? applyBatchScope(overview, scope.data, batchId == null) : undefined;
   const isLoading = overviewLoading || (data == null && scope.error == null);
   // What the facility can record now does not depend on the batch filter.
   const actions = useFlowActions(status, facilityId, overview);

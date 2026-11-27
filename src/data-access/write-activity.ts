@@ -1,3 +1,4 @@
+import { loadRunEmissionContributors } from "./credit-batch-emission-contributors";
 import { emissionLineFiles } from "@/db/schema/emission-line-files";
 import { emissionEntries } from "@/db/schema/emission-entries";
 import type { ActivitySnapshot } from "@/lib/activity-changes";
@@ -80,6 +81,16 @@ export async function resolveWriteActivityScopes(
   if (runIds.length === 0) return [{}];
   const memberships = await tx.selectDistinct({ creditBatchId: creditBatchProductionRuns.creditBatchId }).from(creditBatchProductionRuns)
     .where(and(inArray(creditBatchProductionRuns.productionRunId, runIds), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)));
+  // Only upstream production/feedstock activity gains emissions dependencies;
+  // delivery/product/application scopes remain material-only.
+  if (entityType === "production_run" || entityType === "feedstock") {
+    const contributors = await loadRunEmissionContributors(ctx, runIds, tx, { includeArchived: true });
+    for (const run of contributors) {
+      if (run.kind === "failed" && run.creditBatchId && !memberships.some(row => row.creditBatchId === run.creditBatchId)) {
+        memberships.push({ creditBatchId: run.creditBatchId });
+      }
+    }
+  }
   const productionRunId = runIds.length === 1 ? runIds[0] : null;
   return memberships.length ? memberships.map(row => ({ ...row, productionRunId })) : [{ productionRunId }];
 }

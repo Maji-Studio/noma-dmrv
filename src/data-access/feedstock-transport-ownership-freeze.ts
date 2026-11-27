@@ -1,11 +1,13 @@
+import { lockFailedEmissionBatchArtifacts } from "./failed-run-emission-write-guard";
 import type { DbTransaction } from "@/db";
 import { creditBatchProductionRuns, feedstocks, productionRunFeedstocks, productionRuns } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
 import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
-import { getLineageUnderLockedArtifacts, getFeedstockLineageBatchTargets, tryLockCertifiedLineageArtifacts } from "./certification-lineage-guards";
+import { getLineageUnderLockedArtifacts, getFeedstockLineageBatchTargets } from "./certification-lineage-guards";
 import { getFeedstockTransportOwnerBatches } from "./feedstock-transport-ownership";
+import { loadBatchEmissionContributors } from "./credit-batch-emission-contributors";
 import { requireOrgScope } from "./utils";
 
 const TRANSPORT_OWNER_LOCK_SCOPE = "feedstock-transport-owner";
@@ -25,6 +27,8 @@ function batchKey(batches: { creditBatchId: string }[] | undefined): string | un
 export type TransportOwnershipChange = {
   mutation: "create" | "update" | "delete";
   subject: "production run" | "credit batch" | "facility" | "feedstock";
+  /** Explicit deletion already synchronized this batch before removing its row. */
+  deletedCreditBatchId?: string;
 };
 
 /** Include existing provenance and every intake a replacement bin draw can select, archived included like the allocator. */
@@ -34,7 +38,10 @@ export async function getTransportFreezeFeedstockIds(
   candidates: { runIds?: readonly string[]; batchIds?: readonly string[]; binIds?: readonly string[]; facilityId?: string },
 ): Promise<string[]> {
   requireOrgScope(ctx);
+  const attached = await loadBatchEmissionContributors(ctx, candidates.batchIds ?? [], tx, { includeArchived: true });
+  const failedRunIds = Object.values(attached).flatMap(batch => batch.failedContributors.map(run => run.runId));
   const conditions = [
+    failedRunIds.length ? inArray(productionRuns.id, failedRunIds) : undefined,
     candidates.runIds?.length ? inArray(productionRuns.id, [...candidates.runIds]) : undefined,
     candidates.batchIds?.length ? inArray(creditBatchProductionRuns.creditBatchId, [...candidates.batchIds]) : undefined,
     candidates.facilityId ? eq(productionRuns.facilityId, candidates.facilityId) : undefined,
@@ -89,11 +96,13 @@ export async function prepareFeedstockTransportOwnershipFreeze(
     if (!changed.length) return result;
 
     const targets = changed.map(entityId => ({ entityType: "feedstock" as const, entityId }));
-    const artifacts = await tryLockCertifiedLineageArtifacts(ctx, tx,
-      [...targets, ...changed.flatMap(id => previousTargets.get(id) ?? [])]);
-    if (artifacts === null) {
-      throw new DomainError("conflict", `Certification records for ${await feedstockLabel(ctx, tx, changed[0])} are being changed. Save again in a moment.`, { retryable: true });
-    }
+    const artifacts = await lockFailedEmissionBatchArtifacts(ctx, tx, changed.flatMap(id => [
+      ...(before.get(id) ?? []).map(owner => owner.creditBatchId),
+      ...(after.get(id) ?? []).map(owner => owner.creditBatchId),
+    ]).filter(id => id !== change.deletedCreditBatchId),
+    change.subject === "production run" ? "productionRun" : change.subject === "credit batch" ? "creditBatch" : change.subject,
+    async () => new DomainError("conflict", `Certification records for ${await feedstockLabel(ctx, tx, changed[0])} are being changed. Save again in a moment.`, { retryable: true }),
+    [...targets, ...changed.flatMap(id => previousTargets.get(id) ?? [])], change.mutation);
     for (const target of targets) {
       const lineage = await getLineageUnderLockedArtifacts(ctx, tx, artifacts, target);
       for (const previousTarget of previousTargets.get(target.entityId) ?? []) {

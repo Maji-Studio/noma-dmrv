@@ -77,6 +77,19 @@ describe("assertClaimedRemovalPayloadFresh", () => {
     expect(loadRemovalSubmissionContext).toHaveBeenCalledWith(ORG_CTX, "rem-1", { refreshEnrichment: true, claimedSubmissionId: ROW.id });
   });
 
+  it("retires an equal-number payload when failed source identities drift", async () => {
+    vi.mocked(prepareRemovalSubmission).mockReturnValue({ prepared: PREPARED, blockers: [] });
+    vi.mocked(buildRemovalSubmissionBuild).mockResolvedValue({ semanticPayload: {
+      hash: "hash-claimed", productionSourceManifest: { version: 1, failedContributors: [{
+        runId: "failed-new", version: 1, facilityId: "facility", endDay: "2026-03-01",
+        feedstockTypeId: "type", feedstockIds: ["stock"], creditBatchId: "batch",
+        creditBatchCode: "CB-1", kind: "failed", unresolvedReason: null,
+      }], countedTransportFeedstockIds: ["stock"] },
+    } } as never);
+    await expect(assertFresh()).rejects.toThrow(/Removal source data changed/);
+    expect(retiredAsChanged()).toBe(true);
+  });
+
   it("retires the draft when the template stopped being a REMOVAL template", async () => {
     vi.mocked(prepareRemovalSubmission).mockReturnValue({
       prepared: PREPARED,

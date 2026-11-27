@@ -1,3 +1,4 @@
+import { prepareFailedRunEmissionWrite } from "./failed-run-emission-write-guard";
 import { earliestFeedstockEventTie } from '@/lib/feedstock-event-boundary';
 import { prepareFeedstockTransportOwnershipFreeze, type TransportOwnershipChange, type TransportOwnershipFreezeScope } from "./feedstock-transport-ownership-freeze";
 import { and, eq, gt, gte, inArray, ne, or, sql } from "drizzle-orm";
@@ -5,7 +6,7 @@ import type { DbTransaction } from "@/db";
 import { productionRunFeedstockDraws, productionRunFeedstocks, productionRuns, storageLocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
-import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { CANCELLED_PRODUCTION_RUN_STATUS, FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { FeedstockReplayOverdrawError } from "@/lib/feedstock-draw-replay";
 import { replayFeedstockBinStock } from "./feedstock-bin-ledger";
 import { withProductionRunErrors } from "@/lib/production-run-domain-errors";
@@ -152,6 +153,16 @@ export async function reallocateRunsForBins(
   }
   if (!rewrites.length) return [];
 
+  const finishFailedEmissionWrites = [];
+  const subject = options.change?.subject ?? "production run";
+  const subjectEntityType = subject === "production run" ? "productionRun" : subject === "credit batch" ? "creditBatch" : subject;
+  if (!options.allowSentRewrite) for (const { run } of rewrites) {
+    if (run.status !== FAILED_PRODUCTION_RUN_STATUS) continue;
+    finishFailedEmissionWrites.push(await prepareFailedRunEmissionWrite(ctx, tx, run.id, {
+      feedstockDraws: draws.filter(draw => draw.productionRunId === run.id),
+    }, subjectEntityType, options.change?.mutation === "delete" ? "delete" : "update"));
+  }
+
   // One snapshot over every rewritten run, so a handoff between them compares
   // the final owner rather than each intermediate one.
   const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
@@ -181,6 +192,7 @@ export async function reallocateRunsForBins(
       })));
     }
   });
+  for (const finish of finishFailedEmissionWrites) await finish();
   return rewrites.map(({ run }) => run.id);
 }
 

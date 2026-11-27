@@ -468,3 +468,16 @@ it("keeps Failed energy while excluding its output from biochar and carried-prod
   expect(record(breakdown.records, "delivery").runCount).toBe(0);
   expect(sumFlows(breakdown, "grid")).toBe(200);
 });
+
+it("counts zero-output attached failed activity in full and keeps unattached activity on its start day", () => {
+  const breakdown = buildEnergyBreakdown(inputs({
+    runs: [run({ id: "failed", creditBatchId: "batch", biocharDryMassKg: null, day: "2026-08-31" }),
+      run({ id: "unattached", biocharDryMassKg: null, day: "2026-09-01" })],
+    creditBatches: [{ id: "batch", code: "CB", startDate: "2026-09-01", endDate: "2026-09-30" }],
+  }), ALL_TIME);
+  expect(record(breakdown.records, "batch").footprint.activity).toMatchObject({ startup: 10, genset: 20, preprocessing: 5, grid: 100 });
+  expect(record(breakdown.records, "batch").dryMassKg).toBeNull();
+  expect(record(breakdown.records, "failed").day).toBe("2026-08-31");
+  expect(breakdown.flows).toContainEqual({ source: "startup", creditBatchId: "batch", day: "2026-08-31", activity: 10 });
+  expect(breakdown.flows).toContainEqual({ source: "startup", creditBatchId: null, day: "2026-09-01", activity: 10 });
+});

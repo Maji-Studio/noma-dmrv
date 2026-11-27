@@ -1,3 +1,4 @@
+import { FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 /**
  * The words of the Production Run footer's credit batch line (#1164), one
  * entry per preview state. Pure, so every state's copy is tested without a
@@ -12,6 +13,12 @@ import {
   pendingLineCopy,
   type CreditBatchLineCopy,
 } from "@/components/credit-batches/credit-batch-line-copy";
+import {
+  describeFailedRunEmissions,
+  UNSAVED_FAILED_RUN_EMISSIONS,
+  type FailedRunEmissionCopy,
+} from "@/lib/production-runs/failed-run-emission-copy";
+import type { ProductionRunCreditBatchPreviewInput } from "@/schemas/production-run-credit-batch-preview";
 import type {
   CreditBatchPreviewBatch,
   ProductionRunCreditBatchPreview,
@@ -23,6 +30,25 @@ export type ProductionRunCreditBatchPreviewView =
   | { state: "pending" }
   | { state: "error" }
   | ProductionRunCreditBatchPreview;
+
+/**
+ * A saved Failed run's attachment names a batch for the saved end day,
+ * facility and source bins only. Once the form edits any of them the line
+ * would name a batch the save will not use, so the attachment is dropped and
+ * the unsaved wording shows until the run is saved again.
+ */
+export function keepSavedAttachmentIfUnchanged(
+  view: ProductionRunCreditBatchPreviewView,
+  current: ProductionRunCreditBatchPreviewInput,
+  saved: ProductionRunCreditBatchPreviewInput | null,
+): ProductionRunCreditBatchPreviewView {
+  if (!saved || !("savedEmissionAttachment" in view) || !view.savedEmissionAttachment) return view;
+  const same = current.facilityId === saved.facilityId
+    && current.endTime === saved.endTime
+    && current.feedstockStorageLocationIds.length === saved.feedstockStorageLocationIds.length
+    && current.feedstockStorageLocationIds.every((id, index) => id === saved.feedstockStorageLocationIds[index]);
+  return same ? view : { ...view, savedEmissionAttachment: undefined };
+}
 
 const INCOMPLETE_LEAD = {
   facility: "Choose a facility in the sidebar to see the credit batch.",
@@ -114,6 +140,18 @@ function memberCopy(
   }
 }
 
+/** The footer's shape of a failed run's emissions line. */
+function emissionLineCopy(copy: FailedRunEmissionCopy): CreditBatchLineCopy {
+  return {
+    ...CREDIT_BATCH_LINE_BASE,
+    tone: copy.tone,
+    lead: copy.lead,
+    batches: copy.batch ? [copy.batch] : [],
+    info: copy.info,
+    infoLabel: "Where the emissions count",
+  };
+}
+
 export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreviewView): CreditBatchLineCopy {
   switch (view.state) {
     case "pending":
@@ -121,10 +159,14 @@ export function describeCreditBatchPreview(view: ProductionRunCreditBatchPreview
     case "error":
       return errorLineCopy();
     case "not-applicable":
+      // A failed run adds no biochar to a batch but its emissions count in a batch, so it never reads "Not applicable".
+      if (view.status === FAILED_PRODUCTION_RUN_STATUS) {
+        return emissionLineCopy(view.savedEmissionAttachment ? describeFailedRunEmissions(view.savedEmissionAttachment) : UNSAVED_FAILED_RUN_EMISSIONS);
+      }
       return {
         ...CREDIT_BATCH_LINE_BASE,
         lead: `Credit batch: ${MISSING_VALUE.notApplicable}`,
-        info: "Failed and cancelled runs do not join a credit batch.",
+        info: "A cancelled run does not join a credit batch.",
       };
     case "incomplete":
       return {

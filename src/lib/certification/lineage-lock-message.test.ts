@@ -18,6 +18,7 @@ describe("formatCertificationLineageLockMessage", () => {
     ["sample", "a sample"], ["application", "an application"], ["delivery", "a delivery"],
     ["order", "an order"], ["biocharProduct", "a biochar product"], ["feedstock", "a feedstock"],
     ["transportLeg", "a transport leg"], ["vehicle", "a vehicle"],
+    ["facility", "a facility"], ["feedstockType", "a feedstock type"],
   ] as const)("uses the correct article for a selected %s", (lineageEntityType, phrase) => {
     const subjectEntityType = lineageEntityType === "delivery" ? "application" : "delivery";
     expect(formatCertificationLineageLockMessage({ mutation: "create", subjectEntityType, lineageEntityType })).toContain(`Select ${phrase} that is not locked.`);

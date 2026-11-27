@@ -261,3 +261,15 @@ it("ignores incomplete sample legs", () => {
   expect(result.gaps.length > 0).toBe(false);
   expect(result.issues.some((issue) => issue.key === "sample-transport-evidence")).toBe(false);
 });
+
+
+it("uses registry labels and structured fix targets for failed emissions without output gaps", () => {
+  const run = { ...productionRun("failed-run", "PR-26-001", 0), status: "failed" as const,
+    dieselGensetLiters: null, hasReadingsFile: false, biocharOutputKg: null, biocharMoisturePercent: null };
+  const result = buildEntityReadinessResult([], [], { feedstock: [], biochar: [], sample: [] }, [], [run]);
+  expect(result.gaps).toEqual(["Production run PR-26-001: Readings CSV file · Genset diesel"]);
+  expect(result.issues).toEqual([{ key: "production-runs", label: "Production-run evidence", fixTarget: "productionRuns",
+    affectedRecords: [{ id: run.id, code: run.code, missing: ["Readings CSV file", "Genset diesel"] }] }]);
+  const complete = { ...run, dieselGensetLiters: 0, hasReadingsFile: true };
+  expect(buildEntityReadinessResult([], [], { feedstock: [], biochar: [], sample: [] }, [], [complete]).gaps).toEqual([]);
+});

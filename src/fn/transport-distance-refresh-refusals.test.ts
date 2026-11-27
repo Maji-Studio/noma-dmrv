@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DomainError } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
+import { recordLocks } from "@/lib/record-lock";
 import { formatCertificationLineageLockMessage } from "@/lib/certification/lineage-lock-message";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE } from "@/lib/stale-version";
 import { refreshDeliveryDistanceFn, refreshFeedstockDistanceFn } from "./transport-distance-refresh";
@@ -80,6 +81,25 @@ describe.each([
   it("returns not_found for a missing or archived record", async () => {
     mocks.row.mockResolvedValue([]);
     expect(await refresh(INPUT)).toMatchObject({ success: false, code: "not_found", error: `${noun} was not found or is archived.` });
+  });
+
+  it("preserves the lineage refusal for a Removal holder with a window", async () => {
+    const lock = recordLocks.removal({ dependents: [], removals: [{
+      id: "removal", label: "2026-10-01 to 2026-10-31", submissions: [{ status: "submitted" }], statements: [],
+    }] });
+    const message = formatCertificationLineageLockMessage({
+      mutation: "update", subjectEntityType: entityType, lineageEntityType: entityType, lock,
+    });
+    mocks.guard.mockRejectedValue(new DomainError("certification_locked", message));
+    expect(await refresh(INPUT)).toMatchObject({ success: false, code: "certification_locked", error: message });
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.sync).not.toHaveBeenCalled();
+  });
+
+  it("preserves a custom certification lock refusal", async () => {
+    const message = "The linked certification artifact changed. Reload and try again.";
+    mocks.guard.mockRejectedValue(new DomainError("certification_locked", message));
+    expect(await refresh(INPUT)).toMatchObject({ success: false, code: "certification_locked", error: message });
   });
 
   it("returns validation_failed for a missing pair distance", async () => {

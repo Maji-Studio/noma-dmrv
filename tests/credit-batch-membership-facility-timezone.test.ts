@@ -1,3 +1,5 @@
+import { resolveFacilityTimezoneEdit } from "@/data-access/facility-timezone-guard";
+import { failedRunFixture } from "./helpers/failed-run-fixture";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -366,4 +368,23 @@ describe("credit batch membership by facility-local day", () => {
     });
     expect(await assignments(completed.id)).toEqual([{ creditBatchId: september.id }]);
   });
+});
+
+
+beforeAll(() => ensureTestOrg());
+const FAILED_TIMEZONE_ROLLBACK = new Error("rollback failed timezone fixture");
+it.each([
+  ["2026-03-01T00:30:00Z", "America/Los_Angeles"],
+  ["2026-02-28T23:30:00Z", "Africa/Dar_es_Salaam"],
+])("protects old and prospective failed-only attachments at %s", async (endTime, timezone) => {
+  await expect(db.transaction(async tx => {
+    const f = await failedRunFixture(tx, { endTime });
+    await tx.select().from(facilities).where(eq(facilities.id, f.facility.id)).for("update");
+    await expect(resolveFacilityTimezoneEdit(makeTestOrgContext(TEST_USER_ID), tx, f.facility, timezone))
+      .rejects.toMatchObject({ code: "conflict", conflict: { id: f.batch!.id } });
+    const [saved] = await tx.select().from(facilities).where(eq(facilities.id, f.facility.id));
+    expect(saved.timezone).toBe("UTC");
+    expect(await tx.select().from(creditBatchProductionRuns).where(eq(creditBatchProductionRuns.productionRunId, f.run.id))).toEqual([]);
+    throw FAILED_TIMEZONE_ROLLBACK;
+  })).rejects.toBe(FAILED_TIMEZONE_ROLLBACK);
 });

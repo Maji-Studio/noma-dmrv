@@ -1,3 +1,4 @@
+import { productionSourceManifestsEqual, readProductionSourceManifest } from "@/lib/certification/production-source-manifest";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import type { OrgContext } from "@/lib/auth/server";
 import { InterruptedRemovalChangedError } from "@/lib/certification/interrupted-removal-copy";
@@ -90,7 +91,11 @@ export async function assertClaimedRemovalPayloadFresh(args: {
     throw error;
   }
   const freshHash = payloadHash(freshBuild.semanticPayload);
-  if (freshHash === row.payloadHash) return;
+  const sourcesMatch = productionSourceManifestsEqual(
+    readProductionSourceManifest(row.payloadSnapshot),
+    readProductionSourceManifest(freshBuild.semanticPayload),
+  );
+  if (freshHash === row.payloadHash && sourcesMatch) return;
 
   await retireForDrift(
     `semantic payload drift: snapshot ${String(row.payloadHash)} != current ${freshHash}`,

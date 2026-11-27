@@ -15,12 +15,13 @@ import { requireOrgScope } from "./utils";
 export async function assertComponentFileClaimFresh(ctx: OrgContext, tx: DbTransaction,
   batches: readonly { id: string; removalTemplateId: string | null }[],
   reviewed: readonly { anchorId: string; version: number }[],
+  removalId: string,
 ) {
   requireOrgScope(ctx);
   const ids = batches.map(batch => batch.id);
   const files = await listEmissionLineFilesForBatches(ctx, ids, tx);
   const current = new Map<string, number>();
-  const automatic = await loadBatchesEmissionAutomaticFacts(ctx, ids, {}, tx);
+  const automatic = await loadBatchesEmissionAutomaticFacts(ctx, ids, { removalId }, tx);
   for (const batch of batches) {
     const observation = batch.removalTemplateId
       ? await getLatestTemplateObservation(ctx, "isometric", batch.removalTemplateId, tx) : null;

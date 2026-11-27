@@ -1,5 +1,6 @@
 import { EMISSION_LINE_FILE_CHANGED } from "@/lib/certification/emission-entry-messages";
-import { includesProductionInputs } from "./production-claim-policy";
+import { loadProductionClaimFeedstockScope } from "@/data-access/production-source-manifest";
+import { ownedTransportFeedstockIds } from "./feedstock-transport-ownership";
 import { EMISSION_ENTRY_FILE_UNAVAILABLE, formatEmissionEntryMessageLabel } from "@/lib/certification/emission-entry-messages";
 import { withEmissionEntryEvidenceDiagnostics } from "./emission-entry-evidence-diagnostics";
 import { logger } from "@/lib/log";
@@ -20,6 +21,7 @@ import {
   type DocumentRow,
 } from "@/data-access/certification";
 import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
+import { getFeedstockCodes } from "@/data-access/feedstocks";
 import { getSamplesByCreditBatchIds } from "@/data-access/credit-batch-samples";
 import {
   getCertifierRemovalById,
@@ -120,17 +122,21 @@ async function collectLineageEntities(
         entityLabel: `Delivery ${application.delivery.code}`,
       });
     }
+  }
 
-    for (const run of lineageFacts.runs) {
-      for (const feedstock of run.feedstocks) {
-        if (!feedstock.ownsTransport || !includesProductionInputs(batch.productionEmissionsClaimedByRemovalId, removalId)) continue;
-        add({
-          entityType: "feedstock",
-          entityId: feedstock.id,
-          entityLabel: `Feedstock ${feedstock.code}`,
-        });
-      }
-    }
+  const counted = await loadProductionClaimFeedstockScope(orgCtx, Object.values(accountingByBatch).map(({ batch, lineageFacts }) => ({
+    id: batch.id,
+    productionEmissionsClaimedByRemovalId: batch.productionEmissionsClaimedByRemovalId,
+    productionFeedstockIds: ownedTransportFeedstockIds(lineageFacts.runs),
+  })), removalId);
+  const feedstockCodes = new Map(Object.values(accountingByBatch).flatMap(({ lineageFacts }) =>
+    lineageFacts.runs.flatMap(run => run.feedstocks.map(feedstock => [feedstock.id, feedstock.code] as const))));
+  const missingCodeIds = counted.feedstockIds.filter(id => !feedstockCodes.has(id));
+  if (missingCodeIds.length) {
+    for (const [id, code] of await getFeedstockCodes(orgCtx, missingCodeIds)) feedstockCodes.set(id, code);
+  }
+  for (const id of counted.feedstockIds) {
+    add({ entityType: "feedstock", entityId: id, entityLabel: `Feedstock ${feedstockCodes.get(id) ?? id}` });
   }
 
   for (const sample of memberSamples) {

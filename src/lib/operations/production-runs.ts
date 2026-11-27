@@ -1,3 +1,4 @@
+import { resolveWriteActivityScopes } from "@/data-access/write-activity";
 import { createProductionRunInput, updateProductionRunInput } from "@/schemas/production-run-input";
 import { readRunFacilityTimeZone } from "@/data-access/production-run-input";
 import { hasLocalRunInstant, resolveRunInstant } from "./production-run-times";
@@ -68,6 +69,7 @@ export const updateProductionRun: Operation<typeof updateProductionRunInput, Pro
   execute: async ({ ctx, tx, snapshotStock, activity }, validated) => {
     const timeZone = hasLocalRunInstant(validated.startTime, validated.endTime)
       ? await readRunFacilityTimeZone(ctx, tx, validated) : undefined;
+    const previousScopes = await resolveWriteActivityScopes(ctx, tx, "production_run", validated.productionRunId);
     const run = await withProductionRunErrors(() => updateProductionRunInTransaction(ctx, tx, validated.productionRunId, {
       code: validated.code,
       facilityId: validated.facilityId,
@@ -90,6 +92,7 @@ export const updateProductionRun: Operation<typeof updateProductionRunInput, Pro
       biocharMoisturePercent: validated.biocharMoisturePercent,
       biocharStorageLocationId: validated.biocharStorageLocationId,
     }, { snapshotStock, capture: activity.capture }));
+    activity.scope(run.id, [...previousScopes, ...await resolveWriteActivityScopes(ctx, tx, "production_run", run.id)]);
     activity.link({ facilityId: run.facilityId });
     return run;
   },
@@ -104,6 +107,7 @@ export const deleteProductionRun: Operation<typeof deleteProductionRunSchema, vo
     versionBefore: input.expectedVersion, versionAfter: null,
   }),
   execute: async ({ ctx, tx, source, afterCommit, snapshotStock, activity }, { productionRunId, expectedVersion }) => {
+    activity.scope(productionRunId, await resolveWriteActivityScopes(ctx, tx, "production_run", productionRunId));
     const run = await withProductionRunErrors(() => deleteProductionRunInTransaction(ctx, tx, productionRunId, expectedVersion, source, snapshotStock));
     activity.link({ facilityId: run.facilityId });
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });

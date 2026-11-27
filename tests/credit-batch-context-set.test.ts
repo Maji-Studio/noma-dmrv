@@ -25,6 +25,10 @@ vi.mock("@/lib/certification/durability-readiness", () => ({
   loadDurabilityBatchData: vi.fn(),
 }));
 
+vi.mock("@/data-access/credit-batch-emission-contributors", () => ({
+  loadBatchEmissionContributors: vi.fn(async () => ({})),
+}));
+
 const mockedLoadAccounting = vi.mocked(loadCreditBatchRollups);
 const mockedLoadLinkedGhgStatementStatus = vi.mocked(
   loadLinkedGhgStatementStatus,

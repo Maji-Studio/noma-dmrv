@@ -39,6 +39,11 @@ export function withUnmatchedUsers(chain: RecordUsedByChain, usedBy: RecordLockL
   };
 }
 
+/** Nothing to list: no direct user, no batch and no later Removal. */
+export function usedByGraphIsEmpty(graph: UsedByGraph): boolean {
+  return directUserGroups(graph).length === 0 && namedBatches(graph).length === 0 && laterRemovals(graph).length === 0;
+}
+
 /** Oldest first; records without a day last, then by code. */
 export function byDay(nodes: UsedByNode[]): UsedByNode[] {
   const time = (node: UsedByNode) => (node.at ? Date.parse(node.at) : Number.POSITIVE_INFINITY);
@@ -84,11 +89,11 @@ export function dayRange(nodes: UsedByNode[], timeZone: string): string | null {
   return start === end ? start : `${start} to ${end}`;
 }
 
-/** Where "Open in Traceability" goes for this record; null when no credit batch holds it. */
+/** Where "Open in Traceability" goes for this record; null when no material credit batch holds it (an emissions-only batch has no lineage to draw). */
 export function traceabilityHref(graph: UsedByGraph): string | null {
   const { self, creditBatches } = graph;
   if (self.kind === "creditBatch" && self.facilityId) return traceabilityBatchHref(self.id, self.facilityId);
-  const batch = creditBatches[0];
+  const batch = creditBatches.find((candidate) => candidate.dependency !== "production-emissions");
   if (!batch) return null;
   if (self.kind === "application") return traceabilityApplicationHref(batch.id, self.id);
   const href = traceabilityBatchHref(batch.id, batch.facilityId);

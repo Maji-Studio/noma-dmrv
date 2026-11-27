@@ -88,11 +88,45 @@ describe("applyBatchScope", () => {
     expect(scoped.activity.map((item) => item.id)).toEqual(["older-scoped"]);
   });
 
+  describe.each(["single", "grouped"] as const)("facility-scoped %s attention", (kind) => {
+    const row = kind === "single"
+      ? attentionRow("productionRun", "failed-run", { scope: "facility" })
+      : { ...productionGroup(["failed-run-1", "failed-run-2", "failed-run-3"]), scope: "facility" as const };
+
+    it.each([{ batchIds: [] }, { batchIds: ["batch-1"] }, { batchIds: ["batch-1", "batch-2"] }])("keeps the complete row under all batches ($batchIds)", ({ batchIds }) => {
+      const result = applyBatchScope({ ...overview, attention: [row] }, { ...scope, batchIds }, true);
+      expect(result.attention).toEqual([row]);
+      expect(result.attentionTotal).toBe(kind === "single" ? 1 : 3);
+      const production = result.stations.find((station) => station.key === "production");
+      expect(production?.attention).toBe(row.count ?? 1);
+      expect(production?.reasons).toEqual([{
+        state: "warning",
+        text: kind === "single" ? "failed-run: Missing data" : "Production runs: 3 affected, missing data",
+        href: row.href,
+      }]);
+    });
+
+    it.each([{ recordIds: [] }, { recordIds: row.recordIds }])("drops the row under one batch even with overlapping record ids ($recordIds)", ({ recordIds }) => {
+      const result = applyBatchScope({ ...overview, attention: [row] }, { ...scope, recordIds }, false);
+      expect(result.attention).toEqual([]);
+      expect(result.attentionTotal).toBe(0);
+      const production = result.stations.find((station) => station.key === "production");
+      expect(production?.attention).toBe(0);
+      expect(production?.reasons).toEqual([]);
+    });
+  });
+
+  it("keeps ordinary attention scoping identical under all batches and one batch", () => {
+    const source = { ...overview, attention: [...overview.attention, productionGroup(["run-1", "run-2", "run-9"])] };
+    const selected = { ...scope, recordIds: [...scope.recordIds, "run-2"] };
+    expect(applyBatchScope(source, selected, true)).toEqual(applyBatchScope(source, selected, false));
+  });
+
   it("keeps grouped rows with their scoped count, records in the bubble and a narrowed list link", () => {
     const group = productionGroup(["run-1", "run-2", "run-9"]);
     const result = applyBatchScope({ ...overview, attention: [group] }, { ...scope, recordIds: ["run-1", "run-2"] });
     expect(result.attention).toEqual([{ ...group, href: "/production-runs?facility=f1&ids=run-1,run-2", recordIds: ["run-1", "run-2"], count: 2 }]);
-    expect(result.attentionTotal).toBe(1);
+    expect(result.attentionTotal).toBe(2);
     const production = result.stations.find((station) => station.key === "production");
     expect(production?.attention).toBe(2);
     expect(production?.reasons.map((reason) => reason.text)).toEqual(["Production runs: 2 affected, missing data"]);
@@ -183,7 +217,7 @@ describe("applyBatchScope", () => {
       recordIds: ["batch-1", "batch-9", "run-1", "run-9", "removal-1", "removal-2", "run-7", "run-8"],
     });
     expect(all.attention.map((item) => item.id)).toEqual(overview.attention.map((item) => item.id));
-    expect(all.attentionTotal).toBe(overview.attention.length);
+    expect(all.attentionTotal).toBe(overview.attention.reduce((sum, item) => sum + (item.count ?? 1), 0));
     expect(all.stations.find((station) => station.key === "production")?.attention).toBe(8);
   });
 

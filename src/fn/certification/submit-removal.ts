@@ -1,3 +1,4 @@
+import { readProductionSourceManifest } from "@/lib/certification/production-source-manifest";
 import { startSubmissionRegistryAttempt } from "./submission-attempt-start";
 import { ATTEMPT_SUMMARY_OPERATION } from "@/lib/certification/submission-attempts";
 import { isNoAnswerError } from "@/lib/isometric/error-utils";
@@ -567,6 +568,7 @@ async function submitRemovalCore(
           removalId,
           submissionId: claimed.row.id,
           creditBatchIds: productionClaimBatchIds,
+          frozenProductionSourceManifest: readProductionSourceManifest(claimed.row.payloadSnapshot),
           // The saved plan contains exactly the lineFileEvidence used by this payload,
           // including on resume. Several documents can share the same anchor revision.
           frozenLineFileSet: [...new Map(readRemovalSourceBindingPlan(claimed.row)

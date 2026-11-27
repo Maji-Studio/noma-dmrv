@@ -76,7 +76,7 @@ export async function loadBatchEmissionContext(
     [...new Set(claimedBatchIds.map(id => rollups[id].batch.productionEmissionsClaimedByRemovalId!))]);
   const [storedEntries, automatic, contenders, availableApplications, lineFiles, fileReservations, fileContenders] = await Promise.all([
     listEmissionEntriesForBatches(ctx, ids),
-    loadBatchesEmissionAutomaticFacts(ctx, ids),
+    loadBatchesEmissionAutomaticFacts(ctx, ids, { removalId: ownedRemovalId ?? claimedAttempt?.removalId }),
     coversBatches(coveredContenders, ids, claimedAttempt) ? coveredContenders.contenders : listEmissionEntryDraftContenders(ctx, ids, undefined, claimedAttempt),
     listEmissionEntryAvailableApplications(ctx, ids),
     listEmissionLineFilesForBatches(ctx, ids),

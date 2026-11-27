@@ -756,3 +756,43 @@ it("refuses a batch move that keeps the owning run", async () => {
     expect(memberships.map(row => row.creditBatchId)).toEqual([a.batchId]);
   });
 });
+
+it("freezes a failed owner when a different Removal counted its shared transport as zero", async () => {
+  await withPair("sent-moves", async a => {
+    await removeMembership(a);
+    await db.update(productionRuns).set({ status: "failed", outputPostedAt: null }).where(eq(productionRuns.id, a.productionRunId));
+    expect(await owner(a)).toBe(a.productionRunId);
+    await expectFreeze("sent-moves", db.transaction(async tx => {
+      const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx, [a.feedstockId], { subject: "production run", mutation: "update" });
+      await freeze(async () => {
+        await tx.update(productionRuns).set({ startTime: LATE, endTime: LATE_END }).where(eq(productionRuns.id, a.productionRunId));
+      });
+    }), a, a.productionRunId);
+    const [run] = await db.select().from(productionRuns).where(eq(productionRuns.id, a.productionRunId));
+    expect(run.startTime).toEqual(EARLY);
+  });
+});
+
+
+it("retains a failed-only Sent holder after its last feedstock link is removed", async () => {
+  await withPair("sent-moves", async (a, b) => {
+    await removeMembership(b);
+    await db.update(productionRuns).set({ status: "failed", outputPostedAt: null })
+      .where(eq(productionRuns.id, b.productionRunId));
+    await makeNonOwner(a);
+    expect(await owner(a)).toBe(b.productionRunId);
+    const before = await db.select().from(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, b.productionRunId));
+    await expect(db.transaction(async tx => {
+      const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx, [a.feedstockId, b.feedstockId], {
+        mutation: "update", subject: "production run",
+      });
+      await freeze(async () => {
+        await tx.delete(productionRunFeedstocks).where(and(
+          eq(productionRunFeedstocks.organizationId, TEST_ORG_ID), eq(productionRunFeedstocks.productionRunId, b.productionRunId),
+        ));
+      });
+    })).rejects.toMatchObject({ code: "certification_locked" });
+    expect(await db.select().from(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, b.productionRunId))).toEqual(before);
+    expect(await owner(a)).toBe(b.productionRunId);
+  });
+});

@@ -8,7 +8,7 @@
  *
  * - A null reading is a missing reading, never zero.
  * - Feedstock transport is 2 x one-way km x load tonnes per leg and counts
- *   once, on the owning run, the earliest complete run in a credit batch that
+ *   once, on the owning run, the earliest complete material member or attached failed contributor that
  *   drew it, as the Removal does (#1487, #1522). Without a loaded owner it
  *   stays unattributed and reaches no credit batch. Only road legs
  *   are counted, so a feedstock with a rail, ship, pipeline or air leg counts
@@ -140,7 +140,7 @@ function buildModel(inputs: EnergyInputs): Model {
 
   const runs = new Map<string, RunCalc>();
   for (const input of inputs.runs) {
-    const run = input.status === "failed" ? { ...input, biocharDryMassKg: null, creditBatchId: null } : input;
+    const run = input.status === "failed" ? { ...input, biocharDryMassKg: null } : input;
     runs.set(run.id, {
       run,
       creditBatchId:

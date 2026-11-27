@@ -97,6 +97,7 @@ import { useListPagination } from "@/hooks/use-list-pagination";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { sumNullableBy } from "@/lib/nullable-sum";
 import { Notice } from "@/components/ui/notice";
+import { FailedRunEmissionTodos } from "./failed-run-emission-todos";
 import { ILLUSTRATION_SIZE, CreditBatchArt } from "@/components/ui/illustrations";
 
 // ============================================
@@ -690,6 +691,8 @@ export function CreditBatchList({
           </Button>
         }
       />
+
+      <FailedRunEmissionTodos facilityId={contextFacilityId} />
 
       {allItems.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-x-20 gap-y-8">

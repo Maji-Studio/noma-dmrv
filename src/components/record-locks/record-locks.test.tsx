@@ -352,6 +352,35 @@ describe("RecordUsedBy", () => {
     expect(traceability).toContain("run=run-1");
   });
 
+  it("lists a failed run's batch as emissions only, with no lock reference and no separate line", () => {
+    answer(chainOf([], { creditBatches: [{ ...BATCH, dependency: "production-emissions" }] }));
+    render(<RecordUsedBy lock={view("open", [])} record={RECORD} readsChain />);
+    expect(screen.queryByText("None")).toBeNull();
+    expect(screen.getByText("Credit batch:")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "CB-26-003" }).getAttribute("href")).toContain("/credit-batches/cb-1");
+    expect(screen.getByText(/, emissions only/)).toBeTruthy();
+    expect(screen.queryByText(/Emissions count in credit batch/)).toBeNull();
+  });
+
+  it("keeps None for a failed run no batch covers, and holds it back while the check failed", () => {
+    answer(chainOf([]));
+    const { rerender } = render(<RecordUsedBy lock={view("open", [])} record={RECORD} readsChain />);
+    expect(screen.getByText("None")).toBeTruthy();
+    rerender(<RecordUsedBy lock={view("open", [])} record={RECORD} readsChain holdsNone />);
+    expect(screen.queryByText("None")).toBeNull();
+  });
+
+  it("marks an intake drawn only by a failed run as emissions only, and a material batch stays plain", () => {
+    answer(chainOf([], { self: node("feedstock", "fs-1", "FS-26-001"), creditBatches: [{ ...BATCH, dependency: "production-emissions" }] }));
+    const { unmount } = render(<RecordUsedBy lock={view("inUse", [], [PRODUCT])} record={{ kind: "feedstock", id: "fs-1" }} />);
+    expect(screen.getByText("Credit batch:")).toBeTruthy();
+    expect(screen.getByText(/, emissions only/)).toBeTruthy();
+    unmount();
+    answer(chainOf([], { self: node("feedstock", "fs-1", "FS-26-001"), creditBatches: [BATCH] }));
+    render(<RecordUsedBy lock={view("inUse", [], [PRODUCT])} record={{ kind: "feedstock", id: "fs-1" }} />);
+    expect(screen.queryByText(/emissions only/)).toBeNull();
+  });
+
   it("shows three of a kind oldest first and folds the rest behind one line that opens and closes", () => {
     const days = ["2026-04-05", "2026-04-01", "2026-04-03", "2026-04-02", "2026-04-04"];
     answer(chainOf(days.map((day, index) => node("order", `o-${index}`, `OR-26-00${index}`, day))));

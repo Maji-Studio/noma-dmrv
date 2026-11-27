@@ -1,10 +1,14 @@
+import { FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { lockFailedEmissionBatchArtifacts } from "./failed-run-emission-write-guard";
+import { loadRunEmissionContributors } from "./credit-batch-emission-contributors";
 import type { DbTransaction } from "@/db";
-import { certifierRemovals, creditBatchProductionRuns, feedstocks, feedstockTypes, productionRunFeedstocks } from "@/db/schema";
+import { certifierRemovals, creditBatchProductionRuns, feedstocks, feedstockTypes, productionRunFeedstocks, productionRuns } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { DomainError } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
 import { and, eq, inArray } from "drizzle-orm";
 import {
-  getLockedCertifiedLineageForBatches,
+  getLineageUnderLockedArtifacts,
   getRecordLocks,
   isSubmittedLineageRow,
 } from "./certification-lineage-guards";
@@ -108,7 +112,21 @@ export async function getLockedFeedstockTypeLinkLock(
       eq(feedstocks.feedstockTypeId, feedstockTypeId),
     ))
     .orderBy(creditBatchProductionRuns.creditBatchId);
-  const lineage = await getLockedCertifiedLineageForBatches(ctx, tx, batches.map(batch => batch.id));
+  const failedRuns = await tx.selectDistinct({ id: productionRunFeedstocks.productionRunId })
+    .from(productionRunFeedstocks).innerJoin(feedstocks, and(
+      eq(feedstocks.id, productionRunFeedstocks.feedstockId), eq(feedstocks.organizationId, ctx.organizationId),
+    )).innerJoin(productionRuns, and(
+      eq(productionRuns.id, productionRunFeedstocks.productionRunId),
+      eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.status, FAILED_PRODUCTION_RUN_STATUS),
+    )).where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId), eq(feedstocks.feedstockTypeId, feedstockTypeId)));
+  const contributors = await loadRunEmissionContributors(ctx, failedRuns.map(run => run.id), tx, { includeArchived: true });
+  const batchIds = [...new Set([...batches.map(batch => batch.id), ...contributors.flatMap(run => run.creditBatchId ? [run.creditBatchId] : [])])];
+  const targets = batchIds.sort().map(entityId => ({ entityType: "creditBatch" as const, entityId }));
+  // The caller holds the feedstock-type row. Newly discovered failed-source
+  // artifacts cannot be waited on behind that row lock.
+  const keys = await lockFailedEmissionBatchArtifacts(ctx, tx, contributors.filter(run => run.kind === "failed" && run.creditBatchId).map(run => run.creditBatchId!), "feedstockType",
+    () => new DomainError("conflict", "Certification inputs changed while saving the feedstock type. Refresh and retry.", { retryable: true }), targets);
+  const lineage = (await Promise.all(targets.map(target => getLineageUnderLockedArtifacts(ctx, tx, keys, target)))).flat();
   const removals = new Set<string>();
   for (const row of lineage.filter(isSubmittedLineageRow)) {
     removals.add(row.removalId);
