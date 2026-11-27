@@ -1,3 +1,5 @@
+import { prepareFailedRunEmissionWrite } from "../failed-run-emission-write-guard";
+import { lockFacilityReferences } from "../facility-reference-guards";
 import { earliestFeedstockEventTie } from '@/lib/feedstock-event-boundary';
 import { reallocateRunsForBins } from '../feedstock-run-allocations';
 import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze } from "../feedstock-transport-ownership-freeze";
@@ -52,6 +54,7 @@ export async function deleteProductionRunInTransaction(
   const [existing] = await tx
     .select({
       id: productionRuns.id,
+      facilityId: productionRuns.facilityId,
       version: productionRuns.version,
       biocharStorageLocationId: productionRuns.biocharStorageLocationId,
     })
@@ -68,6 +71,7 @@ export async function deleteProductionRunInTransaction(
   // if the final productionRuns delete fails. Foreign-key constraints remain
   // the race-safe backstop for dependent records; without the transaction the
   // removable children would already be gone, leaving a half-deleted run.
+  await lockFacilityReferences(ctx, tx, [existing.facilityId]);
   await lockBinStocks(ctx, tx, [
     ...existingFeedstockStorageLocationIds,
     existing.biocharStorageLocationId,
@@ -118,6 +122,7 @@ export async function deleteProductionRunInTransaction(
   const eventTie = earliestFeedstockEventTie(previousDraws);
   await snapshotStock?.(tx, [...lockedFeedstockStorageLocationIds, locked.biocharStorageLocationId]);
 
+  const finishFailedEmissionWrite = await prepareFailedRunEmissionWrite(ctx, tx, productionRunId, {}, "productionRun", "delete");
   const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
     await getTransportFreezeFeedstockIds(ctx, tx, { runIds: [productionRunId], binIds: lockedFeedstockStorageLocationIds }),
     { mutation: "delete", subject: "production run" });
@@ -201,6 +206,7 @@ export async function deleteProductionRunInTransaction(
       .where(and(eq(incidentReports.productionRunId, productionRunId), eq(incidentReports.organizationId, ctx.organizationId)));
 
     await tx.delete(productionRuns).where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
+    await finishFailedEmissionWrite();
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "production_run", entityId: productionRunId },
       ...productionIncidents.map((incident) => ({

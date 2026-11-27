@@ -1,3 +1,4 @@
+import type { FailedRunEmissionGuidance } from "./failed-run-emission-guidance";
 /**
  * What the Production Run form footer says about credit batch membership
  * (#1164). The server resolves it with the same predicate the save path uses
@@ -38,8 +39,14 @@ export type ProductionRunCreditBatchMemberConflict =
 /** The first input the preview still needs, in form order. */
 export type ProductionRunCreditBatchPreviewMissing = "facility" | "start" | "end" | "feedstock";
 
-export type ProductionRunCreditBatchPreview =
-  /** Failed and cancelled runs never join a credit batch. */
+export type ProductionRunCreditBatchPreview = ProductionRunCreditBatchPreviewState & {
+  /** Persisted failed-run facts, never inferred from unsaved form values. */
+  savedEmissionAttachment?: FailedRunEmissionGuidance;
+  contributionKind?: "material" | "emissions";
+};
+
+export type ProductionRunCreditBatchPreviewState =
+  /** No material membership. Saved failed activity is described by savedEmissionAttachment. */
   | { state: "not-applicable"; status: "failed" | "cancelled" }
   | { state: "incomplete"; missing: ProductionRunCreditBatchPreviewMissing }
   /** The source bins hold more than one feedstock type. */

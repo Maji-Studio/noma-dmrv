@@ -62,6 +62,7 @@ import { footerForRefusedSave } from "./production-run-refusal";
 import { StaleVersionError, toDeleteErrorMessage, toSaveErrorMessage } from "@/lib/stale-version";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { ProductionRunForm, type ProductionRunSubmitData } from "./production-run-form";
+import { FailedRunUsedBy } from "./failed-run-emission-line";
 import { productionRunSheetSections, RunStatusBadge } from "./production-run-read-sections";
 import { ProductionIncidentTable } from "./production-incident-table";
 import { ProductionSampleTable } from "./production-sample-table";
@@ -541,7 +542,7 @@ export function ProductionRunList() {
       onModeChange={handleModeChange}
       title={sideSheetTitle}
       subtitle={sideSheetSubtitle}
-      {...recordLockSheetProps({ record: { kind: "productionRun", id: displaySideSheet?.entity?.id }, lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: !isProductionRunOutputLocked(sheetLock) })}
+      {...recordLockSheetProps({ record: { kind: "productionRun", id: displaySideSheet?.entity?.id }, lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: !isProductionRunOutputLocked(sheetLock), usedBy: <FailedRunUsedBy lock={sheetLock} run={displaySideSheet?.entity} /> })}
       canEdit={isRecordEditable(sheetLock)}
       editLabel="Edit production run"
       readOnly={sheetReadOnly}

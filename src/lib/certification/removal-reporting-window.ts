@@ -57,6 +57,7 @@ export function resolveLatestApplicationTime(
  */
 export function resolveRemovalReportingWindow(args: {
   earliestProductionStartTime: Date;
+  failedContributorStartTimes?: readonly Date[];
   latestProductionEndTime: Date;
   latestApplicationTime: Date;
   facilityTimezone: string;
@@ -78,9 +79,13 @@ export function resolveRemovalReportingWindow(args: {
         `${productionEndFacilityDay}. Correct the application date before submitting.`,
     );
   }
+  const reportingStart = (args.failedContributorStartTimes ?? []).reduce(
+    (earliest, start) => start < earliest ? start : earliest,
+    earliestProductionStartTime,
+  );
   return {
     startedOn: new Date(
-      `${formatFacilityDate(earliestProductionStartTime, facilityTimezone)}T00:00:00Z`,
+      `${formatFacilityDate(reportingStart, facilityTimezone)}T00:00:00Z`,
     ),
     completedOn: new Date(`${applicationDate}T00:00:00Z`),
   };

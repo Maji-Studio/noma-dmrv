@@ -3,6 +3,8 @@ import { SafeError } from "@/lib/errors";
 import { dryOutputExceedsDryInput } from "@/lib/calculations/mass-dry";
 
 export const COMPLETED_PRODUCTION_RUN_STATUS = "complete" as const;
+export const FAILED_PRODUCTION_RUN_STATUS = "failed" as const;
+export const EMISSION_SOURCE_RUN_STATUSES = [COMPLETED_PRODUCTION_RUN_STATUS, FAILED_PRODUCTION_RUN_STATUS] as const;
 export const CANCELLED_PRODUCTION_RUN_STATUS = "cancelled" as const;
 export const DRY_MASS_BALANCE_MESSAGE =
   "Dry output exceeds dry input. Reduce the biochar output or correct the moisture values.";
@@ -14,7 +16,7 @@ export const RUNNING_END_FORBIDDEN_MESSAGE = "Choose Complete or clear the end t
 export const PRODUCTION_RUN_STATUSES = [
   "running",
   COMPLETED_PRODUCTION_RUN_STATUS,
-  "failed",
+  FAILED_PRODUCTION_RUN_STATUS,
   CANCELLED_PRODUCTION_RUN_STATUS,
 ] as const;
 

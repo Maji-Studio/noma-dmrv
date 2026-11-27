@@ -297,3 +297,17 @@ it("returns a real zero only for empty transport owned elsewhere", () => {
   expect(mixed.massDistanceTonneKm).toBeNull();
   expect(mixed.warning).not.toBeNull();
 });
+
+it("keeps failed output and dates out of material aggregation while front-loading inputs", () => {
+  const material = { id: "material", code: "M", status: "complete", startTime: new Date("2026-03-10"), endTime: new Date("2026-03-11"),
+    biocharDryMassKg: 100, feedstockMassDryKg: 200, dieselOperationLiters: 1 } as ProductionRunForCertification;
+  const failed = { ...material, id: "failed", code: "F", status: "failed", startTime: new Date("2026-02-01"), endTime: new Date("2026-03-31"),
+    biocharDryMassKg: 999, dieselOperationLiters: 2, dieselGensetLiters: 3, preprocessingFuelLiters: 4, electricityKwh: 5 } as ProductionRunForCertification;
+  const result = aggregateProductionRuns([material, material], new Map([[material.id, 0.5]]), { failedContributors: [failed, failed] });
+  expect(result).toMatchObject({ totalBiocharDryMassKg: 50, totalFeedstockDryMassKg: 400, totalStartupDieselLitres: 3,
+    totalGensetDieselLitres: 7, totalElectricityKwh: 5, earliestStartTime: material.startTime, latestEndTime: material.endTime, warnings: [] });
+  expect(result.sourceProductionRunIds).toEqual(["material", "failed"]);
+  const followup = aggregateProductionRuns([material], undefined, { productionRunIds: new Set(), failedContributors: [] });
+  expect(followup.totalFeedstockDryMassKg).toBe(0);
+  expect(followup.totalBiocharDryMassKg).toBe(100);
+});

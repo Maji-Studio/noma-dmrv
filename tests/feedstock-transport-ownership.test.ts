@@ -1,3 +1,5 @@
+import { eq } from "drizzle-orm";
+import { failedRunFixture } from "./helpers/failed-run-fixture";
 import { beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import {
@@ -142,4 +144,28 @@ describe("feedstock transport ownership data access", () => {
       throw ROLLBACK;
     })).rejects.toBe(ROLLBACK);
   });
+});
+
+it("orders failed transport owners across facilities and retains archive-inclusive ownership", async () => {
+  await expect(db.transaction(async tx => {
+    const ctx = makeTestOrgContext();
+    const early = await failedRunFixture(tx);
+    const later = await failedRunFixture(tx);
+    const [process] = await tx.insert(productionProcesses).values({ ...later.site, feedstockTypeId: early.type.id }).returning();
+    await tx.update(creditBatches).set({ feedstockTypeId: early.type.id, productionProcessId: process.id }).where(eq(creditBatches.id, later.batch!.id));
+    await tx.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, later.run.id));
+    await tx.insert(productionRunFeedstocks).values({ ...early.org, productionRunId: later.run.id, feedstockId: early.stock.id, wetMassUsedKg: 1 });
+    await tx.update(productionRuns).set({ startTime: new Date("2026-03-01T00:00:00Z") }).where(eq(productionRuns.id, later.run.id));
+    const owners = () => getFeedstockTransportOwners(ctx, [early.stock.id], tx, { includeArchived: true });
+    expect((await owners()).get(early.stock.id)).toBe(early.run.id);
+    await tx.update(productionRuns).set({ archivedAt: new Date("2026-04-01") }).where(eq(productionRuns.id, early.run.id));
+    await tx.update(creditBatches).set({ archivedAt: new Date("2026-04-01") }).where(eq(creditBatches.id, early.batch!.id));
+    expect((await owners()).get(early.stock.id)).toBe(early.run.id);
+    expect((await getFeedstockTransportOwners(ctx, [early.stock.id], tx)).get(early.stock.id)).toBe(later.run.id);
+    await tx.update(productionRuns).set({ status: "cancelled", cancellationReason: "Recorded in error" }).where(eq(productionRuns.id, early.run.id));
+    expect((await owners()).get(early.stock.id)).toBe(later.run.id);
+    await tx.update(creditBatches).set({ startDate: "2026-03-02" }).where(eq(creditBatches.id, later.batch!.id));
+    expect((await owners()).has(early.stock.id)).toBe(false);
+    throw ROLLBACK;
+  })).rejects.toBe(ROLLBACK);
 });

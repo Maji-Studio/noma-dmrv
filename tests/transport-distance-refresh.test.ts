@@ -1,7 +1,9 @@
 import { beforeAll, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { activityEvents, customerLocationFacilityDistances, supplierLocationFacilityDistances, customerLocations, deliveries, feedstocks, orders, supplierLocations } from "@/db/schema";
+import { certifierRemovals, activityEvents, customerLocationFacilityDistances, supplierLocationFacilityDistances, customerLocations, deliveries, feedstocks, orders, supplierLocations } from "@/db/schema";
+import { recordLocks } from "@/lib/record-lock";
+import { formatCertificationLineageLockMessage } from "@/lib/certification/lineage-lock-message";
 import { getTransportDistanceDrift } from "@/data-access/transport-distance-drift";
 import { refreshFeedstockDistance, refreshDeliveryDistance } from "@/lib/operations/transport-distance-refresh";
 import { runOperationInProcess } from "@/lib/operations/runner";
@@ -173,4 +175,24 @@ it("refreshes a documented delivery using the pair provenance", async () => {
 it("returns not_found for a missing drift record", async () => {
   await expect(getTransportDistanceDrift(ctx, { entityType: "delivery", entityId: crypto.randomUUID() }))
     .rejects.toMatchObject({ code: "not_found" });
+});
+
+it.each(["feedstock", "delivery"] as const)("preserves the ordinary Removal window in a %s refresh refusal", async entityType => {
+  await withLineageFixture(async fixture => {
+    await db.update(certifierRemovals).set({ startedOn: "2026-06-01", completedOn: "2026-06-30" })
+      .where(and(eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, fixture.removalId)));
+    const entityId = entityType === "feedstock" ? fixture.feedstockId : fixture.deliveryId;
+    const target = { entityType, entityId };
+    const before = await getTransportDistanceDrift(ctx, target);
+    const lock = recordLocks.removal({ dependents: [], removals: [{
+      id: fixture.removalId, label: "2026-06-01 to 2026-06-30", submissions: [{ status: "submitted" }], statements: [],
+    }] });
+    const refresh = entityType === "feedstock" ? refreshFeedstockDistance : refreshDeliveryDistance;
+    await expect(runOperationInProcess(refresh, ctx, { entityId, expectedVersion: before.expectedVersion })).rejects.toMatchObject({
+      code: "certification_locked", message: formatCertificationLineageLockMessage({
+        mutation: "update", subjectEntityType: entityType, lineageEntityType: entityType, lock,
+      }),
+    });
+    expect(await getTransportDistanceDrift(ctx, target)).toEqual(before);
+  }, "removal");
 });

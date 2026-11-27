@@ -157,18 +157,32 @@ function BatchLink({ batch }: { batch: RecordUsedByBatch }) {
   );
 }
 
-/** "Credit batch: CB-26-003" and "Removal: RM-26-003", the forms' label wording, as one quiet caption line under the records. */
+/** Appended to a batch the record reaches only through a failed run's emissions (#1714). */
+export const EMISSIONS_ONLY_SUFFIX = ", emissions only";
+
+/** One "Credit batch: A and B" group; `suffix` closes an emissions-only group ("CB-26-001, emissions only"). */
+function BatchGroup({ batches, suffix }: { batches: RecordUsedByBatch[]; suffix?: string }) {
+  return (
+    <span className="flex flex-wrap items-center gap-x-6">
+      <CertificateIcon size={LINE_ICON} aria-hidden className="shrink-0" />
+      {batches.length === 1 ? "Credit batch:" : "Credit batches:"}
+      <span>{joinWithAnd(batches.map((batch) => <BatchLink key={batch.id} batch={batch} />))}{suffix}</span>
+    </span>
+  );
+}
+
+/**
+ * "Credit batch: CB-26-003" and "Removal: RM-26-003", the forms' label wording, as one quiet caption line under the records.
+ * A batch reached only through a failed run's emissions reads "CB-26-003, emissions only" (#1714).
+ */
 function BatchLine({ batches, removals }: { batches: RecordUsedByBatch[]; removals: UsedByNode[] }) {
   if (batches.length === 0 && removals.length === 0) return null;
+  const material = batches.filter((batch) => !batch.dependency);
+  const emissionsOnly = batches.filter((batch) => batch.dependency === "production-emissions");
   return (
     <p className="flex flex-wrap items-center gap-x-24 gap-y-8 body-caption text-[var(--color-text-secondary)]">
-      {batches.length > 0 && (
-        <span className="flex flex-wrap items-center gap-x-6">
-          <CertificateIcon size={LINE_ICON} aria-hidden className="shrink-0" />
-          {batches.length === 1 ? "Credit batch:" : "Credit batches:"}
-          {joinWithAnd(batches.map((batch) => <BatchLink key={batch.id} batch={batch} />))}
-        </span>
-      )}
+      {material.length > 0 && <BatchGroup batches={material} />}
+      {emissionsOnly.length > 0 && <BatchGroup batches={emissionsOnly} suffix={EMISSIONS_ONLY_SUFFIX} />}
       {removals.length > 0 && (
         <span className="flex flex-wrap items-center gap-x-6">
           <StackIcon size={LINE_ICON} aria-hidden className="shrink-0" />
@@ -176,6 +190,25 @@ function BatchLine({ batches, removals }: { batches: RecordUsedByBatch[]; remova
           {joinWithAnd(removals.map((node) => <NodeLink key={keyOf(node)} node={node} />))}
         </span>
       )}
+    </p>
+  );
+}
+
+/**
+ * A Failed run's quiet emissions caption on its sheet (#1714), in the credit
+ * batch caption's frame: no credit batch matches yet, and one link goes to the
+ * credit batches. Warnings and failed reads are a `Notice` instead; a counted
+ * run is listed in Used by as "CB-26-003, emissions only".
+ */
+export function EmissionsLine({ lead, action }: {
+  lead: string;
+  action?: { label: string; href: string } | null;
+}) {
+  return (
+    <p className="flex flex-wrap items-center gap-x-6 gap-y-4 body-caption text-[var(--color-text-secondary)]">
+      <CertificateIcon size={LINE_ICON} aria-hidden className="shrink-0" />
+      <span>{lead}</span>
+      {action && <Link href={action.href} className={cn("underline underline-offset-4", INLINE_HIT_AREA)}>{action.label}</Link>}
     </p>
   );
 }

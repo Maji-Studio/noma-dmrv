@@ -16,6 +16,7 @@
  *
  * Pure, so the mapping is unit-tested without a database.
  */
+import { failedRunEmissionTodoTitle } from "@/lib/production-runs/failed-run-emission-copy";
 import { facilityListHref, plural } from "@/lib/dashboard-links";
 import { RECORD_LINKS } from "@/lib/record-links";
 import type {
@@ -29,6 +30,7 @@ import type { DashboardStructuralGap } from "./dashboard-structural-gaps";
 export interface DashboardBatchAttentionCounts {
   /** Removals whose submission stopped part way (one row per Removal). */
   interrupted: number;
+  failedEmissions?: number;
   /** Batches whose period ended with no submitted Removal. */
   notSubmitted: number;
   /** Batches whose submitted Removal the verifier sent back for correction. */
@@ -41,6 +43,11 @@ export const BATCH_ATTENTION_STATION: DashboardStationKey = "production";
 
 function batchReasons(counts: DashboardBatchAttentionCounts, facilityId: string): DashboardStationReason[] {
   return [
+    ...((counts.failedEmissions ?? 0) > 0 ? [{
+      state: "warning" as const,
+      text: failedRunEmissionTodoTitle(counts.failedEmissions!),
+      href: facilityListHref(RECORD_LINKS.creditBatch.path, facilityId),
+    }] : []),
     ...(counts.interrupted > 0
       ? [{
           state: "error" as const,
@@ -80,7 +87,7 @@ export function withCrossCuttingAttention(
     add(gap.station, gap.count, [{ state: "warning", text: gap.stationReason, href: gap.href }]);
   }
   const reasons = batchReasons(batches, facilityId);
-  if (reasons.length > 0) add(BATCH_ATTENTION_STATION, batches.interrupted + batches.notSubmitted + batches.returned, reasons);
+  if (reasons.length > 0) add(BATCH_ATTENTION_STATION, batches.interrupted + batches.notSubmitted + batches.returned + (batches.failedEmissions ?? 0), reasons);
 
   return stations.map((station) => {
     const added = extra.get(station.key);

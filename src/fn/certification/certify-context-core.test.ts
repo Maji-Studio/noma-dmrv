@@ -1,3 +1,4 @@
+vi.mock("@/data-access/credit-batch-emission-contributors", () => ({ loadBatchEmissionContributors: vi.fn(async () => ({})) }));
 vi.mock("@/lib/certification/removal-correction-core", () => ({ loadRemovalEntryCorrection: vi.fn(async () => ({ windowOpen: false, correctionNeeded: false, changedComponentIds: [], message: null })) }));
 import { beforeEach, expect, it, vi } from "vitest";
 import { collectFutureDatedMeasurements } from "@/lib/certification/future-dated-measurements";
@@ -40,7 +41,7 @@ const ctx = makeTestOrgContext();
 const scope = {
   facilityId: "facility-1", removalId: "removal-1", removal: null,
   memberBatches: [{ id: "batch-1", code: "CB-1", removalTemplateId: fixture.id,
-    productionRunIds: [], completedProductionRunIds: [], applicationIds: ["application-1"], applicationSlices: [],
+    productionRunIds: [], productionFeedstockIds: ["feedstock-1"], completedProductionRunIds: [], applicationIds: ["application-1"], applicationSlices: [],
     productionEmissionsClaimedByRemovalId: null,
   }],
   lineages: [{ delivery: { id: "delivery-1" }, application: { biocharAppliedTons: 1, applicationDate: new Date("2026-10-01") } }],

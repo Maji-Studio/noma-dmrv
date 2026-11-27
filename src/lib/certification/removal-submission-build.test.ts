@@ -1,3 +1,4 @@
+import { readProductionSourceManifest } from "./production-source-manifest";
 import { reviewedTemplateSources } from "../../../tests/helpers/template-line-sources";
 import { buildSubmissionLineageBlockers } from "./certify-lineage-blockers";
 import { deriveRequiredTransportCategories, EMPTY_TRANSPORT_COVERAGE } from "./certify-transport-coverage";
@@ -376,9 +377,11 @@ describe("buildRemovalSubmissionBuild", () => {
 
   it.each([
     { scenario: "builds the Safety margin from dry mass with the Inventory Source attached", inverted: false, beforeEnd: false },
+    { scenario: "includes failed inputs on the first production claim", inverted: false, beforeEnd: false, failed: true, followup: false },
+    { scenario: "omits failed inputs on the follow-up claim", inverted: false, beforeEnd: false, failed: true, followup: true },
     { scenario: "refuses an application on the UTC day before the run's facility day", inverted: true, beforeEnd: false },
     { scenario: "refuses an application before the production end's facility day", inverted: false, beforeEnd: true },
-  ])("$scenario", async ({ inverted, beforeEnd }) => {
+  ])("$scenario", async ({ inverted, beforeEnd, failed = false, followup = false }) => {
     const inventoryBinding = classifyRemovalSourceCandidate({
       documentType: "pdf",
       metadata: { logbookEvidenceType: "inventory" },
@@ -523,6 +526,20 @@ describe("buildRemovalSubmissionBuild", () => {
       memberBatches: [{ id: "batch-1" }],
       facilityReferenceSoilTemperature: null,
     } as unknown as RemovalSubmissionContext;
+    ctx.memberBatchClaims[0].productionRunIds = [run.id];
+    ctx.memberBatchClaims[0].claimedByRemovalId = followup ? "other-removal" : null;
+    if (failed) {
+      const failedRun = { ...run, id: "failed-run", status: "failed" as const,
+        startTime: new Date("2025-12-30T12:00:00Z"), endTime: new Date("2026-01-10T12:00:00Z"),
+        biocharDryMassKg: 9999, feedstockMassDryKg: 123, dieselOperationLiters: 2,
+        dieselGensetLiters: 3, preprocessingFuelLiters: 4, electricityKwh: 5 };
+      ctx.failedEmissionRuns = [failedRun, failedRun];
+      ctx.productionSourceManifest = { version: 1, failedContributors: [{
+        runId: failedRun.id, version: 1, facilityId: "facility-1", endDay: "2026-01-02", feedstockTypeId: "type-1",
+        feedstockIds: ["feedstock-a"], creditBatchId: "batch-1", creditBatchCode: "CB-1", kind: "failed", unresolvedReason: null,
+      }] };
+    }
+    ctx.productionSourceManifest ??= { version: 1, failedContributors: [], countedTransportFeedstockIds: [] };
     ctx.lineSources = reviewedTemplateSources(template, { "component-safety-margin": { scope: "operating", automaticSource: "safety-margin", entryPolicy: "additive", origin: "reviewed" } });
     ctx.submissionLineageBlockers = buildSubmissionLineageBlockers(
       ctx.lineages, ["feedstock-without-leg"], {},
@@ -564,6 +581,21 @@ describe("buildRemovalSubmissionBuild", () => {
       return;
     }
     const build = await buildPromise;
+    if (!failed || followup) expect(build.semanticPayload).not.toHaveProperty("productionSourceManifest");
+    if (failed && !followup) {
+      expect(build.semanticPayload.startedOn).toBe("2025-12-30T00:00:00.000Z");
+      expect(build.agg.earliestStartTime).toEqual(run.startTime);
+      expect(build.agg.latestEndTime).toEqual(run.endTime);
+    }
+    if (failed) {
+      expect(build.agg).toMatchObject({ totalBiocharDryMassKg: 600, totalFeedstockDryMassKg: followup ? 0 : 4123,
+        totalStartupDieselLitres: followup ? 0 : 2, totalGensetDieselLitres: followup ? 0 : 7, totalElectricityKwh: followup ? 0 : 5 });
+      expect(build.agg.sourceProductionRunIds).toEqual(followup ? [run.id] : [run.id, "failed-run"]);
+      const snapshot = materializeRemovalSubmissionSnapshot({ compiled: build, template,
+        externalProjectId: "project-1", removalId: "removal-1", nextVersion: 1, supersedePreviousId: null });
+      expect(readProductionSourceManifest(snapshot.payloadSnapshot)).toEqual(followup ? null : ctx.productionSourceManifest);
+    }
+
     expect(build.transportFeedstockIds).toEqual(["feedstock-a", "feedstock-b"]);
     expect(build.semanticPayload).not.toHaveProperty("transportFeedstockIds");
 

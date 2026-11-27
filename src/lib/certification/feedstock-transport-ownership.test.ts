@@ -64,3 +64,11 @@ it("lists linked feedstock ids owned elsewhere only when no run owns any of them
   expect(linkedFeedstockIdsOwnedElsewhere(allElsewhere)).toEqual(["a", "b"]);
   expect(linkedFeedstockIdsOwnedElsewhere([{ feedstocks: [] }])).toEqual([]);
 });
+
+it("lets attached failed runs own once, retaining start-time and ID ordering", () => {
+  const failed = { ...draw("a", "2026-02-01", "failed"), failedEmissionAttached: true };
+  expect(feedstockTransportOwners([draw("b", "2026-02-01"), failed, failed]).get("early")).toBe("a");
+  expect(feedstockTransportOwners([failed]).get("early")).toBe("a");
+  expect(feedstockTransportOwners([failed, draw("earlier", "2026-01-01")]).get("early")).toBe("earlier");
+  expect(feedstockTransportOwners([{ ...failed, failedEmissionAttached: false }]).size).toBe(0);
+});

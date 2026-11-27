@@ -1,3 +1,6 @@
+import { lockFacilityReferences } from "./facility-reference-guards";
+import { assertProductionSourceManifestFresh } from "./production-source-manifest";
+import type { ProductionSourceManifest } from "@/lib/certification/production-source-manifest";
 import { assertComponentFileClaimFresh } from "./component-file-claim";
 import { isCarriedToRemoval } from "@/lib/certification/emission-entry-carry";
 import { loadFacilityEmissionEntryCarry } from "./emission-entry-carry";
@@ -55,6 +58,7 @@ export async function reserveProductionEmissionsClaims(
     submissionId: string;
     creditBatchIds: string[];
     now?: Date;
+    frozenProductionSourceManifest?: ProductionSourceManifest | null;
     frozenLineFileSet?: { anchorId: string; version: number }[];
     entryClaim?: { memberBatchIds: string[]; frozenEntrySet: { entryId: string; contentRevision: number }[] };
   },
@@ -70,6 +74,9 @@ export async function reserveProductionEmissionsClaims(
     const origins = frozenIds.length ? await tx.select({ creditBatchId: emissionEntries.creditBatchId }).from(emissionEntries)
       .where(and(eq(emissionEntries.organizationId, ctx.organizationId), inArray(emissionEntries.id, frozenIds))) : [];
     const ids = [...new Set([...baseIds, ...origins.map(entry => entry.creditBatchId)])].sort();
+    const discoveredBatches = await tx.select({ id: creditBatches.id, facilityId: creditBatches.facilityId })
+      .from(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), inArray(creditBatches.id, ids)));
+    await lockFacilityReferences(ctx, tx, discoveredBatches.map(batch => batch.facilityId));
     const batches = await tx
       .select()
       .from(creditBatches)
@@ -85,6 +92,10 @@ export async function reserveProductionEmissionsClaims(
       throw new SafeError(
         "A credit batch changed while reserving production inputs. Reload and retry.",
       );
+    }
+
+    if (batches.some(batch => discoveredBatches.find(discovered => discovered.id === batch.id)?.facilityId !== batch.facilityId)) {
+      throw new DomainError("conflict", "A credit batch moved while preparing this Removal. Refresh the review and submit again.", { retryable: true });
     }
 
     const members = entryClaim ? await tx.select({ creditBatchId: creditBatchApplications.creditBatchId }).from(creditBatchApplications)
@@ -198,7 +209,9 @@ export async function reserveProductionEmissionsClaims(
       );
     }
 
-    await assertComponentFileClaimFresh(ctx, tx, batches.filter(batch => productionIds.includes(batch.id)), args.frozenLineFileSet ?? []);
+    await assertProductionSourceManifestFresh(ctx, tx, productionIds, args.frozenProductionSourceManifest ?? null, args.removalId);
+
+    await assertComponentFileClaimFresh(ctx, tx, batches.filter(batch => productionIds.includes(batch.id)), args.frozenLineFileSet ?? [], args.removalId);
 
     const reservedEntries = entryIds.length ? await tx.update(emissionEntries).set({
       sendReservedBySubmissionId: args.submissionId, version: nextVersion(emissionEntries.version), updatedAt: sql`now()`,

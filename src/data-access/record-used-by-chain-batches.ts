@@ -1,3 +1,4 @@
+import { loadRunEmissionContributors } from "./credit-batch-emission-contributors";
 import { and, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { binMovements, creditBatchApplications, creditBatchProductionRuns, creditBatches, outputStockAllocations, outputStockRunAllocations, samples } from "@/db/schema";
@@ -7,7 +8,7 @@ import { liveOutputDraw } from "./output-stock-active-movements";
 import { requireOrgScope } from "./utils";
 
 /**
- * The root record's cohorts, never inferred from dates or legacy product links.
+ * The root record's material cohorts and explicitly resolved emissions dependencies.
  * A reached Removal can contain other cohorts; those do not belong to this root.
  */
 export async function readUsedByBatches(ctx: OrgContext, self: RecordUsedByNode, upstream: RecordUsedByNode[], downstream: RecordUsedByNode[]): Promise<RecordUsedByBatch[]> {
@@ -15,6 +16,7 @@ export async function readUsedByBatches(ctx: OrgContext, self: RecordUsedByNode,
   const org = ctx.organizationId;
   const idsOf = (nodes: RecordUsedByNode[], kind: RecordUsedByNode["kind"]) => [...new Set(nodes.filter(node => node.kind === kind).map(node => node.id))];
   const batchIds = new Set(self.kind === "creditBatch" ? [self.id] : []);
+  const emissionBatchIds = new Set<string>();
   const runIds = new Set(self.kind === "productionRun" ? [self.id]
     : self.kind === "feedstock" ? idsOf(downstream, "productionRun")
     : self.kind === "biocharProduct" ? idsOf(upstream, "productionRun") : []);
@@ -32,6 +34,11 @@ export async function readUsedByBatches(ctx: OrgContext, self: RecordUsedByNode,
     const rows = await db.selectDistinct({ id: creditBatchProductionRuns.creditBatchId }).from(creditBatchProductionRuns)
       .where(and(eq(creditBatchProductionRuns.organizationId, org), inArray(creditBatchProductionRuns.productionRunId, [...runIds])));
     for (const row of rows) batchIds.add(row.id);
+    if (self.kind === "productionRun" || self.kind === "feedstock") {
+      for (const run of await loadRunEmissionContributors(ctx, [...runIds])) {
+        if (run.kind === "failed" && run.creditBatchId) emissionBatchIds.add(run.creditBatchId);
+      }
+    }
   }
   const sampleIds = self.kind === "sample" ? [self.id] : [];
   if (sampleIds.length) {
@@ -48,9 +55,12 @@ export async function readUsedByBatches(ctx: OrgContext, self: RecordUsedByNode,
       )));
     for (const row of rows) batchIds.add(row.id);
   }
+  const materialBatchIds = new Set(batchIds);
+  for (const id of emissionBatchIds) batchIds.add(id);
   if (!batchIds.size) return [];
   const rows = await db.select({ id: creditBatches.id, code: creditBatches.code, name: creditBatches.name, facilityId: creditBatches.facilityId,
     startDate: creditBatches.startDate, endDate: creditBatches.endDate })
     .from(creditBatches).where(and(eq(creditBatches.organizationId, org), inArray(creditBatches.id, [...batchIds])));
-  return rows.sort((a, b) => a.startDate.localeCompare(b.startDate) || a.code.localeCompare(b.code) || a.id.localeCompare(b.id));
+  return rows.map(row => ({ ...row, ...(emissionBatchIds.has(row.id) && !materialBatchIds.has(row.id)
+    ? { dependency: "production-emissions" as const } : {}) })).sort((a, b) => a.startDate.localeCompare(b.startDate) || a.code.localeCompare(b.code) || a.id.localeCompare(b.id));
 }

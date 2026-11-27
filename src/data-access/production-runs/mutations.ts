@@ -1,3 +1,4 @@
+import { prepareFailedRunEmissionWrite } from "../failed-run-emission-write-guard";
 import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze } from "../feedstock-transport-ownership-freeze";
 import { reallocateRunsForBins } from "../feedstock-run-allocations";
 import { readRecordDependents } from "../record-lock-dependents";
@@ -694,6 +695,9 @@ export async function updateProductionRunInTransaction(
       }
     }
 
+    const finishFailedEmissionWrite = await prepareFailedRunEmissionWrite(ctx, tx, productionRunId, {
+      facilityId: lockedTargetFacilityId, status: lockedTargetStatus, feedstockDraws: normalizedFeedstockDraws,
+    });
     const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
       await getTransportFreezeFeedstockIds(ctx, tx, {
         runIds: [productionRunId],
@@ -844,6 +848,7 @@ export async function updateProductionRunInTransaction(
         },
         cancellationReason: lockedTargetCancellationReason,
       });
+      await finishFailedEmissionWrite();
       await attachProductionRunToMatchingCreditBatch(
         ctx,
         tx,

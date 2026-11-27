@@ -10,15 +10,18 @@ import { getFeedstockTransportOwners } from './feedstock-transport-ownership';
 it('chooses the first completed share owner without reading submission locks or filtering mass', async () => {
   const conditions: SQL[] = [];
   const rows = ['later', 'earlier'].map((runId, index) => ({ feedstockId: 'intake', runId,
-    status: 'complete', startTime: new Date(`2026-01-0${2 - index}T00:00:00Z`) }));
+    status: 'complete', creditBatchId: 'batch', creditBatchCode: 'CB-1', startTime: new Date(`2026-01-0${2 - index}T00:00:00Z`) }));
   const chain = { from: () => chain,
+    leftJoin: (_table: unknown, condition: SQL) => { conditions.push(condition); return chain; },
     innerJoin: (_table: unknown, condition: SQL) => { conditions.push(condition); return chain; },
     where: (condition: SQL) => { conditions.push(condition); return chain; },
     then: (resolve: (value: unknown) => unknown) => Promise.resolve(rows).then(resolve) };
   const selectDistinct = vi.fn();
-  const reader = { select: () => chain, selectDistinct } as unknown as DbTransaction;
+  const select = vi.fn(() => chain);
+  const reader = { select, selectDistinct } as unknown as DbTransaction;
   const ctx = { organizationId: 'org', userId: 'user' } as OrgContext;
   expect(await getFeedstockTransportOwners(ctx, ['intake'], reader)).toEqual(new Map([['intake', 'earlier']]));
+  expect(select).toHaveBeenCalledOnce();
   expect(locks).not.toHaveBeenCalled();
   expect(selectDistinct).not.toHaveBeenCalled();
   const sql = conditions.map(condition => new PgDialect().sqlToQuery(condition).sql).join(' ');

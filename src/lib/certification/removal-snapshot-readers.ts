@@ -352,3 +352,5 @@ export function readRemovalBiocharApplicationIntents(
 }
 
 export { readRemovalEntrySnapshot } from "@/lib/certification/removal-entry-snapshot";
+
+export { readProductionSourceManifest } from "./production-source-manifest";

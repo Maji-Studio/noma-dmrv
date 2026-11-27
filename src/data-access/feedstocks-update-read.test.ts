@@ -15,6 +15,7 @@ vi.mock("./certification-lineage-guards", () => ({
 }));
 vi.mock("./facility-reference-guards", () => ({
   lockActiveFacilityReference: vi.fn(),
+  lockFacilityReferences: vi.fn(),
 }));
 vi.mock("./lock-bin-stocks", () => ({ lockBinStocks: vi.fn() }));
 // The post-write lane check (issue #767) runs its own aggregate reads through
@@ -65,6 +66,7 @@ function selectReturning(read: { rows: unknown[] } | { error: Error }) {
   const query = {
     from: () => query,
     leftJoin: () => query,
+    innerJoin: () => query,
     where: () => query,
     for: () => query,
     limit: () => query,
@@ -85,7 +87,7 @@ function makeTx(enrichment: { rows: unknown[] } | { error: Error }) {
   const reads = [{ rows: [STORED_ROW] }, enrichment];
   const select = vi.fn(() => selectReturning(reads.shift() ?? { rows: [] }));
   const update = vi.fn(() => ({ set: () => ({ where: () => ({ returning: async () => [STORED_ROW] }) }) }));
-  return { select, update } as unknown as DbTransaction & {
+  return { select, selectDistinct: () => selectReturning({ rows: [] }), update } as unknown as DbTransaction & {
     select: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
   };
@@ -160,7 +162,7 @@ it("clears the override note when the supplier route changes", async () => {
     { rows: [ENRICHED_ROW] },
   ];
   const set = vi.fn(() => ({ where: () => ({ returning: async () => [ENRICHED_ROW] }) }));
-  const tx = { select: () => selectReturning(reads.shift() ?? { rows: [] }), update: () => ({ set }) } as unknown as DbTransaction;
+  const tx = { selectDistinct: () => selectReturning({ rows: [] }), select: () => selectReturning(reads.shift() ?? { rows: [] }), update: () => ({ set }) } as unknown as DbTransaction;
   await updateFeedstockInTransaction(ctx, tx, FEEDSTOCK_ID, { expectedVersion: 1, supplierId: "other-supplier" });
   expect(set).toHaveBeenCalledWith(expect.objectContaining({ distanceKmOverride: null, distanceSource: null, distanceNote: null }));
 });

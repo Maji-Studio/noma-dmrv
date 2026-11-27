@@ -1,3 +1,4 @@
+import { aggregateProductionRuns, type ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import { expect, it } from "vitest";
 import sandboxFixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import productionFixture from "../../../tests/fixtures/isometric/production-template-2026-10-15.json";
@@ -230,4 +231,23 @@ it("sends an additive entry alone for a null automatic aggregate but refuses an 
     agg.totalElectricityKwh = Number.NaN;
     expect(() => compileEntries("grid_electricity_use")).toThrow();
   } finally { agg.totalElectricityKwh = previous; }
+});
+
+it("maps failed production inputs to template quantities once while keeping stored inputs unchanged", () => {
+  const fixture = structuredClone(sandbox);
+  fixture.groups = fixture.groups.filter(group => group.key === "pyrolysis");
+  const lineSources = resolveLineSources({ definition: normalizeTemplateDefinition(fixture) });
+  const material = { id: "material", status: "complete", startTime: new Date("2026-01-01"), endTime: new Date("2026-01-02"),
+    biocharDryMassKg: 200, feedstockMassDryKg: 500, dieselOperationLiters: 5, dieselGensetLiters: 10, electricityKwh: 20 } as ProductionRunForCertification;
+  const failed = { ...material, id: "failed", status: "failed", biocharDryMassKg: 9999,
+    dieselOperationLiters: 2, dieselGensetLiters: 3, preprocessingFuelLiters: 4, electricityKwh: 5 } as ProductionRunForCertification;
+  const combined = { ...agg, ...aggregateProductionRuns([material], undefined, { failedContributors: [failed] }) };
+  const compiled = resolveTemplateInputs({ template: fixture, lineSources, blueprintsByKey, agg: combined,
+    externalProjectId: fixture.project_id, sourceIds: [], sourceBindingPlan: [], omitProductionComponents: false });
+  expect(compiled.monitored.filter(input => input.componentBlueprintKey === "fuel_usage_by_volume").map(input => input.quantity.magnitude).sort((a, b) => a - b)).toEqual([7, 17]);
+  expect(compiled.monitored).toContainEqual(expect.objectContaining({ inputKey: "electricity_use", quantity: { magnitude: 25, unit: "kWh" } }));
+  expect(combined.totalBiocharDryMassKg).toBe(200);
+  const followup = resolveTemplateInputs({ template: fixture, lineSources, blueprintsByKey, agg: combined,
+    externalProjectId: fixture.project_id, sourceIds: [], sourceBindingPlan: [], omitProductionComponents: true });
+  expect(followup.monitored).toEqual([]);
 });

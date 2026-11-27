@@ -1,3 +1,5 @@
+import { failedRunEmissionTodoRowTitle, FAILED_RUN_EMISSION_GROUP_TITLE } from "@/lib/production-runs/failed-run-emission-copy";
+import { loadFacilityFailedRunEmissionTodos } from "./failed-run-emission-guidance";
 /**
  * Dashboard overview data access — the Flow Hero dashboard's single aggregate
  * read. Period-scoped numbers (the 4-KPI band with deltas vs the previous
@@ -30,7 +32,7 @@ import { addDaysIso, formatFacilityDate, formatUtcDate, UNKNOWN_FACILITY_TIMEZON
 import { sourceBiocharMassFlowKg } from "@/lib/biochar-product-mass";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 
-import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { COMPLETED_PRODUCTION_RUN_STATUS, FAILED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import {
   and,
   asc,
@@ -163,6 +165,8 @@ export interface DashboardAttentionItem {
   /** The traceability stage whose attention bubble includes this row. */
   stage: DashboardStationKey;
   recordKind: RecordKind;
+  /** Belongs to no credit batch; shown only when all credit batches are in scope. */
+  scope?: "facility";
   /**
    * Entity code shown in the mono column, e.g. "PR-26-0042"; on a grouped row
    * the list it links to, e.g. "Production runs".
@@ -555,7 +559,8 @@ type AttentionKind =
   | "run-mass"
   | "feedstock-missing"
   | "application-evidence"
-  | "batch-pending";
+  | "batch-pending"
+  | "failed-emissions";
 
 function attentionKind(kind: AttentionKind): SQL<AttentionKind> {
   return sql<AttentionKind>`${kind}::text`;
@@ -591,7 +596,7 @@ interface AttentionRow {
   removals: BatchRemovalDisplayFacts[];
 }
 
-type FlagKind = Exclude<AttentionKind, "batch-pending">;
+type FlagKind = Exclude<AttentionKind, "batch-pending" | "failed-emissions">;
 
 /** Uncapped size of a capped branch, read in the same statement. */
 const branchTotal = sql<number>`count(*) over ()`.mapWith(Number);
@@ -644,7 +649,7 @@ function groupedRow(
 }
 
 /** Active batches take their title from `creditBatchAttention`. */
-const ATTENTION_TITLES: Record<Exclude<AttentionKind, "batch-pending">, string> = {
+const ATTENTION_TITLES: Record<FlagKind, string> = {
   "run-mass": "Complete run missing mass data",
   "feedstock-missing": "Feedstock record missing data",
   "application-evidence": "Application missing evidence",
@@ -658,7 +663,7 @@ const FLAG_ORDER: FlagKind[] = [
 ];
 
 function attentionHref(
-  kind: AttentionKind,
+  kind: Exclude<AttentionKind, "failed-emissions">,
   id: string,
   facilityId: string,
 ): string {
@@ -696,6 +701,21 @@ export async function getDashboardAttentionItems(
   const orgId = ctx.organizationId;
 
   const rows: AttentionRow[] = await unionAll(
+    // Detect failed runs in the existing round trip, even without a batch.
+    db.select({
+      kind: attentionKind("failed-emissions"),
+      removals: sql<BatchRemovalDisplayFacts[]>`'[]'::jsonb`,
+      id: productionRuns.id,
+      code: productionRuns.code,
+      dateDay: noDay,
+      dateMs: noInstant,
+      ord: sql<number>`1::bigint`.mapWith(Number),
+      total: sql<number>`1::bigint`.mapWith(Number),
+      allIds: sql<string[]>`'{}'::text[]`,
+    }).from(productionRuns).where(and(
+      eq(productionRuns.organizationId, orgId), eq(productionRuns.facilityId, facilityId),
+      eq(productionRuns.status, FAILED_PRODUCTION_RUN_STATUS), isNull(productionRuns.archivedAt),
+    )).limit(1),
     db
       .select({
         kind: attentionKind("run-mass"),
@@ -777,6 +797,14 @@ export async function getDashboardAttentionItems(
       .orderBy(asc(creditBatches.endDate)),
   );
 
+  const failedEmissionTodos = rows.some(row => row.kind === "failed-emissions")
+    ? await loadFacilityFailedRunEmissionTodos(ctx, facilityId) : [];
+  const failedEmissionRows = failedEmissionTodos.map((todo): DashboardAttentionItem => ({
+    id: todo.id, stage: "production", recordKind: "productionRun", entityCode: todo.productionRun.code,
+    scope: "facility",
+    recordIds: [todo.productionRun.id], date: todo.emissionAttachment.endDay,
+    title: failedRunEmissionTodoRowTitle(todo.emissionAttachment.state), href: todo.target.href,
+  }));
   const batchRows = rows.filter((row) => row.kind === "batch-pending")
     .map((row) => ({ row, removals: row.removals.map(removalDisplayFromFacts) }));
   // Only a submitted period can have come back from the verifier, so only its
@@ -830,7 +858,7 @@ export async function getDashboardAttentionItems(
         entityCode: row.code,
         date: row.dateDay,
         title: attention.period === "returned" ? RETURNED_BY_ISOMETRIC_LABEL : PERIOD_ENDED_NOT_SUBMITTED_TITLE,
-        href: attentionHref(row.kind, row.id, facilityId),
+        href: attentionHref("batch-pending", row.id, facilityId),
       });
     }
   }
@@ -867,6 +895,11 @@ export async function getDashboardAttentionItems(
         groupedRow("removal-draft", "Removals", "Draft Removals", removalRows.drafts.length, removalsList, removalRows.drafts)),
       ...capOrGroup(removalRows.rejected, removalRows.rejected.length, () =>
         groupedRow("removal-rejected", "Removals", REMOVAL_REJECTED_ATTENTION_TITLE, removalRows.rejected.length, removalsList, removalRows.rejected)),
+      ...capOrGroup(failedEmissionRows, failedEmissionRows.length, (): DashboardAttentionItem => ({
+        ...groupedRow("failed-run-emissions", "Credit batches", FAILED_RUN_EMISSION_GROUP_TITLE,
+          failedEmissionRows.length, batchList, failedEmissionRows),
+        scope: "facility",
+      })),
       ...flags,
       ...capOrGroup(removalRows.returned.map((row) => row.item), removalRows.returned.length, () =>
         groupedRow("removal-returned", "Removals", RETURNED_BY_ISOMETRIC_LABEL, removalRows.returned.length, removalsList, removalRows.returned.map((row) => row.item))),
@@ -875,6 +908,6 @@ export async function getDashboardAttentionItems(
       ...capOrGroup(notSubmitted, notSubmitted.length, () =>
         groupedRow("batch-not-submitted", "Credit batches", PERIOD_ENDED_NOT_SUBMITTED_TITLE, notSubmitted.length, batchList, notSubmitted)),
     ],
-    batches: { interrupted: interrupted.size, notSubmitted: notSubmittedBatchCount, returned: returnedBatchCount },
+    batches: { ...(failedEmissionTodos.length ? { failedEmissions: failedEmissionTodos.length } : {}), interrupted: interrupted.size, notSubmitted: notSubmittedBatchCount, returned: returnedBatchCount },
   };
 }

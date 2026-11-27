@@ -1,3 +1,4 @@
+vi.mock("@/data-access/credit-batch-emission-contributors", () => ({ loadBatchEmissionContributors: vi.fn(async () => ({})) }));
 /**
  * Phase 3.5 — mirror-flow recovery integration tests.
  *

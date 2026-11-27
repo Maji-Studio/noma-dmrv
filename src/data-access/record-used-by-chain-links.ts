@@ -1,3 +1,4 @@
+import { loadBatchEmissionContributors, loadRunEmissionContributors } from "./credit-batch-emission-contributors";
 import { and, eq, inArray, isNotNull, notInArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -23,7 +24,7 @@ export async function readUsedByDownstreamEdges(ctx: OrgContext, kind: RecordUse
       return rows.map(row => usedByEdge(kind, row.from, "productionRun", row.to));
     }
     case "productionRun": {
-      const [products, batches, draws] = await Promise.all([
+      const [products, batches, draws, emissions] = await Promise.all([
         db.select({ from: biocharProductSourceAllocations.productionRunId, to: biocharProductSourceAllocations.biocharProductId })
           .from(biocharProductSourceAllocations)
           .where(and(eq(biocharProductSourceAllocations.organizationId, org), inArray(biocharProductSourceAllocations.productionRunId, ids),
@@ -31,8 +32,11 @@ export async function readUsedByDownstreamEdges(ctx: OrgContext, kind: RecordUse
         db.select({ from: creditBatchProductionRuns.productionRunId, to: creditBatchProductionRuns.creditBatchId })
           .from(creditBatchProductionRuns).where(and(eq(creditBatchProductionRuns.organizationId, org), inArray(creditBatchProductionRuns.productionRunId, ids))),
         readUsedByStockEdges(ctx, kind, ids),
+        loadRunEmissionContributors(ctx, ids),
       ]);
       return [
+        ...emissions.flatMap(run => run.kind === "failed" && run.creditBatchId
+          ? [{ ...usedByEdge(kind, run.runId, "creditBatch", run.creditBatchId), dependency: "production-emissions" as const }] : []),
         ...products.map(row => usedByEdge(kind, row.from, "biocharProduct", row.to)),
         ...batches.map(row => usedByEdge(kind, row.from, "creditBatch", row.to)), ...draws,
       ];
@@ -122,7 +126,11 @@ export async function readUsedByUpstreamEdges(ctx: OrgContext, kind: RecordUsedB
     case "creditBatch": {
       const rows = await db.select({ from: creditBatchProductionRuns.productionRunId }).from(creditBatchProductionRuns)
         .where(and(eq(creditBatchProductionRuns.organizationId, org), eq(creditBatchProductionRuns.creditBatchId, id)));
-      return rows.map(row => usedByEdge("productionRun", row.from, kind, id));
+      const emissions = await loadBatchEmissionContributors(ctx, [id]);
+      return [...rows.map(row => usedByEdge("productionRun", row.from, kind, id)),
+        ...(emissions[id]?.failedContributors ?? []).map(run => ({
+          ...usedByEdge("productionRun", run.runId, kind, id), dependency: "production-emissions" as const,
+        }))];
     }
     case "removal": {
       const rows = await db.select({ from: creditBatchApplications.applicationId }).from(creditBatchApplications)

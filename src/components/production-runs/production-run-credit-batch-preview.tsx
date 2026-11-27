@@ -18,6 +18,7 @@ import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 import type { ProductionRunCreditBatchPreviewInput } from "@/schemas/production-run-credit-batch-preview";
 import {
   describeCreditBatchPreview,
+  keepSavedAttachmentIfUnchanged,
   type ProductionRunCreditBatchPreviewView,
 } from "./production-run-credit-batch-preview-copy";
 
@@ -65,10 +66,17 @@ export function buildCreditBatchPreviewInput(
   };
 }
 
+/** The saved run's own values: a Failed run names its batch only while the form still matches them. */
+export interface SavedRunPreviewValues {
+  facilityId: string;
+  values: CreditBatchPreviewFormValues;
+}
+
 export function ProductionRunCreditBatchPreview<TFieldValues extends CreditBatchPreviewFormValues, TTransformed>({
   control,
+  saved,
   ...context
-}: CreditBatchPreviewContext & { control: Control<TFieldValues, unknown, TTransformed> }) {
+}: CreditBatchPreviewContext & { control: Control<TFieldValues, unknown, TTransformed>; saved?: SavedRunPreviewValues }) {
   // Narrowed to the fields read here; the form's control carries more.
   const previewControl = control as unknown as Control<CreditBatchPreviewFormValues>;
   const [status, startDate, startTime, endDate, endTime, feedstockDraws] = useWatch({
@@ -76,10 +84,15 @@ export function ProductionRunCreditBatchPreview<TFieldValues extends CreditBatch
     name: WATCHED_FIELDS,
   });
   const values: CreditBatchPreviewFormValues = { status, startDate, startTime, endDate, endTime, feedstockDraws };
-  const { settled, settling } = useSettledInput(buildCreditBatchPreviewInput(values, context));
+  const input = buildCreditBatchPreviewInput(values, context);
+  const { settled, settling } = useSettledInput(input);
   const query = useProductionRunCreditBatchPreview(settled);
   const preview = settledPreview(settling, query);
-  const view: ProductionRunCreditBatchPreviewView = preview.state === "ready" ? preview.data : preview;
+  const savedInput = saved
+    ? buildCreditBatchPreviewInput(saved.values, { ...context, facilityId: saved.facilityId, clearEndTime: false })
+    : null;
+  const answer: ProductionRunCreditBatchPreviewView = preview.state === "ready" ? preview.data : preview;
+  const view = keepSavedAttachmentIfUnchanged(answer, input, savedInput);
   const copy = describeCreditBatchPreview(view);
 
   return (

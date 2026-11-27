@@ -6,7 +6,8 @@ import type { OrgContext } from '@/lib/auth/server';
 const mocks = vi.hoisted(() => ({ locks: vi.fn(), lineage: vi.fn() }));
 vi.mock('@/db', () => ({ db: {} }));
 vi.mock('./certification-lineage-guards', () => ({ getRecordLocks: mocks.locks,
-  getLockedCertifiedLineageForBatches: mocks.lineage, isSubmittedLineageRow: () => true }));
+  tryLockCertifiedLineageArtifacts: vi.fn(async () => new Set()),
+  getLineageUnderLockedArtifacts: mocks.lineage, isSubmittedLineageRow: () => true }));
 import { readRecordDependentsBatch } from './record-lock-dependents';
 import { getFeedstockTypeLinkLock, getLockedFeedstockTypeLinkLock } from './feedstock-type-link-lock';
 const ctx = { organizationId: 'org', userId: 'user' } as OrgContext;
@@ -40,7 +41,7 @@ it('keeps share links in advisory and write feedstock-type freezes', async () =>
   const advisory = reader([[{ id: 'type' }], [{ id: 'saved-run' }], [removal]]);
   expect(await getFeedstockTypeLinkLock(ctx, advisory.tx, 'type')).toEqual({ locked: true, removals: [removal] });
   expectNoMassFilter(advisory.clauses);
-  const write = reader([[{ id: 'batch' }], [removal]]);
+  const write = reader([[{ id: 'batch' }], [], [removal]]);
   expect(await getLockedFeedstockTypeLinkLock(ctx, write.tx, 'type')).toEqual({ locked: true, removals: [removal] });
   expectNoMassFilter(write.clauses);
 });

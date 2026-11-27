@@ -1,4 +1,6 @@
-import type { DbTransaction } from "@/db";
+import { alias } from "drizzle-orm/pg-core";
+import { failedRunEmissionBatchCondition } from "./failed-run-emission-predicate";
+import { db, type DbTransaction } from "@/db";
 import {
   applications,
   biocharProducts,
@@ -31,7 +33,7 @@ import {
   type CertificationArtifactLock,
 } from "@/lib/certification/submission-lock";
 import { SafeError } from "@/lib/errors";
-import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, exists, inArray, or, sql, type SQL } from "drizzle-orm";
 import { getFeedstockTransportOwners } from "./feedstock-transport-ownership";
 import { requireOrgScope } from "./utils";
 import { readRecordLockLineage, type StatementReads } from "./record-lock-lineage";
@@ -39,7 +41,7 @@ import { readRecordDependents } from "./record-lock-dependents";
 
 export type CertifiedLineageEntityType = Exclude<
   CertificationLineageLockEntityType,
-  "transportLeg" | "vehicle"
+  "transportLeg" | "vehicle" | "facility" | "feedstockType"
 >;
 
 export interface CertifiedLineageTarget {
@@ -76,6 +78,52 @@ function targetCondition(target: CertifiedLineageTarget): SQL {
 /** Snapshot key written by removal-submission-build.ts (materializeRemovalSubmissionSnapshot). */
 const TRANSPORT_FEEDSTOCK_IDS_KEY = "transportFeedstockIds";
 
+// Shared snapshot predicate: lineage locks include legacy snapshots, while
+// recount prevention requires an explicit counted intake identity.
+function countedTransportCondition(ctx: OrgContext, feedstockId: string | SQL, removalCondition: SQL, includeLegacy: boolean): SQL {
+  return sql<boolean>`exists (
+    select 1 from ${certificationSubmissions}
+    where ${certificationSubmissions.organizationId} = ${ctx.organizationId}
+      and ${certificationSubmissions.provider} = 'isometric'
+      and ${certificationSubmissions.localEntityType} = 'removal'
+      and ${certificationSubmissions.submissionType} = 'removal'
+      and ${removalCondition}
+      and not (
+        ${certificationSubmissions.status} = 'rejected'
+        and ${certificationSubmissions.externalId} is null
+        and (${certificationSubmissions.metadata}->>${SUBMISSION_METADATA_KEYS.externalMutation} is null
+          or ${certificationSubmissions.metadata}->>${SUBMISSION_METADATA_KEYS.externalMutation} not in (${SUBMISSION_EXTERNAL_MUTATIONS.possible}, ${SUBMISSION_EXTERNAL_MUTATIONS.confirmed}))
+        and ${certificationSubmissions.lockedAt} is null
+      )
+      and ${certificationSubmissions.payloadSnapshot} is not null
+      and ((${includeLegacy} and not (${certificationSubmissions.payloadSnapshot} ? ${TRANSPORT_FEEDSTOCK_IDS_KEY}))
+        or (${certificationSubmissions.payloadSnapshot}->${TRANSPORT_FEEDSTOCK_IDS_KEY}) ? ${feedstockId})
+  )`;
+}
+
+/** One relationship read for all batches, using the same snapshot eligibility predicate. */
+export async function getTransportFeedstockCountedRemovals(
+  ctx: OrgContext, ids: readonly string[],
+  reader: Pick<DbTransaction, "select" | "selectDistinct"> = db,
+): Promise<Map<string, Set<string>>> {
+  requireOrgScope(ctx);
+  const result = new Map<string, Set<string>>();
+  if (!ids.length) return result;
+  const listing = alias(certificationSubmissions, "counted_transport_submission");
+  const rows = await reader.selectDistinct({ id: feedstocks.id, removalId: listing.localEntityId })
+    .from(feedstocks).innerJoin(listing, and(
+      eq(listing.organizationId, ctx.organizationId),
+      countedTransportCondition(ctx, sql`${feedstocks.id}::text`,
+        eq(certificationSubmissions.id, listing.id), false),
+    )).where(and(eq(feedstocks.organizationId, ctx.organizationId), inArray(feedstocks.id, [...ids])));
+  for (const row of rows) {
+    const removals = result.get(row.id) ?? new Set<string>();
+    removals.add(row.removalId);
+    result.set(row.id, removals);
+  }
+  return result;
+}
+
 function transportTargetCondition(ctx: OrgContext, target: CertifiedLineageTarget, owner: string | undefined): SQL {
   // No eligible transport owner must retain the lock through every linked run.
   if (!owner) return targetCondition(target);
@@ -86,24 +134,7 @@ function transportTargetCondition(ctx: OrgContext, target: CertifiedLineageTarge
   // with no registry mutation never reached Isometric, so cannot have counted
   // anything and are excluded. A Removal without a snapshot is covered by the
   // current owner. Artifact/row lock order is unchanged.
-  const countedTransport = sql<boolean>`exists (
-    select 1 from ${certificationSubmissions}
-    where ${certificationSubmissions.organizationId} = ${ctx.organizationId}
-      and ${certificationSubmissions.provider} = 'isometric'
-      and ${certificationSubmissions.localEntityType} = 'removal'
-      and ${certificationSubmissions.submissionType} = 'removal'
-      and ${certificationSubmissions.localEntityId} = ${certifierRemovals.id}
-      and not (
-        ${certificationSubmissions.status} = 'rejected'
-        and ${certificationSubmissions.externalId} is null
-        and (${certificationSubmissions.metadata}->>${SUBMISSION_METADATA_KEYS.externalMutation} is null
-          or ${certificationSubmissions.metadata}->>${SUBMISSION_METADATA_KEYS.externalMutation} not in (${SUBMISSION_EXTERNAL_MUTATIONS.possible}, ${SUBMISSION_EXTERNAL_MUTATIONS.confirmed}))
-        and ${certificationSubmissions.lockedAt} is null
-      )
-      and ${certificationSubmissions.payloadSnapshot} is not null
-      and (not (${certificationSubmissions.payloadSnapshot} ? ${TRANSPORT_FEEDSTOCK_IDS_KEY})
-        or (${certificationSubmissions.payloadSnapshot}->${TRANSPORT_FEEDSTOCK_IDS_KEY}) ? ${target.entityId})
-  )`;
+  const countedTransport = countedTransportCondition(ctx, target.entityId, eq(certificationSubmissions.localEntityId, certifierRemovals.id), true);
   return and(targetCondition(target), or(eq(productionRuns.id, owner), countedTransport))!;
 }
 
@@ -165,13 +196,19 @@ function lineageQueryWhere(
         eq(creditBatchApplications.organizationId, ctx.organizationId),
       ),
     )
-    .innerJoin(
-      creditBatchProductionRuns,
-      and(eq(creditBatchProductionRuns.creditBatchId, creditBatches.id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)),
-    )
-    .innerJoin(
+    // Failed sources reach certification through emissions, without joining
+    // the material membership or output-allocation graph.
+    .leftJoin(
       productionRuns,
-      and(eq(productionRuns.id, creditBatchProductionRuns.productionRunId), eq(productionRuns.organizationId, ctx.organizationId)),
+      and(eq(productionRuns.organizationId, ctx.organizationId), or(
+        exists(tx.select({ id: creditBatchProductionRuns.productionRunId })
+          .from(creditBatchProductionRuns).where(and(
+            eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
+            eq(creditBatchProductionRuns.creditBatchId, creditBatches.id),
+            eq(creditBatchProductionRuns.productionRunId, productionRuns.id),
+          ))),
+        failedRunEmissionBatchCondition(ctx),
+      )),
     )
     .leftJoin(
       productionRunFeedstocks,

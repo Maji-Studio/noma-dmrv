@@ -114,7 +114,7 @@ export async function recordEmissionZeros(ctx: OrgContext, input: z.input<typeof
       .filter((entry) => !(entry.kind === "zero" && entry.confirmedForRemovalId === data.removalId))
       .map(entry => ({ ...entry, carry: carryContext.entries.find(carried => carried.id === entry.id)?.carry }));
     const reservations = await loadEmissionEntryReservations(ctx, candidates.flatMap((entry) => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []), tx);
-    const automatic = await loadBatchesEmissionAutomaticFacts(ctx, memberBatchIds, {}, tx);
+    const automatic = await loadBatchesEmissionAutomaticFacts(ctx, memberBatchIds, { removalId: data.removalId }, tx);
     const availableApplications = await listEmissionEntryAvailableApplications(ctx, memberBatchIds, tx);
     const nowMs = Date.now();
     const orphanIds = entriesWithoutRemoval(candidates, contenders, new Set(reservations.filter((row) => isLiveEntryReservation(row, nowMs)).map((row) => row.submissionId)), availableApplications);

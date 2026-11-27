@@ -1,3 +1,6 @@
+import { sortProcessScopes } from "./production-processes";
+import { assertFailedEmissionBatchesEditable } from "./failed-run-emission-write-guard";
+import { findFailedEmissionCohortRunIds } from "./credit-batch-failed-cohort";
 import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze, type TransportOwnershipFreezeScope } from "./feedstock-transport-ownership-freeze";
 import type { CertifierProvider } from "@/schemas/credit-batches";
 import { recordMembershipActivity } from "./write-activity";
@@ -9,19 +12,20 @@ import { recordMembershipActivity } from "./write-activity";
  *    Then their certifier_projects rows FOR SHARE, sorted: Set template
  *    updates that row before it locks batches and artifacts, so a batch
  *    writer must hold it before step 3 or the two wait on each other.
- * 3. Discover current/prospective runs and lock the batch's certification
+ * 3. Discover current/prospective material and failed runs and lock the batch's certification
  *    artifacts. Both helpers use acquireCertificationArtifactLocksSorted
  *    with one global key order.
  *    Create has no existing batch or certification lineage to guard.
- * 4. Current/prospective runs FOR UPDATE, sorted, on create or membership refresh.
- * 5. Production-process advisory scope. Keep runs before scope: auto-attachment
+ * 4. Current/prospective material and failed runs FOR UPDATE in one sorted union.
+ *    Failed sources also lock on scalar edits and deletion; they never become members.
+ * 5. Sorted old/new production-process advisory scopes. Keep runs before scope: auto-attachment
  *    already holds its run before requesting this scope. Other scope holders
  *    in production-processes.ts never request runs or certification artifacts.
  *    Newly matching unassigned runs use late SKIP LOCKED acquisition: it
  *    cannot wait on scope holders, these runs have no batch artifacts, and
  *    their facility is already share-locked. A missed row answers conflict.
  * 6. Batch FOR UPDATE and expected-version check (insert on create).
- * 7. Revalidate artifact set, current/prospective member sets and cohort.
+ * 7. Revalidate artifact set, material/failed sets, cohort and claim reservations.
  *    Changed artifacts/current membership answer a typed conflict.
  * 8. Write membership and reconcile slices, whose inserts FK-check applications
  *    with KEY SHARE. Application writers take artifacts, facility, runs SHARE,
@@ -136,12 +140,15 @@ export async function lockCreditBatchDeclarationRuns(
     requestedProductionRunIds: string[];
     currentProductionRunIds?: string[];
     matchingProductionRunIds?: string[];
+    currentFailedRunIds?: string[];
+    previousScope?: { facilityId: string; feedstockTypeId: string };
     /** Held add-only edits persist only explicit selections; free batches expand by default. */
     expand?: boolean;
   },
 ): Promise<{
   runIds: string[];
   lockedRuns: LockedCreditBatchProductionRun[];
+  failedRunIds: string[];
 }> {
   requireOrgScope(ctx);
   await lockMembershipFacilities(ctx, tx, [params.facilityId]);
@@ -150,6 +157,7 @@ export async function lockCreditBatchDeclarationRuns(
     tx,
     params,
   );
+  const failedBeforeLock = await findFailedEmissionCohortRunIds(ctx, tx, params);
   const runIds = [
     ...new Set([
       ...params.requestedProductionRunIds,
@@ -159,9 +167,13 @@ export async function lockCreditBatchDeclarationRuns(
   const lockedRuns = await lockCreditBatchProductionRuns(ctx, tx, [
     ...(params.currentProductionRunIds ?? []),
     ...runIds,
+    ...failedBeforeLock,
+    ...(params.currentFailedRunIds ?? []),
   ]);
 
-  await lockProductionProcessScope(tx, params);
+  const scopes = sortProcessScopes([params, ...(params.previousScope ? [params.previousScope] : [])]);
+  for (const scope of scopes) await lockProductionProcessScope(tx, scope);
+  const failedAfterLock = await findFailedEmissionCohortRunIds(ctx, tx, params);
   const requestedIds = new Set(params.requestedProductionRunIds);
   const matchingAfterLock = (await findMatchingUnassignedProductionRunIds(
     ctx,
@@ -169,7 +181,7 @@ export async function lockCreditBatchDeclarationRuns(
     params,
   )).filter(id => params.expand !== false || requestedIds.has(id));
   const lockedIds = new Set(lockedRuns.map(run => run.id));
-  const lateRunIds = matchingAfterLock.filter(id => !lockedIds.has(id));
+  const lateRunIds = [...new Set([...matchingAfterLock, ...failedAfterLock])].filter(id => !lockedIds.has(id));
   const lateRuns = await lockCreditBatchProductionRuns(ctx, tx, lateRunIds, { skipLocked: true });
   if (lateRuns.length !== lateRunIds.length) {
     throw membershipChanged(
@@ -177,8 +189,9 @@ export async function lockCreditBatchDeclarationRuns(
     );
   }
   return {
-    runIds: [...new Set([...runIds, ...lateRunIds])].sort(),
-    lockedRuns: [...lockedRuns, ...lateRuns],
+    failedRunIds: failedAfterLock,
+    runIds: [...new Set([...runIds, ...matchingAfterLock])].sort(),
+    lockedRuns: [...lockedRuns, ...lateRuns].filter(run => runIds.includes(run.id) || matchingAfterLock.includes(run.id)),
   };
 }
 
@@ -255,8 +268,19 @@ export async function prepareCreditBatchMembershipWrite(
         endDate: target.endDate ?? snapshot.endDate,
       })
     : undefined;
+  const currentFailedRunIds = await findFailedEmissionCohortRunIds(ctx, tx, snapshot);
+  const prospectiveFailedRunIds = refreshMembership
+    ? await findFailedEmissionCohortRunIds(ctx, tx, {
+        facilityId: target.facilityId ?? snapshot.facilityId,
+        feedstockTypeId: target.feedstockTypeId ?? snapshot.feedstockTypeId,
+        startDate: target.startDate ?? snapshot.startDate,
+        endDate: target.endDate ?? snapshot.endDate,
+      }) : currentFailedRunIds;
   const lockedRemovals = await lockCreditBatchArtifacts(ctx, tx, id);
-  return { snapshot, currentProductionRunIds, matchingProductionRunIds, lockedRemovals, certifier };
+  // Refresh acquires these in the sorted material/failed union below. Scalar
+  // updates and deletion also hold failed sources before the process scope.
+  if (!refreshMembership) await lockCreditBatchProductionRuns(ctx, tx, currentFailedRunIds);
+  return { snapshot, currentProductionRunIds, matchingProductionRunIds, currentFailedRunIds, prospectiveFailedRunIds, lockedRemovals, certifier };
 }
 
 export async function assertNoOverlappingCreditBatchCohort(
@@ -309,11 +333,10 @@ export async function lockCreditBatchForUpdate(
   target: { facilityId?: string; feedstockTypeId?: string; expectedVersion: number },
   prepared?: Awaited<ReturnType<typeof prepareCreditBatchMembershipWrite>>,
 ): Promise<LockedCreditBatchForUpdate> {
-  const { snapshot, currentProductionRunIds, lockedRemovals } = prepared ??
+  const { snapshot, currentProductionRunIds, currentFailedRunIds, prospectiveFailedRunIds, lockedRemovals } = prepared ??
     await prepareCreditBatchMembershipWrite(ctx, tx, id, target);
-  // Membership refresh already locked the old/new run union. Scalar edits and
-  // delete need no run locks: batch UPDATE serializes with applications' SHARE
-  // before membership links or slices change, including delete's FK checks.
+  // Membership refresh already locked the old/new material and failed union.
+  // Scalar edits and delete locked failed sources during preparation.
   await lockProductionProcessScope(tx, {
     facilityId: target.facilityId ?? snapshot.facilityId,
     feedstockTypeId: target.feedstockTypeId ?? snapshot.feedstockTypeId,
@@ -336,6 +359,9 @@ export async function lockCreditBatchForUpdate(
   ) {
     throw membershipChanged();
   }
+  if (!sameIds(currentFailedRunIds, await findFailedEmissionCohortRunIds(ctx, tx, snapshot))) {
+    throw membershipChanged("Failed production inputs changed while this credit batch was being updated. Refresh and retry.");
+  }
   if (!sameIds(currentProductionRunIds, await readMembershipRunIds(ctx, tx, id))) {
     throw membershipChanged("Credit batch membership changed while this update was being prepared. Refresh and retry.");
   }
@@ -346,6 +372,9 @@ export async function lockCreditBatchForUpdate(
   } catch (error) {
     if (error instanceof CreditBatchLineageChangedError) throw membershipChanged(error.message);
     throw error;
+  }
+  if (currentFailedRunIds.length || prospectiveFailedRunIds.length) {
+    await assertFailedEmissionBatchesEditable(ctx, tx, [id], "update", "creditBatch");
   }
   return { ...locked, lockedRemovals, row: locked };
 }

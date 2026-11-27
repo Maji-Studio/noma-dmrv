@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
-import { certificationSubmissions, creditBatchApplications, creditBatches, emissionEntries } from "@/db/schema";
+import { certificationSubmissions, creditBatchApplications, creditBatches, emissionEntries, facilities } from "@/db/schema";
 const mocks = vi.hoisted(() => ({ transaction: vi.fn(), activity: vi.fn() }));
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
 vi.mock("./activity-events", () => ({ recordActivityChange: mocks.activity }));
@@ -18,7 +18,8 @@ it("captures the entry claim link on reserve and release without changing conten
     return q;
   };
   const tx = {
-    select: () => ({ from: (table: unknown) => query(table === creditBatches ? [{ id: "batch" }]
+    select: () => ({ from: (table: unknown) => query(table === creditBatches ? [{ id: "batch", facilityId: "facility" }]
+      : table === facilities ? [{ id: "facility" }]
       : table === creditBatchApplications ? [{ creditBatchId: "batch" }]
       : table === emissionEntries ? [entry]
       : table === certificationSubmissions ? [{ id: "attempt", status: "draft", provider: "isometric",

@@ -1,3 +1,4 @@
+import { loadProductionClaimFeedstockScope } from "@/data-access/production-source-manifest";
 import type { CoveredContenders } from "@/lib/certification/covered-contenders";
 import { env } from "@/config/env";
 import { DURABILITY_MEASUREMENT_SAMPLES_ENABLED } from "./durability-measurement-samples";
@@ -147,9 +148,11 @@ export async function buildRemovalContext(
   const registryBoundaryOpened = removalMayHaveExternalMutation(
     scope.removal?.metadata ?? null,
   );
+  const { failedContributors, manifest: productionSourceManifest, feedstockIds } =
+    await loadProductionClaimFeedstockScope(orgCtx, scope.memberBatches, scope.removalId);
   const supportingDocuments = correctionRead ? { total: 0, mirrored: 0 } : await loadEvidenceMirrorSummaryForScope(
     orgCtx,
-    scope,
+    { ...scope, transportFeedstockIds: feedstockIds },
     latestSubmission,
     correctionWindowOpen,
     removalEntryContext?.lineFileEvidence,
@@ -309,6 +312,10 @@ export async function buildRemovalContext(
       ? await getProductionRunsForCertification(orgCtx, runIds)
       : [];
 
+  const failedEmissionRuns = failedContributors.length
+    ? await getProductionRunsForCertification(orgCtx, failedContributors.map(run => run.runId)) : [];
+  const failedFeedstockIds = [...new Set(failedContributors.flatMap(run => run.feedstockIds))];
+
   // Batch-pooled Samples drive durability, transport, and readiness (ADR 0016).
   // The same durability blockers gate the submit pipeline below.
   const entityIds = collectProductionClaimAwareTransportEntityIds({
@@ -316,6 +323,9 @@ export async function buildRemovalContext(
     memberBatches: scope.memberBatches,
     lineages,
   });
+  entityIds.feedstockIds = feedstockIds;
+  entityIds.feedstockTransportOwnedElsewhere = entityIds.feedstockIds.length === 0 &&
+    (entityIds.feedstockTransportOwnedElsewhere === true || failedFeedstockIds.length > 0);
   const requiredTransportCategories = collectProductionClaimAwareRequiredTransportCategories({
     removalId: scope.removalId,
     memberBatches: scope.memberBatches,
@@ -347,6 +357,7 @@ export async function buildRemovalContext(
   }
   const entityReadiness = await buildCertifyEntityReadiness({
     runs,
+    failedEmissionRuns,
     batchesWithSamples,
     transportLegs,
     requiredTransportCategories,
@@ -360,7 +371,7 @@ export async function buildRemovalContext(
 
   const submissionAdvisories = buildSubmissionAdvisories({
     removalTemplate: templateFacts.removalTemplate, lineSources: templateFacts.lineSources,
-    transportLegs: recordedTransportLegs, runs, lineages,
+    transportLegs: recordedTransportLegs, runs, failedRuns: failedEmissionRuns, lineages,
   });
   const submissionWarnings = [
     ...buildSubmissionWarnings({
@@ -368,6 +379,7 @@ export async function buildRemovalContext(
       lineSources: templateFacts.lineSources,
       transportLegs: recordedTransportLegs,
       runs,
+      failedRuns: failedEmissionRuns,
       lineages,
       facilityTimezone: facilityFacts.facilityTimezone,
     }),
@@ -422,6 +434,8 @@ export async function buildRemovalContext(
     durabilityMeasurementSamplesEnabled: DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
     lineages,
     runs,
+    failedEmissionRuns,
+    productionSourceManifest,
     batchesWithSamples,
     attributionByRunId,
     memberBatchClaims,

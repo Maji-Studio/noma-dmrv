@@ -60,7 +60,7 @@ function feedstockRecord(fact: AllocationFeedstockFact, facts: EmissionAllocatio
     detail: { kind: "feedstockTransport", binId: fact.binId, binName: fact.binName, wetKg: usage.intakeWetKg, legs: fact.legs },
     quantities: [{ value: tonneKm, unit: "t·km", label: "Transport" }], parts,
     removalParts: productionParts(facts, owner, fact.code),
-    basisWord: "the first completed run that drew from it",
+    basisWord: "the earliest complete or failed run attached to a credit batch that drew from it",
     feedstock: {
       bin: fact.binName, binId: fact.binId, wetKg: usage.intakeWetKg, tonneKm,
       used: usage.creditBatches.map(batch => ({ creditBatchId: batch.creditBatchId, code: batch.code,

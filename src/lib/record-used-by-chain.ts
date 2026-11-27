@@ -17,11 +17,15 @@ export interface RecordUsedByNode {
 }
 
 export interface RecordUsedByEdge {
+  /** Present on computed emissions dependencies, never material provenance. */
+  dependency?: "production-emissions";
   from: string;
   to: string;
 }
 
 export interface RecordUsedByBatch {
+  /** Present only when no material membership reaches this batch. */
+  dependency?: "production-emissions";
   id: string;
   code: string;
   name: string | null;
